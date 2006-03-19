@@ -432,59 +432,59 @@
 				Name="Uthernet"
 				>
 				<File
-					RelativePath=".\source\bittypes.h"
+					RelativePath=".\source\Bittypes.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\bpf.h"
+					RelativePath=".\source\Bpf.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\ip6_misc.h"
+					RelativePath=".\source\Ip6_misc.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\pcap-stdinc.h"
+					RelativePath=".\source\Pcap-stdinc.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\pcap.h"
+					RelativePath=".\source\Pcap.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfe.cpp"
+					RelativePath=".\source\Tfe.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfe.h"
+					RelativePath=".\source\Tfe.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfearch.cpp"
+					RelativePath=".\source\Tfearch.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfearch.h"
+					RelativePath=".\source\Tfearch.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfesupp.cpp"
+					RelativePath=".\source\Tfesupp.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\tfesupp.h"
+					RelativePath=".\source\Tfesupp.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\types.h"
+					RelativePath=".\source\Types.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\uilib.cpp"
+					RelativePath=".\source\Uilib.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\uilib.h"
+					RelativePath=".\source\Uilib.h"
 					>
 				</File>
 			</Filter>
