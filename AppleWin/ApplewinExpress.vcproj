@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="shift_jis"?>
+<?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="Applewin"
 	ProjectGUID="{1DA0C491-B5F4-4EC8-B1D2-CF6BE635DADC}"
+	RootNamespace="Applewin"
 	SccProjectName="APPLEWIN"
 	SccLocalPath="."
 	>
@@ -427,6 +428,70 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="Uthernet"
+				>
+				<File
+					RelativePath=".\source\bittypes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\bpf.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\config.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\ip6_misc.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\pcap-stdinc.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\pcap.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfe.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfe.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfearch.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfearch.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfesupp.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\tfesupp.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\types.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\uilib.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\uilib.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Docs"
@@ -456,6 +521,14 @@
 			Name="Resources"
 			Filter=".txt,.ico,.bmp,.rc"
 			>
+			<File
+				RelativePath=".\resource\Apple2.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Apple2e.rom"
+				>
+			</File>
 			<File
 				RelativePath=".\resource\Applewin.bmp"
 				>

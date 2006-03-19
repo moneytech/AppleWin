@@ -53,6 +53,8 @@ double		g_fCurrentCLK6502 = CLK_6502;	// Affected by Config dialog's speed slide
 static double g_fMHz		= 1.0;			// Affected by Config dialog's speed slider bar
 
 int			g_nCpuCyclesFeedback = 0;
+DWORD       g_dwCyclesThisFrame = 0;
+
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
 
@@ -86,7 +88,6 @@ ULONGLONG g_nPerfFreq = 0;
 
 void ContinueExecution()
 {
-	static DWORD dwCyclesThisFrame = 0;
 	static BOOL pageflipping    = 0; //?
 
 	const double fUsecPerSec        = 1.e6;
@@ -128,7 +129,7 @@ void ContinueExecution()
 
 	DWORD dwExecutedCycles = CpuExecute(nCyclesToExecute);
 
-	dwCyclesThisFrame += dwExecutedCycles;
+	g_dwCyclesThisFrame += dwExecutedCycles;
 
 	//
 
@@ -137,7 +138,7 @@ void ContinueExecution()
 	CheckFastPaging();
 	DiskUpdatePosition(dwExecutedCycles);
 	JoyUpdatePosition();
-	VideoUpdateVbl(dwCyclesThisFrame);
+	VideoUpdateVbl(g_dwCyclesThisFrame);
 
 	SpkrUpdate(cyclenum);
 	CommUpdate(cyclenum);
@@ -182,9 +183,9 @@ void ContinueExecution()
 
 	//
 
-	if(dwCyclesThisFrame >= dwClksPerFrame)
+	if(g_dwCyclesThisFrame >= dwClksPerFrame)
 	{
-		dwCyclesThisFrame -= dwClksPerFrame;
+		g_dwCyclesThisFrame -= dwClksPerFrame;
 
 		if(mode != MODE_LOGO)
 		{
@@ -355,6 +356,7 @@ void LoadConfiguration () {
   LOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
   LOAD(TEXT("Video Emulation")   ,&videotype);
   LOAD(TEXT("Monochrome Color")  ,&monochrome);
+  LOAD(TEXT("Uthernet Active")  ,(DWORD *)&tfe_enabled);
 
   SetCurrentCLK6502();
 
@@ -402,6 +404,11 @@ void LoadConfiguration () {
   RegLoadString(TEXT("Preferences"),TEXT("Starting Directory"),1,szDirectory,MAX_PATH);
 
   SetCurrentDirectory(szDirectory);
+  
+  char szUthernetInt[MAX_PATH] = {0};
+  RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
+  update_tfe_interface(szUthernetInt,NULL);
+
 }
 
 //===========================================================================
@@ -638,8 +645,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		MemInitialize();
 		VideoInitialize();
 		FrameCreateWindow();
+	   tfe_init();
         Snapshot_Startup();		// Do this after everything has been init'ed
-
+    
 		if(bSetFullScreen)
 		{
 			PostMessage(framewindow, WM_KEYDOWN, VK_F1+BTN_FULLSCR, 0);
@@ -664,6 +672,8 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	DSUninit();
 	SysClk_UninitTimer();
 	CoUninitialize();
+	
+	tfe_shutdown();
 	
 	if(g_fh)
 	{

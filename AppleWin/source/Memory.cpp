@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "..\resource\resource.h"
 
 #define  MF_80STORE    0x00000001
 #define  MF_ALTZP      0x00000002
@@ -232,22 +233,22 @@ iofunction ioread[0x100]  = {KeybReadData,       // $C000
                              NullIo,             // $C0AD
                              NullIo,             // $C0AE
                              NullIo,             // $C0AF
-                             NullIo,             // $C0B0
-                             NullIo,             // $C0B1
-                             NullIo,             // $C0B2
-                             NullIo,             // $C0B3
-                             NullIo,             // $C0B4
-                             NullIo,             // $C0B5
-                             NullIo,             // $C0B6
-                             NullIo,             // $C0B7
-                             NullIo,             // $C0B8
-                             NullIo,             // $C0B9
-                             NullIo,             // $C0BA
-                             NullIo,             // $C0BB
-                             NullIo,             // $C0BC
-                             NullIo,             // $C0BD
-                             NullIo,             // $C0BE
-                             NullIo,             // $C0BF
+                             TfeIo,              // $C0B0
+                             TfeIo,              // $C0B1
+                             TfeIo,              // $C0B2
+                             TfeIo,              // $C0B3
+                             TfeIo,              // $C0B4
+                             TfeIo,              // $C0B5
+                             TfeIo,              // $C0B6
+                             TfeIo,              // $C0B7
+                             TfeIo,              // $C0B8
+                             TfeIo,              // $C0B9
+                             TfeIo,              // $C0BA
+                             TfeIo,              // $C0BB
+                             TfeIo,              // $C0BC
+                             TfeIo,              // $C0BD
+                             TfeIo,              // $C0BE
+                             TfeIo,              // $C0BF
                              PhasorIO,           // $C0C0
                              PhasorIO,           // $C0C1
                              PhasorIO,           // $C0C2
@@ -495,22 +496,22 @@ iofunction iowrite[0x100] = {MemSetPaging,       // $C000
                              NullIo,             // $C0AD
                              NullIo,             // $C0AE
                              NullIo,             // $C0AF
-                             NullIo,             // $C0B0
-                             NullIo,             // $C0B1
-                             NullIo,             // $C0B2
-                             NullIo,             // $C0B3
-                             NullIo,             // $C0B4
-                             NullIo,             // $C0B5
-                             NullIo,             // $C0B6
-                             NullIo,             // $C0B7
-                             NullIo,             // $C0B8
-                             NullIo,             // $C0B9
-                             NullIo,             // $C0BA
-                             NullIo,             // $C0BB
-                             NullIo,             // $C0BC
-                             NullIo,             // $C0BD
-                             NullIo,             // $C0BE
-                             NullIo,             // $C0BF
+                             TfeIo,              // $C0B0
+                             TfeIo,              // $C0B1
+                             TfeIo,              // $C0B2
+                             TfeIo,              // $C0B3
+                             TfeIo,              // $C0B4
+                             TfeIo,              // $C0B5
+                             TfeIo,              // $C0B6
+                             TfeIo,              // $C0B7
+                             TfeIo,              // $C0B8
+                             TfeIo,              // $C0B9
+                             TfeIo,              // $C0BA
+                             TfeIo,              // $C0BB
+                             TfeIo,              // $C0BC
+                             TfeIo,              // $C0BD
+                             TfeIo,              // $C0BE
+                             TfeIo,              // $C0BF
                              PhasorIO,           // $C0C0
                              PhasorIO,           // $C0C1
                              PhasorIO,           // $C0C2
@@ -616,37 +617,14 @@ void BackMainImage () {
 
 //===========================================================================
 BYTE __stdcall NullIo (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG nCycles) {
-  if ((address & 0xF0) == 0xA0) {
-    static const BYTE retval[16] = {0x58,0xFC,0x5B,0xFF,0x58,0xFC,0x5B,0xFF,
-                                    0x0B,0x10,0x00,0x00,0xFF,0xFF,0xFF,0xFF};
-    return retval[address & 15];
-  }
-  else if ((address >= 0xB0) && (address <= 0xCF)) {
-    BYTE r = (BYTE)(rand() & 0xFF);
-    if (r >= 0x10)
-      return 0xA0;
-    else if (r >= 8)
-      return (r > 0xC) ? 0xFF : 0x00;
-    else
-      return (address & 0xF7);
-  }
-  else if ((address & 0xF0) == 0xD0) {
-    BYTE r = (BYTE)(rand() & 0xFF);
-    if (r >= 0xC0)
-      return 0xC0;
-    else if (r >= 0x80)
-      return 0x80;
-    else if ((address == 0xD0) || (address == 0xDF))
-      return 0;
-    else if (r >= 0x40)
-      return 0x40;
-    else if (r >= 0x30)
-      return 0x90;
-    else
-      return 0;
-  }
-  else
-    return MemReturnRandomData(1);
+	if (!write)
+	{
+		return MemReadFloatingBus();
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 //===========================================================================
@@ -838,6 +816,13 @@ void MemDestroy () {
 }
 
 //===========================================================================
+
+bool MemGet80Store()
+{
+	return SW_80STORE != 0;
+}
+
+//===========================================================================
 LPBYTE MemGetAuxPtr (WORD offset)
 {
 	LPBYTE lpMem = (memshadow[image][(offset >> 8)] == (memaux+(offset & 0xFF00)))
@@ -910,21 +895,15 @@ void MemInitialize () {
 #endif
 
   // READ THE APPLE FIRMWARE ROMS INTO THE ROM IMAGE
-	TCHAR sRomFileName[ 128 ];
-	_tcscpy( sRomFileName, apple2e ? TEXT("APPLE2E.ROM") : TEXT("APPLE2.ROM") );
+	const UINT ROM_SIZE = 0x5000; // HACK: Magic #
 
-  TCHAR filename[MAX_PATH];
-  _tcscpy(filename,progdir);
-  _tcscat(filename,sRomFileName );
-  HANDLE file = CreateFile(filename,
-                           GENERIC_READ,
-                           FILE_SHARE_READ,
-                           (LPSECURITY_ATTRIBUTES)NULL,
-                           OPEN_EXISTING,
-                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                           NULL);
-	if (file == INVALID_HANDLE_VALUE)
+	HRSRC hResInfo = apple2e	? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM")
+								: FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_ROM), "ROM");
+	if(hResInfo == NULL)
 	{
+		TCHAR sRomFileName[ 128 ];
+		_tcscpy( sRomFileName, apple2e ? TEXT("APPLE2E.ROM") : TEXT("APPLE2.ROM") );
+
 		TCHAR sText[ 256 ];
 		wsprintf( sText, TEXT("Unable to open the required firmware ROM data file.\n\nFile: %s."), sRomFileName );
 
@@ -935,9 +914,19 @@ void MemInitialize () {
 		ExitProcess(1);
 	}
 
-  DWORD bytesread;
-  ReadFile(file,memrom,0x5000,&bytesread,NULL); // HACK: Magic #
-  CloseHandle(file);
+	DWORD dwResSize = SizeofResource(NULL, hResInfo);
+	if(dwResSize != ROM_SIZE)
+		return;
+
+	HGLOBAL hResData = LoadResource(NULL, hResInfo);
+	if(hResData == NULL)
+		return;
+
+	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+	if(pData == NULL)
+		return;
+
+	memcpy(memrom, pData, ROM_SIZE);
 
   // TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
   {
@@ -1016,6 +1005,21 @@ BYTE MemReturnRandomData (BYTE highbit) {
     return 0x20 | (highbit ? 0x80 : 0);
   else
     return retval[r & 15] | (highbit ? 0x80 : 0);
+}
+
+//===========================================================================
+
+BYTE MemReadFloatingBus()
+{
+  return*(LPBYTE)(mem + VideoGetScannerAddress());
+}
+
+//===========================================================================
+
+BYTE MemReadFloatingBus(BYTE const highbit)
+{
+  BYTE r = *(LPBYTE)(mem + VideoGetScannerAddress());
+  return (r & ~0x80) | ((highbit) ? 0x80 : 0);
 }
 
 //===========================================================================
@@ -1110,13 +1114,13 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
   if ((address >= 4) && (address <= 5) &&
       ((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0028D)) {
     modechanging = 1;
-    return write ? 0 : MemReturnRandomData(1);
+    return write ? 0 : MemReadFloatingBus(1);
   }
   if ((address >= 0x80) && (address <= 0x8F) && (programcounter < 0xC000) &&
       (((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0048D) ||
        ((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0028D))) {
     modechanging = 1;
-    return write ? 0 : MemReturnRandomData(1);
+    return write ? 0 : MemReadFloatingBus(1);
   }
 
   // IF THE MEMORY PAGING MODE HAS CHANGED, UPDATE OUR MEMORY IMAGES AND
@@ -1142,10 +1146,9 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
   }
 
   if ((address <= 1) || ((address >= 0x54) && (address <= 0x57)))
-    VideoSetMode(programcounter,address,write,value,0);
-  return write ? 0
-               : MemReturnRandomData(((address == 0x54) || (address == 0x55))
-                                       ? (SW_PAGE2 != 0) : 1);
+    return VideoSetMode(programcounter,address,write,value,0);
+
+  return write ? 0 : MemReadFloatingBus();
 }
 
 //===========================================================================
