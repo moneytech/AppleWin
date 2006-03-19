@@ -440,10 +440,6 @@
 					>
 				</File>
 				<File
-					RelativePath=".\source\config.h"
-					>
-				</File>
-				<File
 					RelativePath=".\source\ip6_misc.h"
 					>
 				</File>
