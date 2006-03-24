@@ -31,8 +31,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 #include "..\resource\resource.h"
-#include "tfesupp.h"
-#include "uilib.h"
+#include "Tfe\Tfesupp.h"
+#include "Tfe\Uilib.h"
 
 
 TCHAR   computerchoices[] =  TEXT("Apple ][+\0")
