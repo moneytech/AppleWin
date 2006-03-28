@@ -300,6 +300,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\source\ParallelPrinter.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\ParallelPrinter.h"
+				>
+			</File>
+			<File
 				RelativePath=".\source\PropertySheetPage.cpp"
 				>
 			</File>
@@ -556,6 +564,10 @@
 			</File>
 			<File
 				RelativePath="RESOURCE\HELP.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Parallel.rom"
 				>
 			</File>
 			<File

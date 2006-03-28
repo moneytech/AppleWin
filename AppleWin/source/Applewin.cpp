@@ -142,6 +142,7 @@ void ContinueExecution()
 
 	SpkrUpdate(cyclenum);
 	CommUpdate(cyclenum);
+	PrintUpdate(cyclenum);
 
 	//
 

@@ -31,6 +31,7 @@
 #include "Keyboard.h"
 #include "Memory.h"
 #include "Mockingboard.h"
+#include "ParallelPrinter.h"
 #include "PropertySheetPage.h"
 #include "Registry.h"
 #include "Riff.h"
