@@ -194,6 +194,7 @@ static const double g_f6522TimerPeriod_NoIRQ = CLK_6502 / 60.0;		// Constant wha
 
 // External global vars:
 bool g_bMBTimerIrqActive = false;
+UINT32 g_uTimer1IrqCount = 0;	// DEBUG
 
 //---------------------------------------------------------------------------
 
@@ -1478,6 +1479,7 @@ void MB_UpdateCycles(USHORT nClocks)
 
 		if( bTimer1Underflow && (g_nMBTimerDevice == i) && g_bMBTimerIrqActive )
 		{
+			g_uTimer1IrqCount++;	// DEBUG
 			pMB->sy6522.IFR |= TIMER1;
 			UpdateIFR(pMB);
 			CpuIRQ();
