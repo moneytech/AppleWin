@@ -384,7 +384,7 @@ void DrawStatusArea (HDC passdc, int drawflags) {
     }
     if (drawflags & DRAW_TITLE) {
       TCHAR title[40];
-      _tcscpy(title,apple2e ? TITLE : TEXT("Apple ][+ Emulator"));
+      _tcscpy(title,apple2e ? TITLE : ( apple2plus ? TEXT("Apple ][+ Emulator") : TEXT("Apple ][ Emulator")));
       switch (mode) {
         case MODE_PAUSED:   _tcscat(title,TEXT(" [Paused]"));    break;
         case MODE_STEPPING: _tcscat(title,TEXT(" [Stepping]"));  break;
@@ -1117,7 +1117,8 @@ void FrameCreateWindow () {
   if (!RegLoadValue(TEXT("Preferences"),TEXT("Window Y-Position"),1,(DWORD *)&ypos))
     ypos = (GetSystemMetrics(SM_CYSCREEN)-height) >> 1;
   framewindow = CreateWindow(TEXT("APPLE2FRAME"),apple2e ? TITLE
-                                                         : TEXT("Apple ][+ Emulator"),
+                                                         : (apple2plus ? TEXT("Apple ][+ Emulator")
+							               : TEXT("Apple ][ Emulator")),
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |
                              WS_VISIBLE,
                              xpos,ypos,width,height,

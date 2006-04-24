@@ -12,6 +12,8 @@ typedef struct _regsrec {
   WORD pc;  // program counter
   WORD sp;  // stack pointer
   BYTE bIRQ;	// IRQ asserted flag 
+  BYTE bNMI;	// NMI asserted flag 
+  BYTE bRESET;  // RESET asserted flag
 } regsrec, *regsptr;
 
 extern DWORD      cpuemtype;
@@ -29,5 +31,7 @@ void    CpuResetCompilerData ();
 void    CpuSetupBenchmark ();
 BOOL    CpuSupportsFastPaging ();
 void    CpuIRQ ();
+void    CpuNMI ();
+void    CpuReset ();
 DWORD   CpuGetSnapshot(SS_CPU6502* pSS);
 DWORD   CpuSetSnapshot(SS_CPU6502* pSS);

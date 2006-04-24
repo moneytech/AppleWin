@@ -308,7 +308,8 @@ IDR_HDDRVR              FIRMWARE                "Hddrvr.bin"
 // ROM
 //
 
-IDR_APPLE2_ROM          ROM                     "Apple2.rom"
+IDR_APPLE2ORIG_ROM      ROM                     "Apple2orig.rom"
+IDR_APPLE2PLUS_ROM      ROM                     "Apple2plus.rom"
 IDR_APPLE2E_ROM         ROM                     "Apple2e.rom"
 
 /////////////////////////////////////////////////////////////////////////////
