@@ -14,7 +14,7 @@ typedef struct _regsrec {
   BYTE bIRQ;	// IRQ asserted flag 
   BYTE bNMI;	// NMI asserted flag 
   BYTE bRESET;  // RESET asserted flag
-  BYTE bJammed; // CPU has crashed
+  BYTE bJammed; // CPU has crashed (NMOS 6502 only)
 } regsrec, *regsptr;
 
 extern DWORD      cpuemtype;

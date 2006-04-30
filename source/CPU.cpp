@@ -158,8 +158,6 @@ static signed long nInternalCyclesLeft;
 		   flagz = !(a & 0xFF);					    \
 		 }
 #define SETZ(a)	 flagz = !(a & 0xFF);
-#define TOBCD(a) (((((a)/10) % 10) << 4) | ((a) % 10))
-#define TOBIN(a) (((a) >> 4)*10 + ((a) & 0x0F))
 #define WRITE(a) {							    \
 		   memdirty[addr >> 8] = 0xFF;				    \
 		   LPBYTE page = memwrite[0][addr >> 8];		    \

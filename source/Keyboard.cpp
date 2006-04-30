@@ -179,7 +179,8 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 
 			DiskReset();
 			KeybReset();
-			VideoResetState();	// Switch Alternate char set off
+			if (apple2e)
+			        VideoResetState();	// Switch Alternate char set off
 			MB_Reset();
 
 #ifndef KEY_OLD

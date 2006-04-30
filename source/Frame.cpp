@@ -1014,7 +1014,7 @@ void ResetMachineState () {
   JoyReset();
   MB_Reset();
   SpkrReset();
-
+  
   SoundCore_SetFade(FADE_NONE);
 }
 

@@ -985,7 +985,7 @@ void MemReset ()
   ResetPaging(1);
   regs.bIRQ = 0;
   regs.bNMI = 0;
-  regs.bRESET = 0;
+  regs.bRESET = 1;
 }
 
 //===========================================================================
