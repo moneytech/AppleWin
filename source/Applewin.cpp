@@ -356,6 +356,7 @@ void LoadConfiguration () {
   LOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
   LOAD(TEXT("Video Emulation")   ,&videotype);
   LOAD(TEXT("Monochrome Color")  ,&monochrome);
+  LOAD(TEXT("Uthernet Active")  ,(DWORD *)&tfe_enabled);
 
   SetCurrentCLK6502();
 
@@ -403,41 +404,58 @@ void LoadConfiguration () {
   RegLoadString(TEXT("Preferences"),TEXT("Starting Directory"),1,szDirectory,MAX_PATH);
 
   SetCurrentDirectory(szDirectory);
+  
+  char szUthernetInt[MAX_PATH] = {0};
+  RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
+  update_tfe_interface(szUthernetInt,NULL);
+
 }
 
 //===========================================================================
-void RegisterExtensions () {
-  TCHAR command[MAX_PATH];
-  GetModuleFileName((HMODULE)0,command,MAX_PATH);
-  command[MAX_PATH-1] = 0;
-  TCHAR icon[MAX_PATH];
-  wsprintf(icon,TEXT("%s,1"),(LPCTSTR)command);
-  _tcscat(command,TEXT(" %1"));
-  RegSetValue(HKEY_CLASSES_ROOT,".bin",REG_SZ,"DiskImage",10);
-  RegSetValue(HKEY_CLASSES_ROOT,".do" ,REG_SZ,"DiskImage",10);
-  RegSetValue(HKEY_CLASSES_ROOT,".dsk",REG_SZ,"DiskImage",10);
-  RegSetValue(HKEY_CLASSES_ROOT,".nib",REG_SZ,"DiskImage",10);
-  RegSetValue(HKEY_CLASSES_ROOT,".po" ,REG_SZ,"DiskImage",10);
-//  RegSetValue(HKEY_CLASSES_ROOT,".aws",REG_SZ,"DiskImage",10);	// TO DO
-//  RegSetValue(HKEY_CLASSES_ROOT,".hdv",REG_SZ,"DiskImage",10);	// TO DO
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage",
-              REG_SZ,"Disk Image",21);
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage\\DefaultIcon",
-              REG_SZ,icon,_tcslen(icon)+1);
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage\\shell\\open\\command",
-              REG_SZ,command,_tcslen(command)+1);
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage\\shell\\open\\ddeexec",
-              REG_SZ,"%1",3);
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage\\shell\\open\\ddeexec\\application",
-              REG_SZ,"applewin",9);
-  RegSetValue(HKEY_CLASSES_ROOT,
-              "DiskImage\\shell\\open\\ddeexec\\topic",
-              REG_SZ,"system",7);
+void RegisterExtensions ()
+{
+	TCHAR szCommandTmp[MAX_PATH];
+	GetModuleFileName((HMODULE)0,szCommandTmp,MAX_PATH);
+
+	TCHAR command[MAX_PATH];
+	wsprintf(command, "\"%s\"",	szCommandTmp);	// Wrap	path & filename	in quotes &	null terminate
+
+	TCHAR icon[MAX_PATH];
+	wsprintf(icon,TEXT("%s,1"),(LPCTSTR)command);
+
+	_tcscat(command,TEXT(" \"%1\""));			// Append "%1"
+
+	RegSetValue(HKEY_CLASSES_ROOT,".bin",REG_SZ,"DiskImage",10);
+	RegSetValue(HKEY_CLASSES_ROOT,".do"	,REG_SZ,"DiskImage",10);
+	RegSetValue(HKEY_CLASSES_ROOT,".dsk",REG_SZ,"DiskImage",10);
+	RegSetValue(HKEY_CLASSES_ROOT,".nib",REG_SZ,"DiskImage",10);
+	RegSetValue(HKEY_CLASSES_ROOT,".po"	,REG_SZ,"DiskImage",10);
+//	RegSetValue(HKEY_CLASSES_ROOT,".aws",REG_SZ,"DiskImage",10);	// TO DO
+//	RegSetValue(HKEY_CLASSES_ROOT,".hdv",REG_SZ,"DiskImage",10);	// TO DO
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage",
+				REG_SZ,"Disk Image",21);
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage\\DefaultIcon",
+				REG_SZ,icon,_tcslen(icon)+1);
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage\\shell\\open\\command",
+				REG_SZ,command,_tcslen(command)+1);
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage\\shell\\open\\ddeexec",
+				REG_SZ,"%1",3);
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage\\shell\\open\\ddeexec\\application",
+				REG_SZ,"applewin",9);
+
+	RegSetValue(HKEY_CLASSES_ROOT,
+				"DiskImage\\shell\\open\\ddeexec\\topic",
+				REG_SZ,"system",7);
 }
 
 //===========================================================================
@@ -639,8 +657,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		MemInitialize();
 		VideoInitialize();
 		FrameCreateWindow();
+	   tfe_init();
         Snapshot_Startup();		// Do this after everything has been init'ed
-
+    
 		if(bSetFullScreen)
 		{
 			PostMessage(framewindow, WM_KEYDOWN, VK_F1+BTN_FULLSCR, 0);
@@ -665,6 +684,8 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	DSUninit();
 	SysClk_UninitTimer();
 	CoUninitialize();
+	
+	tfe_shutdown();
 	
 	if(g_fh)
 	{
