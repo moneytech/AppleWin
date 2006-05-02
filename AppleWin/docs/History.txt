@@ -35,8 +35,11 @@ Acknowledgements:
 1.13.0 - 02 May 2006
 --------------------
 * New: Uthernet card support
+  . Allows internet access when used with the Contiki OS
   . See: http://applewin.berlios.de/Uthernet.txt
 * New: Floating bus support
+  . Fixes the hang at Drol's cut-scene
+  . Bob Bishop's Money Munchers is a little bit closer to working
 * Change: Added support for SSC receive IRQ (eg. Z-Link)
 * Fix: Checkerboard cursor back for //e mode
 * Fix: [Bug #6778] enable harddisk not working in 1.12.9.1
