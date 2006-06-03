@@ -111,6 +111,7 @@ static signed long nInternalCyclesLeft;
 // Assume all interrupt sources assert until the device is told to stop:
 // - eg by r/w to device's register or a machine reset
 
+static bool g_bCritSectionValid = false;	// Deleting CritialSection when not valid causes crash on Win98
 static CRITICAL_SECTION g_CriticalSection;	// To guard /g_bmIRQ/
 static volatile UINT32 g_bmIRQ = 0;
 
@@ -426,9 +427,34 @@ static volatile UINT32 g_bmIRQ = 0;
 #define TXS      regs.sp = 0x100 | regs.x;
 #define TYA      regs.a = regs.y;                                           \
                  SETNZ(regs.a)
-#define INVALID1
-#define INVALID2 if (apple2e) ++regs.pc;
-#define INVALID3 if (apple2e) regs.pc += 2;
+
+
+void RequestDebugger()
+{
+	PostMessage( g_hFrameWindow, WM_KEYDOWN, DEBUG_TOGGLE_KEY, 0 );
+	PostMessage( g_hFrameWindow, WM_KEYUP  , DEBUG_TOGGLE_KEY, 0 );
+}
+
+bool CheckDebugBreak( int iOpcode )
+{
+	// Rnning at full speed? (debugger not running)
+	if ((mode != MODE_DEBUG) && (mode != MODE_STEPPING))
+	{
+		if (((iOpcode == 0) && IsDebugBreakOnInvalid(0)) ||
+			((g_iDebugOnOpcode) && (g_iDebugOnOpcode == iOpcode))) // User wants to enter debugger on opcode?
+		{
+			RequestDebugger();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Break into debugger on invalid opcodes
+#define INVALID1                          ; if (IsDebugBreakOnInvalid(1)) { RequestDebugger(); bBreakOnInvalid = true; }
+#define INVALID2 if (apple2e) ++regs.pc   ; if (IsDebugBreakOnInvalid(2)) { RequestDebugger(); bBreakOnInvalid = true; }
+#define INVALID3 if (apple2e) regs.pc += 2; if (IsDebugBreakOnInvalid(3)) { RequestDebugger(); bBreakOnInvalid = true; }
 
 /****************************************************************************
 *
@@ -479,24 +505,33 @@ static inline void DoIrqProfiling(DWORD cycles)
 //===========================================================================
 static DWORD InternalCpuExecute (DWORD totalcycles)
 {
-  WORD addr;
-  BOOL flagc;
-  BOOL flagn;
-  BOOL flagv;
-  BOOL flagz;
-  WORD temp;
-  WORD val;
-  AF_TO_EF
-  DWORD cycles = 0;
-  BOOL bWrtMem;		// Set if opcode writes to memory (eg. ASL, STA)
-  WORD base;
+	WORD addr;
+	BOOL flagc;
+	BOOL flagn;
+	BOOL flagv;
+	BOOL flagz;
+	WORD temp;
+	WORD val;
+	AF_TO_EF
+	DWORD cycles = 0;
+	BOOL bWrtMem;		// Set if opcode writes to memory (eg. ASL, STA)
+	WORD base;
 
-  do
-  {
-    nInternalCyclesLeft = (totalcycles<<8) - (cycles<<8);
-    USHORT uExtraCycles = 0;
+	bool bBreakOnInvalid = false;
 
-    switch (*(mem+regs.pc++)) 
+	do
+	{
+		nInternalCyclesLeft = (totalcycles<<8) - (cycles<<8);
+		USHORT uExtraCycles = 0;
+
+		BYTE iOpcode = *(mem+regs.pc);
+		if (CheckDebugBreak( iOpcode ))
+			break;
+
+		regs.pc++;
+
+
+    switch (iOpcode) 
 	{
       case 0x00:       BRK           CYC(7)  break;
       case 0x01:       INDX ORA      CYC(6)  break;
@@ -758,23 +793,29 @@ static DWORD InternalCpuExecute (DWORD totalcycles)
       case 0xFF:       INVALID1      CYC(1)  break;
     }
 
-    if(g_bmIRQ && !(regs.ps & AF_INTERRUPT))
-	{
-		// IRQ signals are deasserted when a specific r/w operation is done on device
-		g_nCycleIrqStart = g_nCumulativeCycles + cycles;
-        PUSH(regs.pc >> 8)
-        PUSH(regs.pc & 0xFF)
-        EF_TO_AF
-        regs.ps |= AF_RESERVED;
-        PUSH(regs.ps)
-        regs.ps |= AF_INTERRUPT;
-		regs.pc = * (WORD*) (mem+0xFFFE);
-		CYC(7)
+		if(g_bmIRQ && !(regs.ps & AF_INTERRUPT))
+		{
+			// IRQ signals are deasserted when a specific r/w operation is done on device
+			g_nCycleIrqStart = g_nCumulativeCycles + cycles;
+			PUSH(regs.pc >> 8)
+			PUSH(regs.pc & 0xFF)
+			EF_TO_AF
+			regs.ps |= AF_RESERVED;
+			PUSH(regs.ps)
+			regs.ps |= AF_INTERRUPT;
+			regs.pc = * (WORD*) (mem+0xFFFE);
+			CYC(7)
+		}
+
+		if (bBreakOnInvalid)
+			break;
+
 	}
-  }
-  while (cycles < totalcycles);
-  EF_TO_AF
-  return cycles;
+	while (cycles < totalcycles);
+
+	EF_TO_AF
+
+	return cycles;
 }
 
 //
@@ -792,7 +833,11 @@ void CpuDestroy () {
     cpulibrary[loop]     = (HINSTANCE)0;
   }
 
-  	DeleteCriticalSection(&g_CriticalSection);
+	if (g_bCritSectionValid)
+	{
+  		DeleteCriticalSection(&g_CriticalSection);
+		g_bCritSectionValid = false;
+	}
 }
 
 //===========================================================================
@@ -913,6 +958,7 @@ void CpuInitialize () {
   regs.sp = 0x01FF;
 
 	InitializeCriticalSection(&g_CriticalSection);
+	g_bCritSectionValid = true;
 	CpuIrqReset();
 
 #ifdef _X86_
@@ -1016,23 +1062,26 @@ BOOL CpuSupportsFastPaging () {
 
 void CpuIrqReset()
 {
-	EnterCriticalSection(&g_CriticalSection);
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
 	g_bmIRQ = 0;
-	LeaveCriticalSection(&g_CriticalSection);
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 
 void CpuIrqAssert(eIRQSRC Device)
 {
-	EnterCriticalSection(&g_CriticalSection);
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
 	g_bmIRQ |= 1<<Device;
-	LeaveCriticalSection(&g_CriticalSection);
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 
 void CpuIrqDeassert(eIRQSRC Device)
 {
-	EnterCriticalSection(&g_CriticalSection);
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
 	g_bmIRQ &= ~(1<<Device);
-	LeaveCriticalSection(&g_CriticalSection);
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 //===========================================================================
 
