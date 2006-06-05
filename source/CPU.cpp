@@ -77,6 +77,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // .  Read-modify-write instructions abs indexed in same page take 6 cycles (cf. 7 cycles for 6502)
 // .  ASL, DEC, INC, LSR, ROL, ROR
 // .  This should work now (but makes bWrtMem even less useful for r/w detection)
+//
+// . Thanks to Scott Hemphill for the verified CMOS ADC and SBC algorithm! You rock.
+// . And thanks to the VICE team for the NMOS ADC and SBC algorithms as well as the
+// . algorithms for those illops which involve ADC or SBC. You rock too.
+
 
 #include "StdAfx.h"
 #pragma	 hdrstop
@@ -133,13 +138,13 @@ static signed long nInternalCyclesLeft;
 		  flagz = (regs.ps & AF_ZERO);
 #define EF_TO_AF  regs.ps = (regs.ps & ~(AF_CARRY | AF_SIGN |		    \
 					 AF_OVERFLOW | AF_ZERO))	    \
-			      | (flagc ? AF_CARRY    : 0)		    \
-			      | (flagn ? AF_SIGN     : 0)		    \
+			      | flagc 					    \
+			      | flagn					    \
 			      | (flagv ? AF_OVERFLOW : 0)		    \
 			      | (flagz ? AF_ZERO     : 0)		    \
 			      | AF_RESERVED | AF_BREAK;
 // CYC(a): This can be optimised, as only certain opcodes will affect uExtraCycles
-#define CYC(a)	 cycles += a+uExtraCycles; MB_UpdateCycles(a+uExtraCycles);
+#define CYC(a)	 cycles += (a)+uExtraCycles; MB_UpdateCycles((a)+uExtraCycles);
 #define POP	 (*(mem+((regs.sp >= 0x1FF) ? (regs.sp = 0x100) : ++regs.sp)))
 #define PUSH(a)	 *(mem+regs.sp--) = (a);				    \
 		 if (regs.sp < 0x100)					    \
@@ -155,9 +160,9 @@ static signed long nInternalCyclesLeft;
 		 )
 #define SETNZ(a) {							    \
 		   flagn = ((a) & 0x80);				    \
-		   flagz = !(a & 0xFF);					    \
+		   flagz = !((a) & 0xFF);					    \
 		 }
-#define SETZ(a)	 flagz = !(a & 0xFF);
+#define SETZ(a)	 flagz = !((a) & 0xFF);
 #define WRITE(a) {							    \
 		   memdirty[addr >> 8] = 0xFF;				    \
 		   LPBYTE page = memwrite[0][addr >> 8];		    \
@@ -244,14 +249,14 @@ static signed long nInternalCyclesLeft;
 #define ADC_NMOS bWrtMem = 0;						    \
 		 temp = READ;						    \
 		 if (regs.ps & AF_DECIMAL) {				    \
-		   val	  = (regs.a & 0x0F) + (temp & 0x0F) + !!flagc;	    \
+		   val	  = (regs.a & 0x0F) + (temp & 0x0F) + flagc;	    \
 		   if (val > 0x09)					    \
 		     val += 0x06;					    \
 		   if (val <= 0x0F)					    \
 		     val = (val & 0x0F) + (regs.a & 0xF0) + (temp & 0xF0);  \
 		   else							    \
 		     val = (val & 0x0F) + (regs.a & 0xF0) + (temp & 0xF0) + 0x10;\
-		   flagz = !((regs.a + temp + !!flagc) & 0xFF);		    \
+		   flagz = !((regs.a + temp + flagc) & 0xFF);		    \
 		   flagn = (val & 0x80);				    \
 		   flagv = ((regs.a ^ val) & 0x80) && !((regs.a ^ temp) & 0x80);\
 		   if ((val & 0x1F0) > 0x90)				    \
@@ -260,7 +265,7 @@ static signed long nInternalCyclesLeft;
 		   regs.a = val & 0xFF;                                     \
 		  }							    \
 		 else {							    \
-		   val	  = regs.a + temp + !!flagc;			    \
+		   val	  = regs.a + temp + flagc;			    \
 		   flagc  = (val > 0xFF);				    \
 		   flagv  = (((regs.a & 0x80) == (temp & 0x80)) &&	    \
 			     ((regs.a & 0x80) != (val & 0x80)));	    \
@@ -272,7 +277,7 @@ static signed long nInternalCyclesLeft;
                  flagv = !((regs.a ^ temp) & 0x80);			    \
 		 if (regs.ps & AF_DECIMAL) {				    \
 		    uExtraCycles++;					    \
-		    val = (regs.a & 0x0f) + (temp & 0x0f) + !!flagc;        \
+		    val = (regs.a & 0x0f) + (temp & 0x0f) + flagc;          \
 		    if (val >= 0x0A)					    \
 		       val = 0x10 | ((val + 6) & 0x0f);			    \
 		    val += (regs.a & 0xf0) + (temp & 0xf0);		    \
@@ -317,9 +322,9 @@ static signed long nInternalCyclesLeft;
 		   val = temp;						    \
 		   val |= (flagc ? 0x100 : 0);				    \
 		   val >>= 1;						    \
-		   flagn = !!flagc;					    \
+		   flagn = (flagc ? 0x80 : 0);					    \
 		   SETZ(val)						    \
-		   flagv = !!((val ^ temp) & 0x40);			    \
+		   flagv = ((val ^ temp) & 0x40);			    \
 		   if (((val & 0x0F) + (val & 0x01)) > 0x05)                \
 		     val = (val & 0xF0) | ((val + 0x06) & 0x0F);	    \
 		   if (((val & 0xF0) + (val & 0x10)) > 0x50) {		    \
@@ -536,22 +541,22 @@ static signed long nInternalCyclesLeft;
 #define PLY	 regs.y = POP;						    \
 		 SETNZ(regs.y)
 #define RLA	 bWrtMem = 1;						    \
-		 val   = (READ << 1) | (!!flagc);			    \
+		 val   = (READ << 1) | flagc;				    \
 		 flagc = (val > 0xFF);					    \
 		 WRITE(val)						    \
 		 regs.a &= val;						    \
 		 SETNZ(regs.a)
 #define ROL_NMOS bWrtMem = 1;						    \
-		 val   = (READ << 1) | (!!flagc);			    \
+		 val   = (READ << 1) | flagc;				    \
 		 flagc = (val > 0xFF);					    \
 		 SETNZ(val)						    \
 		 WRITE(val)
 #define ROL_CMOS bWrtMem = 0;						    \
-		 val   = (READ << 1) | (!!flagc);			    \
+		 val   = (READ << 1) | flagc;				    \
 		 flagc = (val > 0xFF);					    \
 		 SETNZ(val)						    \
 		 WRITE(val)
-#define ROLA	 val	= (((WORD)regs.a) << 1) | (!!flagc);		    \
+#define ROLA	 val	= (((WORD)regs.a) << 1) | flagc;		    \
 		 flagc	= (val > 0xFF);					    \
 		 regs.a = val & 0xFF;					    \
 		 SETNZ(regs.a);
@@ -578,14 +583,14 @@ static signed long nInternalCyclesLeft;
 		 WRITE(val)						    \
 		 temp = val;						    \
 		 if (regs.ps & AF_DECIMAL) {				    \
-		   val	  = (regs.a & 0x0F) + (temp & 0x0F) + !!flagc;	    \
+		   val	  = (regs.a & 0x0F) + (temp & 0x0F) + flagc;	    \
 		   if (val > 0x09)					    \
 		     val += 0x06;					    \
 		   if (val <= 0x0F)					    \
 		     val = (val & 0x0F) + (regs.a & 0xF0) + (temp & 0xF0);  \
 		   else							    \
 		     val = (val & 0x0F) + (regs.a & 0xF0) + (temp & 0xF0) + 0x10;\
-		   flagz = !((regs.a + temp + !!flagc) & 0xFF);		    \
+		   flagz = !((regs.a + temp + flagc) & 0xFF);		    \
 		   flagn = (val & 0x80);				    \
 		   flagv = ((regs.a ^ val) & 0x80) && !((regs.a ^ temp) & 0x80);\
 		   if ((val & 0x1F0) > 0x90)				    \
@@ -594,7 +599,7 @@ static signed long nInternalCyclesLeft;
 		   regs.a = val & 0xFF;                                     \
 		 }							    \
 		 else {							    \
-		   val	  = regs.a + temp + !!flagc;			    \
+		   val	  = regs.a + temp + flagc;			    \
 		   flagc  = (val > 0xFF);				    \
 		   flagv  = (((regs.a & 0x80) == (temp & 0x80)) &&	    \
 			     ((regs.a & 0x80) != (val & 0x80)));	    \
@@ -642,10 +647,10 @@ static signed long nInternalCyclesLeft;
 		 }
 #define SBC_CMOS bWrtMem = 0;						    \
 	         temp = READ;						    \
-		 flagv = !!((regs.a ^ temp) & 0x80);			    \
+		 flagv = ((regs.a ^ temp) & 0x80);			    \
 		 if (regs.ps & AF_DECIMAL) {				    \
 		    uExtraCycles++;					    \
-                    temp2 = 0x0F + (regs.a & 0x0F) - (temp & 0x0F) + !!flagc;\
+                    temp2 = 0x0F + (regs.a & 0x0F) - (temp & 0x0F) + flagc; \
 		    if (temp2 < 0x10) {					    \
 		       val = 0;						    \
 		       temp2 -= 0x06;					    \
@@ -669,7 +674,7 @@ static signed long nInternalCyclesLeft;
 		    val += temp2;					    \
 		 }							    \
 		 else {							    \
-		    val = 0xff + regs.a - temp + !!flagc;                   \
+		    val = 0xff + regs.a - temp + flagc;                     \
 		    if (val < 0x100) {					    \
 		       flagc = 0;					    \
 		       if (val < 0x80)					    \
@@ -777,10 +782,10 @@ static inline void DoIrqProfiling(DWORD cycles)
 static DWORD InternalCpuExecute (DWORD totalcycles)
 {
   WORD addr;
-  BOOL flagc;
-  BOOL flagn;
-  BOOL flagv;
-  BOOL flagz;
+  BOOL flagc; // must always be 0 or 1, no other values allowed
+  BOOL flagn; // must always be 0 or 0x80.
+  BOOL flagv; // any value allowed
+  BOOL flagz; // any value allowed
   WORD temp;
   WORD temp2;
   WORD val;
