@@ -903,7 +903,9 @@ void MemInitialize () {
 	if(hResInfo == NULL)
 	{
 		TCHAR sRomFileName[ 128 ];
-		_tcscpy( sRomFileName, apple2e ? TEXT("APPLE2E.ROM") : TEXT("APPLE2PLUS.ROM") );
+		_tcscpy( sRomFileName, apple2e ? TEXT("APPLE2E.ROM")
+					       : (apple2plus ? TEXT("APPLE2PLUS.ROM")
+					                     : TEXT("APPLE2ORIG.ROM")));
 
 		TCHAR sText[ 256 ];
 		wsprintf( sText, TEXT("Unable to open the required firmware ROM data file.\n\nFile: %s."), sRomFileName );

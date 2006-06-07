@@ -1390,7 +1390,7 @@ void VideoBenchmark () {
   // IF THE PROGRAM COUNTER IS NOT IN THE EXPECTED RANGE AT THE END OF THE
   // CPU BENCHMARK, REPORT AN ERROR AND OPTIONALLY TRACK IT DOWN
   if ((regs.pc < 0x300) || (regs.pc > 0x400))
-    if (MessageBox(framewindow,
+    if (MessageBox(g_hFrameWindow,
                    TEXT("The emulator has detected a problem while running ")
                    TEXT("the CPU benchmark.  Would you like to gather more ")
                    TEXT("information?"),
@@ -1419,13 +1419,13 @@ void VideoBenchmark () {
                  (unsigned)loop,
                  (unsigned)lastpc,
                  (unsigned)regs.pc);
-        MessageBox(framewindow,
+        MessageBox(g_hFrameWindow,
                    outstr,
                    TEXT("Benchmarks"),
                    MB_ICONINFORMATION | MB_SETFOREGROUND);
       }
       else
-        MessageBox(framewindow,
+        MessageBox(g_hFrameWindow,
                    TEXT("The emulator was unable to locate the exact ")
                    TEXT("point of the error.  This probably means that ")
                    TEXT("the problem is external to the emulator, ")
@@ -1480,7 +1480,7 @@ void VideoBenchmark () {
            (unsigned)(totalmhz10 % 10),
            (LPCTSTR)(apple2e ? TEXT("") : TEXT(" (6502)")),
            (unsigned)realisticfps);
-  MessageBox(framewindow,
+  MessageBox(g_hFrameWindow,
              outstr,
              TEXT("Benchmarks"),
              MB_ICONINFORMATION | MB_SETFOREGROUND);
@@ -1569,7 +1569,7 @@ void VideoChooseColor () {
   CHOOSECOLOR cc;
   ZeroMemory(&cc,sizeof(CHOOSECOLOR));
   cc.lStructSize     = sizeof(CHOOSECOLOR);
-  cc.hwndOwner       = framewindow;
+  cc.hwndOwner       = g_hFrameWindow;
   cc.rgbResult       = monochrome;
   cc.lpCustColors    = customcolors;
   cc.Flags           = CC_RGBINIT | CC_SOLIDCOLOR;

@@ -66,7 +66,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{ TOKEN_PIPE        , TYPE_OPERATOR, TEXT('|')  }, // bit-or
 		{ TOKEN_PLUS        , TYPE_OPERATOR, TEXT('+')  }, // add
 //		{ TOKEN_QUESTION    , TYPE_OPERATOR, TEXT('?')  }, // Not a token 1) wildcard needs to stay together with other chars
-		{ TOKEN_QUOTED      , TYPE_QUOTED  , TEXT('"')  },
 		{ TOKEN_RIGHT_PAREN , TYPE_OPERATOR, TEXT(')')  },
 		{ TOKEN_SEMI        , TYPE_STRING  , TEXT(';')  },
 		{ TOKEN_SPACE       , TYPE_STRING  , TEXT(' ')  } // space is also a delimiter between tokens/args
@@ -240,12 +239,6 @@ int	ArgsGet ( TCHAR * pInput )
 				// TODO - command seperator, must handle non-quoted though!
 			}
 
-			if (iTokenSrc == TOKEN_QUOTED)
-			{
-				pSrc++; // Don't store start of quote
-				pEnd = SkipUntilChar( pSrc, CHAR_QUOTED );
-			}
-
 			if (pEnd)
 			{
 				nBuf = pEnd - pSrc;
@@ -259,11 +252,6 @@ int	ArgsGet ( TCHAR * pInput )
 				pArg->nArgLen      = nLen;
 				pArg->eToken       = iTokenSrc;
 				pArg->bType        = iType;
-
-				if (iTokenSrc == TOKEN_QUOTED)
-				{
-					pEnd++; 
-				}
 
 				pSrc = pEnd;
 				iArg++;

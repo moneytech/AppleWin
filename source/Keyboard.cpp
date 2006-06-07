@@ -256,7 +256,7 @@ static void ClipboardInit()
 	if (!IsClipboardFormatAvailable(CF_TEXT))
 		return;
 	
-	if (!OpenClipboard(framewindow))
+	if (!OpenClipboard(g_hFrameWindow))
 		return;
 	
 	hglb = GetClipboardData(CF_TEXT);

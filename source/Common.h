@@ -2,6 +2,7 @@
 
 const double _M14 = (157500000.0 / 11.0); // 14.3181818... * 10^6
 const double CLK_6502 = ((_M14 * 65.0) / 912.0); // 65 cycles per 912 14M clocks
+//const double CLK_6502 = 23 * 44100;			// 1014300
 
 const UINT uCyclesPerLine			= 65;	// 25 cycles of HBL & 40 cycles of HBL'
 const UINT uVisibleLinesPerFrame	= 64*3;	// 192
@@ -71,3 +72,4 @@ typedef BYTE (__stdcall *cxfunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE
 
 typedef struct _IMAGE__ { int unused; } *HIMAGE;
 
+enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC};
