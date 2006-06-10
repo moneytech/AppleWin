@@ -985,8 +985,6 @@ void MemReset ()
 
   // INITIALIZE PAGING, FILLING IN THE 64K MEMORY IMAGE
   ResetPaging(1);
-  regs.bIRQ = 0;
-  regs.bNMI = 0;
   regs.bRESET = 1;
 }
 

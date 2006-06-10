@@ -11,8 +11,6 @@ typedef struct _regsrec {
   BYTE ps;  // processor status
   WORD pc;  // program counter
   WORD sp;  // stack pointer
-  BYTE bIRQ;	// IRQ asserted flag 
-  BYTE bNMI;	// NMI asserted flag 
   BYTE bRESET;  // RESET asserted flag
   BYTE bJammed; // CPU has crashed (NMOS 6502 only)
 } regsrec, *regsptr;
@@ -34,8 +32,9 @@ BOOL    CpuSupportsFastPaging ();
 void	CpuIrqReset();
 void	CpuIrqAssert(eIRQSRC Device);
 void	CpuIrqDeassert(eIRQSRC Device);
-void    CpuIRQ ();
-void    CpuNMI ();
+void	CpuNmiReset();
+void	CpuNmiAssert(eIRQSRC Device);
+void	CpuNmiDeassert(eIRQSRC Device);
 void    CpuReset ();
 DWORD   CpuGetSnapshot(SS_CPU6502* pSS);
 DWORD   CpuSetSnapshot(SS_CPU6502* pSS);
