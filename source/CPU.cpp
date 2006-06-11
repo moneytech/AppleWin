@@ -136,7 +136,7 @@ static bool g_bCritSectionValid = false;	// Deleting CritialSection when not val
 static CRITICAL_SECTION g_CriticalSection;	// To guard /g_bmIRQ/ & /g_bmNMI/
 static volatile UINT32 g_bmIRQ = 0;
 static volatile UINT32 g_bmNMI = 0;
-static volatile BOOL g_bOldNMI = FALSE; // NMI already being serviced
+static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 
 /****************************************************************************
 *
@@ -1111,10 +1111,10 @@ static DWORD InternalCpuExecute (DWORD totalcycles)
       case 0xFE:       ABSX INC_CMOS CYC(6)  break;
       case 0xFF:   INV NOP	     CYC(2)  break;
     }
-    if(g_bmNMI && !g_bOldNMI)
+    if(g_bNmiFlank)
     {
 	// NMI signals are only serviced once
-	g_bOldNMI = TRUE;
+	g_bNmiFlank = FALSE;
 	g_nCycleIrqStart = g_nCumulativeCycles + cycles;
 	PUSH(regs.pc >> 8)
 	PUSH(regs.pc & 0xFF)
@@ -1423,10 +1423,10 @@ static DWORD InternalCpuExecute (DWORD totalcycles)
       case 0xFE:       ABSX INC_NMOS CYC(6)  break;
       case 0xFF:   INV ABSX INS	     CYC(7)  break;
     }
-    if(g_bmNMI && !g_bOldNMI && !regs.bJammed)
+    if(g_bNmiFlank && !regs.bJammed)
     {
 	// NMI signals are only serviced once
-	g_bOldNMI = TRUE;
+	g_bNmiFlank = FALSE;
 	g_nCycleIrqStart = g_nCumulativeCycles + cycles;
 	PUSH(regs.pc >> 8)
 	PUSH(regs.pc & 0xFF)
@@ -1722,7 +1722,7 @@ void CpuNmiReset()
 	_ASSERT(g_bCritSectionValid);
 	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
 	g_bmNMI = 0;
-	g_bOldNMI = FALSE;
+	g_bNmiFlank = FALSE;
 	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 
@@ -1730,6 +1730,8 @@ void CpuNmiAssert(eIRQSRC Device)
 {
 	_ASSERT(g_bCritSectionValid);
 	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+	if (g_bmNMI == 0) // NMI line is just becoming active
+	    g_bNmiFlank = TRUE;
 	g_bmNMI |= 1<<Device;
 	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
@@ -1739,8 +1741,6 @@ void CpuNmiDeassert(eIRQSRC Device)
 	_ASSERT(g_bCritSectionValid);
 	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
 	g_bmNMI &= ~(1<<Device);
-	if (g_bmNMI == 0) // NMI line just dropped to inactive
-	    g_bOldNMI = FALSE;
 	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 
