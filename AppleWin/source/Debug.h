@@ -25,6 +25,10 @@ using namespace std;
 	extern const TCHAR *g_aBreakpointSource [ NUM_BREAKPOINT_SOURCES   ];
 	extern const TCHAR *g_aBreakpointSymbols[ NUM_BREAKPOINT_OPERATORS ];
 
+	// Full-Speed debugging
+	extern int g_nDebugOnBreakInvalid;
+	extern int g_iDebugOnOpcode      ;
+
 // Commands
 	extern const int NUM_COMMANDS_WITH_ALIASES; // = sizeof(g_aCommands) / sizeof (Command_t); // Determined at compile-time ;-)
 	extern       int g_iCommand; // last command
@@ -62,6 +66,9 @@ using namespace std;
 // Memory
 	extern MemoryDump_t g_aMemDump[ NUM_MEM_DUMPS ];
 
+//	extern MemorySearchArray_t g_vMemSearchMatches;
+	extern vector<int> g_vMemorySearchResults;
+
 // Source Level Debugging
 	extern TCHAR  g_aSourceFileName[ MAX_PATH ];
 	extern MemoryTextFile_t g_AssemblerSourceBuffer;
@@ -91,6 +98,22 @@ using namespace std;
 // Breakpoints
 	bool GetBreakpointInfo ( WORD nOffset, bool & bBreakpointActive_, bool & bBreakpointEnable_ );
 
+	// 0 = Brk, 1 = Invalid1, .. 3 = Invalid 3
+	inline bool IsDebugBreakOnInvalid( int iOpcodeType )
+	{
+		bool bActive = (g_nDebugOnBreakInvalid >> iOpcodeType) & 1;
+		return bActive;
+	}
+
+	inline void SetDebugBreakOnInvalid( int iOpcodeType, int nValue )
+	{
+		if (iOpcodeType <= AM_3)
+		{
+			g_nDebugOnBreakInvalid &= ~ (          1  << iOpcodeType);
+			g_nDebugOnBreakInvalid |=   ((nValue & 1) << iOpcodeType);
+		}
+	}
+	
 // Color
 	inline COLORREF DebuggerGetColor( int iColor );
 
@@ -106,7 +129,7 @@ using namespace std;
 	LPCTSTR FindSymbolFromAddress (WORD nAdress, int * iTable_ = NULL );
 	LPCTSTR GetSymbol   (WORD nAddress, int nBytes);
 
-	bool Get6502Targets (int *pTemp_, int *pFinal_, int *pBytes_ );
+	bool Get6502Targets ( WORD nAddress, int *pTemp_, int *pFinal_, int *pBytes_ );
 
 	Update_t DebuggerProcessCommand( const bool bEchoConsoleInput );
 
@@ -114,7 +137,8 @@ using namespace std;
 
 	enum
 	{
-		DEBUG_EXIT_KEY = 0x1B // Escape
+		DEBUG_EXIT_KEY   = 0x1B, // Escape
+		DEBUG_TOGGLE_KEY = VK_F1 + BTN_DEBUG
 	};
 
 	void	DebugBegin ();

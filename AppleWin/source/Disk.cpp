@@ -400,7 +400,7 @@ void DiskNotifyInvalidImage (LPCTSTR imagefilename,int error)
       // IGNORE OTHER ERRORS SILENTLY
       return;
   }
-  MessageBox(framewindow,
+  MessageBox(g_hFrameWindow,
              buffer,
              TITLE,
              MB_ICONEXCLAMATION | MB_SETFOREGROUND);
@@ -449,7 +449,11 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
       else
         return 0;
     else
-      result = *(fptr->trackimage+fptr->byte);
+    {
+      static int spin_count = 0; // simulate drive spin to fool RWTS test at $BD34
+      spin_count = spin_count++ & 0xF;
+      result = (spin_count) ? *(fptr->trackimage+fptr->byte) : 0x7F;
+    }
   if (++fptr->byte >= fptr->nibbles)
     fptr->byte = 0;
   return result;
@@ -476,7 +480,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   OPENFILENAME ofn;
   ZeroMemory(&ofn,sizeof(OPENFILENAME));
   ofn.lStructSize     = sizeof(OPENFILENAME);
-  ofn.hwndOwner       = framewindow;
+  ofn.hwndOwner       = g_hFrameWindow;
   ofn.hInstance       = instance;
   ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
                         TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")

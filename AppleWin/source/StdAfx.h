@@ -39,4 +39,5 @@
 #include "SerialComms.h"
 #include "SoundCore.h"
 #include "Speaker.h"
+#include "Tfe/Tfe.h"
 #include "Video.h"

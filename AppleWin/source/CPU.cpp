@@ -106,6 +106,15 @@ static ULONG g_nCyclesExecuted;
 
 static signed long nInternalCyclesLeft;
 
+//
+
+// Assume all interrupt sources assert until the device is told to stop:
+// - eg by r/w to device's register or a machine reset
+
+static bool g_bCritSectionValid = false;	// Deleting CritialSection when not valid causes crash on Win98
+static CRITICAL_SECTION g_CriticalSection;	// To guard /g_bmIRQ/
+static volatile UINT32 g_bmIRQ = 0;
+
 /****************************************************************************
 *
 *  GENERAL PURPOSE MACROS
@@ -418,9 +427,34 @@ static signed long nInternalCyclesLeft;
 #define TXS      regs.sp = 0x100 | regs.x;
 #define TYA      regs.a = regs.y;                                           \
                  SETNZ(regs.a)
-#define INVALID1
-#define INVALID2 if (apple2e) ++regs.pc;
-#define INVALID3 if (apple2e) regs.pc += 2;
+
+
+void RequestDebugger()
+{
+	PostMessage( g_hFrameWindow, WM_KEYDOWN, DEBUG_TOGGLE_KEY, 0 );
+	PostMessage( g_hFrameWindow, WM_KEYUP  , DEBUG_TOGGLE_KEY, 0 );
+}
+
+bool CheckDebugBreak( int iOpcode )
+{
+	// Rnning at full speed? (debugger not running)
+	if ((mode != MODE_DEBUG) && (mode != MODE_STEPPING))
+	{
+		if (((iOpcode == 0) && IsDebugBreakOnInvalid(0)) ||
+			((g_iDebugOnOpcode) && (g_iDebugOnOpcode == iOpcode))) // User wants to enter debugger on opcode?
+		{
+			RequestDebugger();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Break into debugger on invalid opcodes
+#define INVALID1                          ; if (IsDebugBreakOnInvalid(1)) { RequestDebugger(); bBreakOnInvalid = true; }
+#define INVALID2 if (apple2e) ++regs.pc   ; if (IsDebugBreakOnInvalid(2)) { RequestDebugger(); bBreakOnInvalid = true; }
+#define INVALID3 if (apple2e) regs.pc += 2; if (IsDebugBreakOnInvalid(3)) { RequestDebugger(); bBreakOnInvalid = true; }
 
 /****************************************************************************
 *
@@ -471,39 +505,33 @@ static inline void DoIrqProfiling(DWORD cycles)
 //===========================================================================
 static DWORD InternalCpuExecute (DWORD totalcycles)
 {
-  WORD addr;
-  BOOL flagc;
-  BOOL flagn;
-  BOOL flagv;
-  BOOL flagz;
-  WORD temp;
-  WORD val;
-  AF_TO_EF
-  DWORD cycles = 0;
-  BOOL bWrtMem;		// Set if opcode writes to memory (eg. ASL, STA)
-  WORD base;
+	WORD addr;
+	BOOL flagc;
+	BOOL flagn;
+	BOOL flagv;
+	BOOL flagz;
+	WORD temp;
+	WORD val;
+	AF_TO_EF
+	DWORD cycles = 0;
+	BOOL bWrtMem;		// Set if opcode writes to memory (eg. ASL, STA)
+	WORD base;
 
-  do
-  {
-    nInternalCyclesLeft = (totalcycles<<8) - (cycles<<8);
-    USHORT uExtraCycles = 0;
+	bool bBreakOnInvalid = false;
 
-    if(regs.bIRQ && !(regs.ps & AF_INTERRUPT))
+	do
 	{
-		g_nCycleIrqStart = g_nCumulativeCycles + cycles;
-		regs.bIRQ = 0;
-        PUSH(regs.pc >> 8)
-        PUSH(regs.pc & 0xFF)
-        EF_TO_AF
-        regs.ps |= AF_RESERVED;
-        PUSH(regs.ps)
-        regs.ps |= AF_INTERRUPT;
-		regs.pc = * (WORD*) (mem+0xFFFE);
-		CYC(7)
-		continue;
-	}
+		nInternalCyclesLeft = (totalcycles<<8) - (cycles<<8);
+		USHORT uExtraCycles = 0;
 
-    switch (*(mem+regs.pc++)) 
+		BYTE iOpcode = *(mem+regs.pc);
+		if (CheckDebugBreak( iOpcode ))
+			break;
+
+		regs.pc++;
+
+
+    switch (iOpcode) 
 	{
       case 0x00:       BRK           CYC(7)  break;
       case 0x01:       INDX ORA      CYC(6)  break;
@@ -764,10 +792,30 @@ static DWORD InternalCpuExecute (DWORD totalcycles)
       case 0xFE:       ABSX INC      CYC(6)  break;
       case 0xFF:       INVALID1      CYC(1)  break;
     }
-  }
-  while (cycles < totalcycles);
-  EF_TO_AF
-  return cycles;
+
+		if(g_bmIRQ && !(regs.ps & AF_INTERRUPT))
+		{
+			// IRQ signals are deasserted when a specific r/w operation is done on device
+			g_nCycleIrqStart = g_nCumulativeCycles + cycles;
+			PUSH(regs.pc >> 8)
+			PUSH(regs.pc & 0xFF)
+			EF_TO_AF
+			regs.ps |= AF_RESERVED;
+			PUSH(regs.ps)
+			regs.ps |= AF_INTERRUPT;
+			regs.pc = * (WORD*) (mem+0xFFFE);
+			CYC(7)
+		}
+
+		if (bBreakOnInvalid)
+			break;
+
+	}
+	while (cycles < totalcycles);
+
+	EF_TO_AF
+
+	return cycles;
 }
 
 //
@@ -784,6 +832,12 @@ void CpuDestroy () {
     cpugetcodefunc[loop] = NULL;
     cpulibrary[loop]     = (HINSTANCE)0;
   }
+
+	if (g_bCritSectionValid)
+	{
+  		DeleteCriticalSection(&g_CriticalSection);
+		g_bCritSectionValid = false;
+	}
 }
 
 //===========================================================================
@@ -902,9 +956,16 @@ void CpuInitialize () {
   regs.ps = 0x20;
   regs.pc = *(LPWORD)(mem+0xFFFC);
   regs.sp = 0x01FF;
-  regs.bIRQ = 0;
+
+	InitializeCriticalSection(&g_CriticalSection);
+	g_bCritSectionValid = true;
+	CpuIrqReset();
 
 #ifdef _X86_
+	// TO DO:
+	// . FreeLibrary isn't being called if DLLs' version is too low
+	// . This code is going to get ditched, so ignore this!
+
   if (mem) {
     TCHAR filename[MAX_PATH];
     _tcscpy(filename,progdir);
@@ -998,11 +1059,30 @@ BOOL CpuSupportsFastPaging () {
 }
 
 //===========================================================================
-void CpuIRQ()
+
+void CpuIrqReset()
 {
-	regs.bIRQ = 1;
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+	g_bmIRQ = 0;
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
 }
 
+void CpuIrqAssert(eIRQSRC Device)
+{
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+	g_bmIRQ |= 1<<Device;
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
+}
+
+void CpuIrqDeassert(eIRQSRC Device)
+{
+	_ASSERT(g_bCritSectionValid);
+	if (g_bCritSectionValid) EnterCriticalSection(&g_CriticalSection);
+	g_bmIRQ &= ~(1<<Device);
+	if (g_bCritSectionValid) LeaveCriticalSection(&g_CriticalSection);
+}
 //===========================================================================
 
 DWORD CpuGetSnapshot(SS_CPU6502* pSS)
@@ -1026,7 +1106,7 @@ DWORD CpuSetSnapshot(SS_CPU6502* pSS)
 	regs.ps = pSS->P;
 	regs.sp = (USHORT)pSS->S + 0x100;
 	regs.pc = pSS->PC;
-	regs.bIRQ = 0;
+	CpuIrqReset();
 	g_nCumulativeCycles = pSS->g_nCumulativeCycles;
 
 	return 0;

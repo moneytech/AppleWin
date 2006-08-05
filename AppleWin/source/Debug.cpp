@@ -43,13 +43,17 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // TODO: COLOR LOAD ["filename"]
 
 	// See Debugger_Changelong.txt for full details
-	const int DEBUGGER_VERSION = MAKE_VERSION(2,5,0,16);
+	const int DEBUGGER_VERSION = MAKE_VERSION(2,5,3,0);
 
 
 // Public _________________________________________________________________________________________
 
 
 // Breakpoints ________________________________________________________________
+
+	// Full-Speed debugging
+	int g_nDebugOnBreakInvalid = 0;
+	int g_iDebugOnOpcode       = 0;
 
 	int          g_nBreakpoints = 0;
 	Breakpoint_t g_aBreakpoints[ NUM_BREAKPOINTS ];
@@ -124,6 +128,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	// CPU (Main)
 		{TEXT("A")           , CmdAssemble          , CMD_ASSEMBLE             , "Assemble instructions"      },
 		{TEXT("U")           , CmdUnassemble        , CMD_UNASSEMBLE           , "Disassemble instructions"   },
+		{TEXT("BRK")         , CmdBreakInvalid      , CMD_BREAK_INVALID        , "Enter debugger on BRK or INVALID" },
+		{TEXT("BRKOP")       , CmdBreakOpcode       , CMD_BREAK_OPCODE         , "Enter debugger on opcode"   },
 		{TEXT("CALC")        , CmdCalculator        , CMD_CALC                 , "Display mini calc result"   },
 		{TEXT("GOTO")        , CmdGo                , CMD_GO                   , "Run [until PC = address]"   },
 		{TEXT("I")           , CmdInput             , CMD_INPUT                , "Input from IO $C0xx"        },
@@ -234,10 +240,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("E")           , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    },
 		{TEXT("EW")          , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    },
 		{TEXT("M")           , CmdMemoryMove        , CMD_MEMORY_MOVE          },
-		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        },
-		{TEXT("SA")          , CmdMemorySearchText  , CMD_MEMORY_SEARCH_ASCII  }, // Search Ascii
-		{TEXT("SAL")         , CmdMemorySearchLowBit, CMD_MEMORY_SEARCH_TXT_LO }, // Search Ascii Low
-		{TEXT("SAH")         , CmdMemorySearchHiBit , CMD_MEMORY_SEARCH_TXT_HI }, // Search "Ascii" High
+		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        , "Search for text for hex values" },
+		{TEXT("SA")          , CmdMemorySearchAscii,  CMD_MEMORY_SEARCH_ASCII  , "Search ASCII text" }, // Search ASCII
+		{TEXT("ST")          , CmdMemorySearchApple , CMD_MEMORY_SEARCH_APPLE  , "Search Apple text (hi-bit)" }, // Search Apple Text
 		{TEXT("SH")          , CmdMemorySearchHex   , CMD_MEMORY_SEARCH_HEX    }, // Search Hex
 		{TEXT("F")           , CmdMemoryFill        , CMD_MEMORY_FILL          },
 	// Registers
@@ -539,6 +544,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 	MemoryDump_t g_aMemDump[ NUM_MEM_DUMPS ];
 
+	// Made global so operator @# can be used with other commands.
+	MemorySearchResults_t g_vMemorySearchResults;
+
 
 // Parameters _____________________________________________________________________________________
 
@@ -830,6 +838,144 @@ LPCTSTR FormatAddress( WORD nAddress, int nBytes )
 // Breakpoints ____________________________________________________________________________________
 
 
+//===========================================================================
+Update_t CmdBreakInvalid (int nArgs) // Breakpoint IFF Full-speed!
+{
+	if ((nArgs > 2) || (nArgs == 0))
+		goto _Help;
+
+	int iType = 0; // default to BRK
+	int nActive;
+
+//	if (nArgs == 2)
+	iType = g_aArgs[ 1 ].nVal1;
+
+	// Cases:
+	// 0.  CMD            // display
+	// 1a. CMD #          // display
+	// 1b. CMD ON | OFF   //set      
+	// 1c. CMD ?          // error
+	// 2a. CMD # ON | OFF // set
+	// 2b. CMD # ?        // error
+	TCHAR sText[ CONSOLE_WIDTH ];
+	bool bValidParam = true;
+
+	int iParamArg = nArgs;
+	int iParam;
+	int nFound = FindParam( g_aArgs[ iParamArg ].sArg, MATCH_EXACT, iParam, _PARAM_GENERAL_BEGIN, _PARAM_GENERAL_END );
+
+	if (nFound)
+	{
+		if (iParam == PARAM_ON)
+			nActive = 1;
+		else
+		if (iParam == PARAM_OFF)
+			nActive = 0;
+		else
+			bValidParam = false;
+	}
+	else
+		bValidParam = false;
+
+	if (nArgs == 1)
+	{
+		if (! nFound) // bValidParam) // case 1a or 1c
+		{
+			if ((iType < 0) || (iType > AM_3))
+				goto _Help;
+
+			if (IsDebugBreakOnInvalid( iType ))
+				iParam = PARAM_ON;
+			else
+				iParam = PARAM_OFF;
+		}
+		else // case 1b
+		{
+			SetDebugBreakOnInvalid( iType, nActive );
+		}
+		
+		if (iType == 0)
+			wsprintf( sText, TEXT("Enter debugger on BRK opcode: %s"), g_aParameters[ iParam ].m_sName );
+		else
+			wsprintf( sText, TEXT("Enter debugger on INVALID %1X opcode: %s"), iType, g_aParameters[ iParam ].m_sName );
+		ConsoleBufferPush( sText );
+		return ConsoleUpdate();
+ 	}
+	else	
+	if (nArgs == 2)
+	{
+		if (! bValidParam) // case 2b
+		{
+			goto _Help;
+		}
+		else // case 2a (or not 2b ;-)
+		{
+			if ((iType < 0) || (iType > AM_3))
+				goto _Help;
+
+			SetDebugBreakOnInvalid( iType, nActive );
+
+			if (iType == 0)
+				wsprintf( sText, TEXT("Enter debugger on BRK opcode: %s"), g_aParameters[ iParam ].m_sName );
+			else
+				wsprintf( sText, TEXT("Enter debugger on INVALID %1X opcode: %s"), iType, g_aParameters[ iParam ].m_sName );
+			ConsoleBufferPush( sText );
+			return ConsoleUpdate();
+		}
+ 	}
+
+	return UPDATE_CONSOLE_DISPLAY;
+
+_Help:
+		return HelpLastCommand();
+}
+
+
+//===========================================================================
+Update_t CmdBreakOpcode (int nArgs) // Breakpoint IFF Full-speed!
+{
+	TCHAR sText[ CONSOLE_WIDTH ];
+
+	if (nArgs > 1)
+		return HelpLastCommand();
+
+	TCHAR sAction[ CONSOLE_WIDTH ] = TEXT("Current"); // default to display
+
+	if (nArgs == 1)
+	{
+		int iOpcode = g_aArgs[ 1] .nVal1;
+		g_iDebugOnOpcode = iOpcode & 0xFF;
+
+		_tcscpy( sAction, TEXT("Setting") );
+
+		if (iOpcode >= NUM_OPCODES)
+		{
+			wsprintf( sText, TEXT("Warning: clamping opcode: %02X"), g_iDebugOnOpcode );
+			ConsoleBufferPush( sText );
+			return ConsoleUpdate();
+		}
+	}
+
+	if (g_iDebugOnOpcode == 0)
+		// Show what the current break opcode is
+		wsprintf( sText, TEXT("%s break on opcode: None")
+			, sAction
+			, g_iDebugOnOpcode
+			, g_aOpcodes65C02[ g_iDebugOnOpcode ].sMnemonic
+		);
+	else
+		// Show what the current break opcode is
+		wsprintf( sText, TEXT("%s break on opcode: %02X %s")
+			, sAction
+			, g_iDebugOnOpcode
+			, g_aOpcodes65C02[ g_iDebugOnOpcode ].sMnemonic
+		);
+
+	ConsoleBufferPush( sText );
+	return ConsoleUpdate();
+}
+
+
 // bool bBP = g_nBreakpoints && CheckBreakpoint(nOffset,nOffset == regs.pc);
 //===========================================================================
 bool GetBreakpointInfo ( WORD nOffset, bool & bBreakpointActive_, bool & bBreakpointEnable_ )
@@ -934,7 +1080,7 @@ bool CheckBreakpointsIO ()
 	int  iTarget;
 	int  nAddress;
 
-	Get6502Targets( &aTarget[0], &aTarget[1], &nBytes );
+	Get6502Targets( regs.pc, &aTarget[0], &aTarget[1], &nBytes );
 	
 	if (nBytes)
 	{
@@ -1170,6 +1316,7 @@ Update_t CmdCalculator (int nArgs)
 	ConsoleBufferPush( sText );
 	return ConsoleUpdate();
 }
+
 
 //===========================================================================
 Update_t CmdFeedKey (int nArgs)
@@ -1896,7 +2043,7 @@ Update_t CmdConfigEcho (int nArgs)
 {
 	TCHAR sText[ CONSOLE_WIDTH ] = TEXT("");
 
-	if (g_aArgs[1].bType & TYPE_QUOTED)
+	if (g_aArgs[1].bType & TYPE_QUOTED_2)
 	{
 		ConsoleDisplayPush( g_aArgs[1].sArg );
 	}
@@ -1986,7 +2133,7 @@ Update_t CmdConfigRun (int nArgs)
 	TCHAR sFileName[ MAX_PATH ];
 	TCHAR sMiniFileName[ CONSOLE_WIDTH ];
 
-//	if (g_aArgs[1].bType & TYPE_QUOTED)
+//	if (g_aArgs[1].bType & TYPE_QUOTED_2)
 
 	strcpy( sMiniFileName, pFileName );
 //	strcat( sMiniFileName, ".aws" ); // HACK: MAGIC STRING
@@ -2346,7 +2493,7 @@ Update_t CmdConfigSetFont (int nArgs)
 				case PARAM_INFO   : iFontTarget = FONT_INFO          ; iFontPitch = FIXED_PITCH   | FF_MODERN    ; bHaveTarget = true; break;
 				case PARAM_CONSOLE: iFontTarget = FONT_CONSOLE       ; iFontPitch = DEFAULT_PITCH | FF_DECORATIVE; bHaveTarget = true; break;
 				default:
-					if (g_aArgs[2].bType != TOKEN_QUOTED)
+					if (g_aArgs[2].bType != TOKEN_QUOTE_DOUBLE)
 						return Help_Arg_1( CMD_CONFIG_FONT );
 					break;
 			}
@@ -2477,7 +2624,7 @@ void DisasmCalcTopFromCurAddress( bool bUpdateTop )
 				"\tLen: %04X\n"
 				"\tMissed: %04X"),
 				g_nDisasmCurAddress - nLen, nLen, g_nDisasmCurAddress );
-			MessageBox( framewindow, sText, "ERROR", MB_OK );
+			MessageBox( g_hFrameWindow, sText, "ERROR", MB_OK );
 #endif
 	}
  }
@@ -3261,133 +3408,30 @@ Update_t CmdMemoryMove (int nArgs)
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
-//===========================================================================
-Update_t CmdMemorySearch (int nArgs)
-{
-	if (nArgs < 2)
-		return Help_Arg_1( CMD_MEMORY_SEARCH );
-
-	 if (g_aArgs[2].sArg[0] == TEXT('\"'))
-		CmdMemorySearchText( nArgs );
-	else
-		CmdMemorySearchHex( nArgs );
-
-	return UPDATE_CONSOLE_DISPLAY;
-}
-
-// Search for Ascii Hi-Bit set
-//===========================================================================
-Update_t CmdMemorySearchHiBit (int nArgs)
-{
-	return UPDATE_CONSOLE_DISPLAY;
-}
-
-//===========================================================================
-Update_t CmdMemorySearchLowBit (int nArgs)
-{
-	return UPDATE_CONSOLE_DISPLAY;
-}
 
 //===========================================================================
 bool _GetStartEnd( WORD & nAddressStart_, WORD & nAddressEnd_ )
 {
 	nAddressStart_ = g_aArgs[1].nVal1; 
-	nAddressEnd_   = nAddressStart_ + g_aArgs[1].nVal2; 
+	int nEnd = nAddressStart_ + g_aArgs[1].nVal2;
+
+	// .17 Bug Fix: D000,FFFF -> D000,CFFF (nothing searched!)
+	if (nEnd > _6502_END_MEM_ADDRESS)
+		nEnd = _6502_END_MEM_ADDRESS;
+
+	nAddressEnd_  = nEnd;
 	return true;
 }
 
+
 //===========================================================================
-Update_t CmdMemorySearchHex (int nArgs)
+int _SearchMemoryFind(
+	MemorySearchValues_t vMemorySearchValues,
+	WORD nAddressStart,
+	WORD nAddressEnd )
 {
-	if (nArgs < 2)
-		return HelpLastCommand();
-
-	WORD nAddressStart;
-	WORD nAddressEnd;
-	_GetStartEnd( nAddressStart, nAddressEnd );
-
-	// S start,len #
-	int nMinLen = nArgs - 2;
-
-	bool bHaveWildCards = false;
-	int iArg;
-
-	vector<MemorySearch_t> vMemorySearch;
-	MemorySearch_e         tLastType = MEM_SEARCH_BYTE_N_WILD;
-	
-	vector<int> vMatches;
-
-	// Get search "string"
-	Arg_t *pArg = & g_aArgs[ 2 ];
-	
-	WORD nTarget;
-	for (iArg = 2; iArg <= nArgs; iArg++, pArg++ )
-	{
-		MemorySearch_t ms;
-
-		nTarget = pArg->nVal1;
-		ms.m_nValue = nTarget & 0xFF;
-		ms.m_iType = MEM_SEARCH_BYTE_EXACT;
-
-		if (nTarget > 0xFF) // searching for 16-bit address
-		{
-			vMemorySearch.push_back( ms );
-			ms.m_nValue = (nTarget >> 8);
-
-			tLastType = ms.m_iType;
-		}
-		else
-		{
-			TCHAR *pByte = pArg->sArg;
-
-			if (pArg->nArgLen > 2)
-				goto _Help;
-			
-			if (pArg->nArgLen == 1)
-			{
-				if (pByte[0] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0])
-				{
-					ms.m_iType = MEM_SEARCH_BYTE_1_WILD;
-				}
-			}
-			else
-			{
-				if (pByte[0] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0])
-				{
-					ms.m_iType = MEM_SEARCH_NIB_LOW_EXACT;
-					ms.m_nValue = pArg->nVal1 & 0x0F;
-				}
-
-				if (pByte[1] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0])
-				{
-					if (ms.m_iType == MEM_SEARCH_NIB_LOW_EXACT)
-					{
-						ms.m_iType = MEM_SEARCH_BYTE_N_WILD;
-					}
-					else
-					{
-						ms.m_iType = MEM_SEARCH_NIB_HIGH_EXACT;
-						ms.m_nValue = (pArg->nVal1 << 4) & 0xF0;
-					}
-				}
-			}
-		}
-
-		// skip over multiple byte_wild, since they are redundent
-		// xx ?? ?? xx
-		//       ^
-		//       redundant
-		if ((tLastType == MEM_SEARCH_BYTE_N_WILD) && (ms.m_iType == MEM_SEARCH_BYTE_N_WILD))
-			continue;
-
-		vMemorySearch.push_back( ms );
-		tLastType = ms.m_iType;
-	}
-	
-	TCHAR sMatches[ CONSOLE_WIDTH ] = TEXT("");
-	int   nMatches = 0; // string length, for word-wrap
-
 	int   nFound = 0;
+	g_vMemorySearchResults.erase( g_vMemorySearchResults.begin(), g_vMemorySearchResults.end() );
 
 	WORD nAddress;
 	for( nAddress = nAddressStart; nAddress < nAddressEnd; nAddress++ )
@@ -3396,10 +3440,10 @@ Update_t CmdMemorySearchHex (int nArgs)
 
 		WORD nAddress2 = nAddress;
 
-		int nMemBlocks = vMemorySearch.size();
+		int nMemBlocks = vMemorySearchValues.size();
 		for (int iBlock = 0; iBlock < nMemBlocks; iBlock++, nAddress2++ )
 		{
-			MemorySearch_t ms = vMemorySearch.at( iBlock );
+			MemorySearch_t ms = vMemorySearchValues.at( iBlock );
 			ms.m_bFound = false;
 		
 			if ((ms.m_iType == MEM_SEARCH_BYTE_EXACT    ) || 
@@ -3437,7 +3481,7 @@ Update_t CmdMemorySearchHex (int nArgs)
 				if ((iBlock + 1) == nMemBlocks) // there is no next block, hence we match
 					continue;
 					
-				MemorySearch_t ms2 = vMemorySearch.at( iBlock + 1 );
+				MemorySearch_t ms2 = vMemorySearchValues.at( iBlock + 1 );
 
 				WORD nAddress3 = nAddress2;
 				for (nAddress3 = nAddress2; nAddress3 < nAddressEnd; nAddress3++ )
@@ -3474,49 +3518,242 @@ Update_t CmdMemorySearchHex (int nArgs)
 		{
 			nFound++;
 
-			TCHAR sText[ CONSOLE_WIDTH ];
-			wsprintf( sText, "%2d:$%04X ", nFound, nAddress );
+			// Save the search result
+			g_vMemorySearchResults.push_back( nAddress );
+		}
+	}
+
+	return nFound;
+}
+
+
+//===========================================================================
+Update_t _SearchMemoryDisplay()
+{
+	int nFound = g_vMemorySearchResults.size();
+
+	TCHAR sMatches[ CONSOLE_WIDTH ] = TEXT("");
+	int   nThisLineLen = 0; // string length of matches for this line, for word-wrap
+
+	if (nFound)
+	{
+		TCHAR sText[ CONSOLE_WIDTH ];
+
+		int iFound = 0;
+		while (iFound < nFound)
+		{
+			WORD nAddress = g_vMemorySearchResults.at( iFound );
+
+			wsprintf( sText, "%2d:$%04X ", iFound, nAddress );
 			int nLen = _tcslen( sText );
 
 			// Fit on same line?
-			if ((nMatches + nLen) > (g_nConsoleDisplayWidth)) // CONSOLE_WIDTH
+			if ((nThisLineLen + nLen) > (g_nConsoleDisplayWidth)) // CONSOLE_WIDTH
 			{
 				ConsoleDisplayPush( sMatches );
 				_tcscpy( sMatches, sText );
-				nMatches = nLen;
+				nThisLineLen = nLen;
 			}
 			else
 			{
 				_tcscat( sMatches, sText );
-				nMatches += nLen;
+				nThisLineLen += nLen;
 			}
+
+			iFound++;
 		}
+		ConsoleDisplayPush( sMatches );
 	}
-	ConsoleDisplayPush( sMatches );
 
 	wsprintf( sMatches, "Total: %d  (#$%04X)", nFound, nFound );
 	ConsoleDisplayPush( sMatches );
 
-	vMemorySearch.erase( vMemorySearch.begin(), vMemorySearch.end() );
+	// g_vMemorySearchResults is cleared in DebugEnd()
+
 	return UPDATE_CONSOLE_DISPLAY;
+}
 
 
-_Help:
-	vMemorySearch.erase( vMemorySearch.begin(), vMemorySearch.end() );
-	return HelpLastCommand();
+//===========================================================================
+Update_t _CmdMemorySearch (int nArgs, bool bTextIsAscii = true )
+{
+	WORD nAddressStart;
+	WORD nAddressEnd;
+	_GetStartEnd( nAddressStart, nAddressEnd );
+
+	// S start,len #
+	int nMinLen = nArgs - 2;
+
+	bool bHaveWildCards = false;
+	int iArg;
+
+	MemorySearchValues_t vMemorySearchValues;
+	MemorySearch_e       tLastType = MEM_SEARCH_BYTE_N_WILD;
+	
+	// Get search "string"
+	Arg_t *pArg = & g_aArgs[ 2 ];
+	
+	WORD nTarget;
+	for (iArg = 2; iArg <= nArgs; iArg++, pArg++ )
+	{
+		MemorySearch_t ms;
+
+		nTarget = pArg->nVal1;
+		ms.m_nValue = nTarget & 0xFF;
+		ms.m_iType = MEM_SEARCH_BYTE_EXACT;
+
+		if (nTarget > 0xFF) // searching for 16-bit address
+		{
+			vMemorySearchValues.push_back( ms );
+			ms.m_nValue = (nTarget >> 8);
+
+			tLastType = ms.m_iType;
+		}
+		else
+		{
+			TCHAR *pByte = pArg->sArg;
+
+			
+			if (pArg->bType & TYPE_QUOTED_1)
+			{
+				ms.m_iType = MEM_SEARCH_BYTE_EXACT;
+				ms.m_bFound = false;
+				ms.m_nValue = pArg->sArg[ 0 ];
+
+				if (! bTextIsAscii) // NOTE: Single quote chars is opposite hi-bit !!!
+					ms.m_nValue &= 0x7F;
+				else
+					ms.m_nValue |= 0x80;
+			}
+			else
+			if (pArg->bType & TYPE_QUOTED_2)
+			{
+				// Convert string to hex byte(s)
+				int iChar = 0;
+				int nChars = pArg->nArgLen;
+
+				if (nChars)
+				{
+					ms.m_iType = MEM_SEARCH_BYTE_EXACT;
+					ms.m_bFound = false;
+
+					nChars--; // last char is handle in common case below
+					while (iChar < nChars)
+					{
+						ms.m_nValue = pArg->sArg[ iChar ];
+
+						// Ascii (Low-Bit)
+						// Apple (High-Bit)
+						if (bTextIsAscii)
+							ms.m_nValue &= 0x7F;
+						else
+							ms.m_nValue |= 0x80;
+
+						vMemorySearchValues.push_back( ms );
+						iChar++;
+					}
+
+					ms.m_nValue = pArg->sArg[ iChar ];
+				}
+			}
+			else
+			{
+				// must be numeric .. make sure not too big
+				if (pArg->nArgLen > 2)
+				{
+					vMemorySearchValues.erase( vMemorySearchValues.begin(), vMemorySearchValues.end() );
+					return HelpLastCommand();
+				}
+
+				if (pArg->nArgLen == 1)
+				{
+					if (pByte[0] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0]) // Hack: hard-coded one char token
+					{
+						ms.m_iType = MEM_SEARCH_BYTE_1_WILD;
+					}
+				}
+				else
+				{
+					if (pByte[0] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0]) // Hack: hard-coded one char token
+					{
+						ms.m_iType = MEM_SEARCH_NIB_LOW_EXACT;
+						ms.m_nValue = pArg->nVal1 & 0x0F;
+					}
+
+					if (pByte[1] == g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName[0]) // Hack: hard-coded one char token
+					{
+						if (ms.m_iType == MEM_SEARCH_NIB_LOW_EXACT)
+						{
+							ms.m_iType = MEM_SEARCH_BYTE_N_WILD;
+						}
+						else
+						{
+							ms.m_iType = MEM_SEARCH_NIB_HIGH_EXACT;
+							ms.m_nValue = (pArg->nVal1 << 4) & 0xF0;
+						}
+					}
+				}
+			}
+		}
+
+		// skip over multiple byte_wild, since they are redundent
+		// xx ?? ?? xx
+		//       ^
+		//       redundant
+		if ((tLastType == MEM_SEARCH_BYTE_N_WILD) && (ms.m_iType == MEM_SEARCH_BYTE_N_WILD))
+			continue;
+
+		vMemorySearchValues.push_back( ms );
+		tLastType = ms.m_iType;
+	}
+
+	_SearchMemoryFind( vMemorySearchValues, nAddressStart, nAddressEnd );
+	vMemorySearchValues.erase( vMemorySearchValues.begin(), vMemorySearchValues.end() );
+
+	return _SearchMemoryDisplay();
+}
+
+
+//===========================================================================
+Update_t CmdMemorySearch (int nArgs)
+{
+	if (nArgs < 2)
+		return HelpLastCommand();
+
+	return _CmdMemorySearch( nArgs, true );
+
+	return UPDATE_CONSOLE_DISPLAY;
+}
+
+
+// Search for ASCII text (no Hi-Bit set)
+//===========================================================================
+Update_t CmdMemorySearchAscii (int nArgs)
+{
+	if (nArgs < 2)
+		return HelpLastCommand();
+
+	return _CmdMemorySearch( nArgs, true );
+}
+
+// Search for Apple text (Hi-Bit set)
+//===========================================================================
+Update_t CmdMemorySearchApple (int nArgs)
+{
+	if (nArgs < 2)
+		return HelpLastCommand();
+
+	return _CmdMemorySearch( nArgs, false );
 }
 
 //===========================================================================
-Update_t CmdMemorySearchText (int nArgs)
+Update_t CmdMemorySearchHex (int nArgs)
 {
-	WORD nAddrStart;
-	WORD nAddrEnd;
-	_GetStartEnd( nAddrStart, nAddrEnd );
+	if (nArgs < 2)
+		return HelpLastCommand();
 
-	return UPDATE_CONSOLE_DISPLAY;
+	return _CmdMemorySearch( nArgs, true );
 }
-
-
 
 
 // Registers ______________________________________________________________________________________
@@ -4859,7 +5096,7 @@ void _CmdColorGet( const int iScheme, const int iColor )
 	{
 		TCHAR sText[ CONSOLE_WIDTH ];
 		wsprintf( sText, "Color: %d\nOut of range!", iColor );
-		MessageBox( framewindow, sText, TEXT("ERROR"), MB_OK );
+		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
 	}
 }
 
@@ -5773,28 +6010,28 @@ Update_t ExecuteCommand (int nArgs)
 // ________________________________________________________________________________________________
 
 //===========================================================================
-bool Get6502Targets (int *pTemp_, int *pFinal_, int * pBytes_)
+bool Get6502Targets ( WORD nAddress, int *pTargetPartial_, int *pTargetPointer_, int * pBytes_)
 {
 	bool bStatus = false;
 
-	if (! pTemp_)
+	if (! pTargetPartial_)
 		return bStatus;
 
-	if (! pFinal_)
+	if (! pTargetPointer_)
 		return bStatus;
 
 //	if (! pBytes_)
 //		return bStatus;
 
-	*pTemp_   = NO_6502_TARGET;
-	*pFinal_  = NO_6502_TARGET;
+	*pTargetPartial_   = NO_6502_TARGET;
+	*pTargetPointer_  = NO_6502_TARGET;
 
 	if (pBytes_)
 		*pBytes_  = 0;	
 
 	bStatus   = true;
 
-	WORD nAddress  = regs.pc;
+//	WORD nAddress  = regs.pc;
 	BYTE nOpcode   = *(LPBYTE)(mem + nAddress    );
 	BYTE nTarget8  = *(LPBYTE)(mem + nAddress + 1);
 	WORD nTarget16 = *(LPWORD)(mem + nAddress + 1);
@@ -5803,77 +6040,77 @@ bool Get6502Targets (int *pTemp_, int *pFinal_, int * pBytes_)
 
 	switch (eMode)
 	{
-		case ADDR_ABS:
-			*pFinal_ = nTarget16;
+		case AM_A: // $Absolute
+			*pTargetPointer_ = nTarget16;
 			if (pBytes_)
 				*pBytes_ = 2;
 			break;
 
-		case ADDR_ABSIINDX:
+		case AM_IAX: // Indexed (Absolute) Indirect
 			nTarget16 += regs.x;
-			*pTemp_    = nTarget16;
-			*pFinal_   = *(LPWORD)(mem + nTarget16);
+			*pTargetPartial_    = nTarget16;
+			*pTargetPointer_   = *(LPWORD)(mem + nTarget16);
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_ABSX:
+		case AM_AX: // Absolute, X
 			nTarget16 += regs.x;
-			*pFinal_   = nTarget16;
+			*pTargetPointer_   = nTarget16;
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_ABSY:
+		case AM_AY: // Absolute, Y
 			nTarget16 += regs.y;
-			*pFinal_   = nTarget16;
+			*pTargetPointer_   = nTarget16;
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_IABS:
-			*pTemp_    = nTarget16;
-			*pFinal_   = *(LPWORD)(mem + nTarget16);
+		case AM_NA: // Indirect (Absolute) i.e. JMP
+			*pTargetPartial_    = nTarget16;
+			*pTargetPointer_   = *(LPWORD)(mem + nTarget16);
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_INDX:
+		case AM_IZX: // Indexed (Zeropage Indirect, X)
 			nTarget8  += regs.x;
-			*pTemp_    = nTarget8;
-			*pFinal_   = *(LPWORD)(mem + nTarget8);
+			*pTargetPartial_    = nTarget8;
+			*pTargetPointer_   = *(LPWORD)(mem + nTarget8);
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_INDY:
-			*pTemp_    = nTarget8;
-			*pFinal_   = (*(LPWORD)(mem + nTarget8)) + regs.y;
+		case AM_NZY: // Indirect (Zeropage) Indexed, Y
+			*pTargetPartial_    = nTarget8;
+			*pTargetPointer_   = (*(LPWORD)(mem + nTarget8)) + regs.y;
 			if (pBytes_)
 				*pBytes_   = 1;
 			break;
 
-		case ADDR_IZPG:
-			*pTemp_    = nTarget8;
-			*pFinal_   = *(LPWORD)(mem + nTarget8);
+		case AM_NZ: // Indirect (Zeropage)
+			*pTargetPartial_    = nTarget8;
+			*pTargetPointer_   = *(LPWORD)(mem + nTarget8);
 			if (pBytes_)
 				*pBytes_   = 2;
 			break;
 
-		case ADDR_ZP:
-			*pFinal_   = nTarget8;
+		case AM_Z: // Zeropage
+			*pTargetPointer_   = nTarget8;
 			if (pBytes_)
 				*pBytes_   = 1;
 			break;
 
-		case ADDR_ZP_X:
-			*pFinal_   = nTarget8 + regs.x; // shouldn't this wrap around?
+		case AM_ZX: // Zeropage, X
+			*pTargetPointer_   = (nTarget8 + regs.x) & 0xFF; // .21 Bugfix: shouldn't this wrap around? Yes.
 			if (pBytes_)
 				*pBytes_   = 1;
 			break;
 
-		case ADDR_ZP_Y:
-			*pFinal_   = nTarget8 + regs.y; // shouldn't this wrap around?
+		case AM_ZY: // Zeropage, Y
+			*pTargetPointer_   = (nTarget8 + regs.y) & 0xFF; // .21 Bugfix: shouldn't this wrap around? Yes.
 			if (pBytes_)
 				*pBytes_   = 1;
 			break;
@@ -5891,18 +6128,19 @@ bool Get6502Targets (int *pTemp_, int *pFinal_, int * pBytes_)
 //	   (!_tcscmp(g_aOpcodes[*(mem+regs.pc)].mnemonic,TEXT("JSR")))))
 
 	// If 6502 is jumping, don't show byte [nAddressTarget]
-	if ((*pFinal_ >= 0) &&
-		((nOpcode == OPCODE_JSR        ) || // 0x20
-		 (nOpcode == OPCODE_JMP_ABS    ) || // 0x4C
-		 (nOpcode == OPCODE_JMP_IABS   ) || // 0x6C
-		 (nOpcode == OPCODE_JMP_ABSINDX)))  // 0x7C
+	if ((*pTargetPointer_ >= 0) &&
+		((nOpcode == OPCODE_JSR    ) || // 0x20
+		 (nOpcode == OPCODE_JMP_A  )))  // 0x4C
+//		 (nOpcode == OPCODE_JMP_NA ) || // 0x6C
+//		 (nOpcode == OPCODE_JMP_IAX)))  // 0x7C
 	{
-		*pFinal_ = NO_6502_TARGET;
+		*pTargetPointer_ = NO_6502_TARGET;
 		if (pBytes_)
 			*pBytes_ = 0;
 	}
 	return bStatus;
 }
+
 
 //===========================================================================
 bool InternalSingleStep ()
@@ -6295,10 +6533,10 @@ void DebugBegin ()
 	if (apple2e)
 		g_aOpcodes = & g_aOpcodes65C02[ 0 ]; // Enhanced Apple //e
 	else
-		g_aOpcodes = & g_aOpcodes6502[ 0 ]; // Original Apple ][
+		g_aOpcodes = & g_aOpcodes6502[ 0 ]; // Original Apple ][ ][+
 
-	g_aOpmodes[ ADDR_INVALID2 ].m_nBytes = apple2e ? 2 : 1;
-	g_aOpmodes[ ADDR_INVALID3 ].m_nBytes = apple2e ? 3 : 1;
+	g_aOpmodes[ AM_2 ].m_nBytes = apple2e ? 2 : 1;
+	g_aOpmodes[ AM_3 ].m_nBytes = apple2e ? 3 : 1;
 
 	g_nDisasmCurAddress = regs.pc;
 	DisasmCalcTopBotAddress();
@@ -6432,6 +6670,9 @@ void DebugEnd ()
 		fclose(g_hTraceFile);
 		g_hTraceFile = NULL;
 	}
+
+
+	g_vMemorySearchResults.erase( g_vMemorySearchResults.begin(), g_vMemorySearchResults.end() );
 }
 
 
@@ -6609,13 +6850,13 @@ void DebugInitialize ()
 	if (_tcscmp( g_aCommands[ NUM_COMMANDS ].m_sName, TEXT(__COMMANDS_VERIFY_TXT__)))
 	{
 		wsprintf( sText, "*** ERROR *** Commands mis-matched!" );
-		MessageBox( framewindow, sText, TEXT("ERROR"), MB_OK );
+		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
 	}
 
 	if (_tcscmp( g_aParameters[ NUM_PARAMS ].m_sName, TEXT(__PARAMS_VERIFY_TXT__)))
 	{
 		wsprintf( sText, "*** ERROR *** Parameters mis-matched!" );
-		MessageBox( framewindow, sText, TEXT("ERROR"), MB_OK );
+		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
 	}
 
 	// Check all summary help to see if it fits within the console
@@ -6641,6 +6882,9 @@ void DebugInitialize ()
 	CmdMOTD(0);
 }
 
+// wparam = 0x16
+// lparam = 0x002f 0x0001
+// insert = VK_INSERT
 
 // Add character to the input line
 //===========================================================================
@@ -6687,6 +6931,70 @@ void DebuggerInputConsoleChar( TCHAR ch )
 		HDC dc = FrameGetDC();
 		DrawConsoleInput( dc );
 		FrameReleaseDC();
+	}
+	else
+	if (ch == 0x16) // HACK: Ctrl-V.  WTF!?
+	{
+		// Clipboard paste
+
+        if (!IsClipboardFormatAvailable(CF_TEXT)) 
+            return; 
+
+        if (!OpenClipboard( g_hFrameWindow )) 
+            return; 
+ 
+		HGLOBAL hClipboard;
+		LPTSTR  pData;
+
+        hClipboard = GetClipboardData(CF_TEXT); 
+        if (hClipboard != NULL) 
+        { 
+            pData = (char*) GlobalLock(hClipboard); 
+            if (pData != NULL) 
+            { 
+				LPTSTR pSrc = pData;
+				char c;
+
+				while (true)
+				{
+					c = *pSrc++;
+
+					if (! c)
+						break;
+
+					if (c == CHAR_CR)
+					{
+#if WIN32						
+						// Eat char
+#endif
+#if MACOSX
+						#pragma error( "TODO: Mac port - handle CR/LF")
+#endif
+					}
+					else
+					if (c == CHAR_LF)
+					{
+#if WIN32						
+						DebuggerProcessCommand( true );	
+#endif
+#if MACOSX
+						#pragma error( "TODO: Mac port - handle CR/LF")
+#endif
+					}
+					else
+					{
+						// If we didn't want verbatim, we could do:
+						// DebuggerInputConsoleChar( c );
+						if ((c >= CHAR_SPACE) && (c <= 126)) // HACK MAGIC # 32 -> ' ', # 126 
+							ConsoleInputChar( c );
+					}
+				}
+                GlobalUnlock(hClipboard); 
+            } 
+        } 
+        CloseClipboard(); 
+ 
+		UpdateDisplay( UPDATE_CONSOLE_DISPLAY );
 	}
 }
 
@@ -6826,6 +7134,34 @@ void DebuggerProcessKey( int keycode )
 		bUpdateDisplay |= UPDATE_ALL;
 		g_bConsoleInputSkip = true; // don't pass to DebugProcessChar()
 	}
+
+
+// Clipboard support
+/*
+	if (!IsClipboardFormatAvailable(CF_TEXT))
+		return;
+	
+	if (!OpenClipboard(g_hFrameWindow))
+		return;
+	
+	hglb = GetClipboardData(CF_TEXT);
+	if (hglb == NULL)
+	{	
+		CloseClipboard();
+		return;
+	}
+
+	lptstr = (char*) GlobalLock(hglb);
+	if (lptstr == NULL)
+	{	
+		CloseClipboard();
+		return;
+	}
+*/
+//	else if (keycode == )
+//	{
+//	}
+
 	else
 	{	
 		switch (keycode)
