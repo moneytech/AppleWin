@@ -349,7 +349,7 @@ void DiskInitialize () {
   while (loop--)
     ZeroMemory(&g_aFloppyDisk[loop],sizeof(Disk_t ));
   TCHAR imagefilename[MAX_PATH];
-  _tcscpy(imagefilename,progdir);
+  _tcscpy(imagefilename,g_sProgramDir);
   _tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
   DiskInsert(0,imagefilename,0,0);
 }
@@ -371,8 +371,9 @@ int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL crea
 }
 
 //===========================================================================
-BOOL DiskIsSpinning () {
-  return floppymotoron;
+BOOL DiskIsSpinning ()
+{
+	return floppymotoron;
 }
 
 //===========================================================================
@@ -380,30 +381,34 @@ void DiskNotifyInvalidImage (LPCTSTR imagefilename,int error)
 {
 	TCHAR buffer[MAX_PATH+128];
 
-  switch (error) {
+	switch (error)
+	{
 
-    case 1:
-      wsprintf(buffer,
-               TEXT("Unable to open the file %s."),
-               (LPCTSTR)imagefilename);
-      break;
+	case 1:
+		wsprintf(
+			buffer,
+			TEXT("Unable to open the file %s."),
+			(LPCTSTR)imagefilename);
+		break;
 
-    case 2:
-      wsprintf(buffer,
-               TEXT("Unable to use the file %s\nbecause the ")
-               TEXT("disk image format is not recognized."),
-               (LPCTSTR)imagefilename);
-      break;
+	case 2:
+		wsprintf(
+			buffer,
+			TEXT("Unable to use the file %s\nbecause the ")
+			TEXT("disk image format is not recognized."),
+			(LPCTSTR)imagefilename);
+		break;
 
-    default:
+	default:
+		// IGNORE OTHER ERRORS SILENTLY
+		return;
+	}
 
-      // IGNORE OTHER ERRORS SILENTLY
-      return;
-  }
-  MessageBox(g_hFrameWindow,
-             buffer,
-             TITLE,
-             MB_ICONEXCLAMATION | MB_SETFOREGROUND);
+	MessageBox(
+		g_hFrameWindow,
+		buffer,
+		g_pAppTitle,
+		MB_ICONEXCLAMATION | MB_SETFOREGROUND);
 }
 
 
@@ -449,11 +454,7 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
       else
         return 0;
     else
-    {
-      static int spin_count = 0; // simulate drive spin to fool RWTS test at $BD34
-      spin_count = spin_count++ & 0xF;
-      result = (spin_count) ? *(fptr->trackimage+fptr->byte) : 0x7F;
-    }
+      result = *(fptr->trackimage+fptr->byte);
   if (++fptr->byte >= fptr->nibbles)
     fptr->byte = 0;
   return result;
@@ -473,7 +474,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 
   strcpy(filename, pszFilename);
 
-  RegLoadString(TEXT("Preferences"),TEXT("Starting Directory"),1,directory,MAX_PATH);
+  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,directory,MAX_PATH);
   _tcscpy(title,TEXT("Select Disk Image For Drive "));
   _tcscat(title,drive ? TEXT("2") : TEXT("1"));
 
@@ -481,7 +482,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   ZeroMemory(&ofn,sizeof(OPENFILENAME));
   ofn.lStructSize     = sizeof(OPENFILENAME);
   ofn.hwndOwner       = g_hFrameWindow;
-  ofn.hInstance       = instance;
+  ofn.hInstance       = g_hInstance;
   ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
                         TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
                         TEXT("All Files\0*.*\0");
@@ -501,7 +502,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 	{
       filename[ofn.nFileOffset] = 0;
       if (_tcsicmp(directory,filename))
-        RegSaveString(TEXT("Preferences"),TEXT("Starting Directory"),1,filename);
+        RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,filename);
     }
     else
 	{

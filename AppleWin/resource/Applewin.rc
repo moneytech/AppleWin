@@ -68,6 +68,7 @@ CAPSON_BITMAP           BITMAP                  "CAPSON.BMP"
 HELP_BUTTON             BITMAP                  "HELP.BMP"
 DRIVESWAP_BUTTON        BITMAP                  "DRIVESWAP.BMP"
 IDB_APPLEWIN            BITMAP                  "Applewin.bmp"
+IDB_DEBUG_FONT_7x8      BITMAP                  "Debug_Font.bmp"
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -233,8 +234,8 @@ DISK_ICON               ICON                    "DISK.ICO"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,13,1,0
- PRODUCTVERSION 1,13,1,0
+ FILEVERSION 1,13,2,0
+ PRODUCTVERSION 1,13,2,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -252,12 +253,12 @@ BEGIN
             VALUE "Comments", "http://applewin.berlios.de"
             VALUE "CompanyName", "Michael O'Brien, Oliver Schmidt, Tom Charlesworth"
             VALUE "FileDescription", "Apple //e Emulator for Windows"
-            VALUE "FileVersion", "1, 13, 1, 0"
+            VALUE "FileVersion", "1, 13, 2, 0"
             VALUE "InternalName", "APPLEWIN"
-            VALUE "LegalCopyright", "© 1994-2006 Michael O'Brien, Oliver Schmidt, Tom Charlesworth, Michael Pohoreski"
+            VALUE "LegalCopyright", "© 1994-2006 Michael O'Brien, Oliver Schmidt, Tom Charlesworth, Michael Pohoreski, Nick Westgate, Linards Ticmanis"
             VALUE "OriginalFilename", "APPLEWIN.EXE"
             VALUE "ProductName", "Apple //e Emulator"
-            VALUE "ProductVersion", "1, 13, 1, 0"
+            VALUE "ProductVersion", "1, 13, 2, 0"
         END
     END
     BLOCK "VarFileInfo"
@@ -292,7 +293,8 @@ IDR_PRINTDRVR           FIRMWARE                "Parallel.rom"
 // ROM
 //
 
-IDR_APPLE2_ROM          ROM                     "Apple2.rom"
+IDR_APPLE2ORIG_ROM      ROM                     "Apple2orig.rom"
+IDR_APPLE2PLUS_ROM      ROM                     "Apple2plus.rom"
 IDR_APPLE2E_ROM         ROM                     "Apple2e.rom"
 
 /////////////////////////////////////////////////////////////////////////////

@@ -31,21 +31,28 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 char VERSIONSTRING[] = "xx.yy.zz.ww";
 
-BOOL      apple2e           = 1;
+TCHAR *g_pAppTitle = TITLE_APPLE_2_E;
+
+bool      g_bApple2e           = true;
+bool      g_bApple2plus        = true;
+
 BOOL      behind            = 0;			// Redundant
 DWORD     cumulativecycles  = 0;			// Wraps after ~1hr 9mins
 DWORD     cyclenum          = 0;			// Used by SpkrToggle() for non-wave sound
 DWORD     emulmsec          = 0;
 static DWORD emulmsec_frac  = 0;
 bool      g_bFullSpeed      = false;
-HINSTANCE instance          = (HINSTANCE)0;
-static DWORD lastfastpaging = 0;
-static DWORD lasttrimimages = 0;
-int       mode              = MODE_LOGO;
+
+// Win32
+HINSTANCE g_hInstance          = (HINSTANCE)0;
+
+AppMode_e	g_nAppMode = MODE_LOGO;
+
 static int lastmode         = MODE_LOGO;
 DWORD     needsprecision    = 0;			// Redundant
-TCHAR     progdir[MAX_PATH] = TEXT("");
-BOOL      resettiming       = 0;			// Redundant
+TCHAR     g_sProgramDir[MAX_PATH] = TEXT("");
+TCHAR     g_sCurrentDir[MAX_PATH] = TEXT(""); // Also Starting Dir
+bool      g_bResetTiming    = false;			// Redundant
 BOOL      restart           = 0;
 
 DWORD		g_dwSpeed		= SPEED_NORMAL;	// Affected by Config dialog's speed slider bar
@@ -57,21 +64,6 @@ DWORD       g_dwCyclesThisFrame = 0;
 
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
-
-//===========================================================================
-
-void CheckFastPaging ()
-{
-  if ((pages >= 10) && CpuSupportsFastPaging())
-  {
-    lastfastpaging = cumulativecycles;
-    if (cpuemtype == CPU_COMPILING)
-	{
-      lasttrimimages = cumulativecycles;
-      MemSetFastPaging(1);
-    }
-  }
-}
 
 //===========================================================================
 
@@ -135,7 +127,6 @@ void ContinueExecution()
 
 	cyclenum = dwExecutedCycles;
 
-	CheckFastPaging();
 	DiskUpdatePosition(dwExecutedCycles);
 	JoyUpdatePosition();
 	VideoUpdateVbl(g_dwCyclesThisFrame);
@@ -143,21 +134,6 @@ void ContinueExecution()
 	SpkrUpdate(cyclenum);
 	CommUpdate(cyclenum);
 	PrintUpdate(cyclenum);
-
-	//
-
-	if (cpuemtype == CPU_FASTPAGING)	//?
-	{
-		if ((!pages) && (cumulativecycles-lastfastpaging > 500000))
-		{
-			MemSetFastPaging(0);
-		}
-		else if (cumulativecycles-lasttrimimages > 500000)
-		{
-			MemTrimImages();
-			lasttrimimages = cumulativecycles;
-		}
-	}
 
 	//
 
@@ -170,8 +146,6 @@ void ContinueExecution()
 		emulmsec_frac %= CLKS_PER_MS;
 	}
 
-	pages = 0;	//?
-	
 	//
 	// DETERMINE WHETHER THE SCREEN WAS UPDATED, THE DISK WAS SPINNING,
 	// OR THE KEYBOARD I/O PORTS WERE BEING EXCESSIVELY QUERIED THIS CLOCKTICK
@@ -188,7 +162,7 @@ void ContinueExecution()
 	{
 		g_dwCyclesThisFrame -= dwClksPerFrame;
 
-		if(mode != MODE_LOGO)
+		if(g_nAppMode != MODE_LOGO)
 		{
 			VideoUpdateFlash();
 
@@ -310,45 +284,72 @@ LRESULT CALLBACK DlgProc (HWND   window,
 }
 
 //===========================================================================
-void EnterMessageLoop () {
-  MSG message;
-  while (GetMessage(&message,0,0,0)) {
-    TranslateMessage(&message);
-    DispatchMessage(&message);
-    while ((mode == MODE_RUNNING) || (mode == MODE_STEPPING))
-      if (PeekMessage(&message,0,0,0,PM_REMOVE)) {
-        if (message.message == WM_QUIT)
-          return;
-        TranslateMessage(&message);
-        DispatchMessage(&message);
-      }
-      else if (mode == MODE_STEPPING)
-        DebugContinueStepping();
-      else {
-        ContinueExecution();
-        if (g_bFullSpeed)
-          ContinueExecution();
-      }
-  }
-  while (PeekMessage(&message,0,0,0,PM_REMOVE)) ;
+void EnterMessageLoop ()
+{
+	MSG message;
+
+	PeekMessage( &message, NULL, 0, 0, PM_NOREMOVE);
+
+	while (message.message!=WM_QUIT)
+	{
+// 	while (GetMessage(&message,0,0,0))
+	if (PeekMessage( &message, NULL, 0, 0, PM_REMOVE))
+	{
+		TranslateMessage(&message);
+		DispatchMessage(&message);
+
+		while ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))
+		{
+			if (PeekMessage(&message,0,0,0,PM_REMOVE))
+			{
+				if (message.message == WM_QUIT)
+					return;
+				TranslateMessage(&message);
+				DispatchMessage(&message);
+			}
+			else if (g_nAppMode == MODE_STEPPING)
+				DebugContinueStepping();
+			else
+			{
+				ContinueExecution();
+				if (g_nAppMode != MODE_DEBUG)
+					if (g_bFullSpeed)
+						ContinueExecution();
+			}
+		}
+	}
+	else
+	{
+		if (g_nAppMode == MODE_DEBUG)
+		{
+			DebuggerUpdate();
+		}
+	}
+}
+
+//	while (PeekMessage(&message,0,0,0,PM_REMOVE))
+//		; // intentional null statement
 }
 
 //===========================================================================
 void GetProgramDirectory () {
-  GetModuleFileName((HINSTANCE)0,progdir,MAX_PATH);
-  progdir[MAX_PATH-1] = 0;
-  int loop = _tcslen(progdir);
+  GetModuleFileName((HINSTANCE)0,g_sProgramDir,MAX_PATH);
+  g_sProgramDir[MAX_PATH-1] = 0;
+  int loop = _tcslen(g_sProgramDir);
   while (loop--)
-    if ((progdir[loop] == TEXT('\\')) ||
-        (progdir[loop] == TEXT(':'))) {
-      progdir[loop+1] = 0;
+    if ((g_sProgramDir[loop] == TEXT('\\')) ||
+        (g_sProgramDir[loop] == TEXT(':'))) {
+      g_sProgramDir[loop+1] = 0;
       break;
     }
 }
 
 //===========================================================================
 void LoadConfiguration () {
-  LOAD(TEXT("Computer Emulation"),(DWORD *)&apple2e);
+  DWORD comptype;
+  LOAD(TEXT("Computer Emulation"),&comptype);
+  g_bApple2e = (comptype == 2);
+  g_bApple2plus = (comptype == 1);
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
   LOAD(TEXT("Sound Emulation")   ,&soundtype);
@@ -398,13 +399,9 @@ void LoadConfiguration () {
   RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
   Snapshot_SetFilename(szFilename);	// If not in Registry than default will be used
 
-  //
-
-  TCHAR szDirectory[MAX_PATH] = TEXT("");
-
-  RegLoadString(TEXT("Preferences"),TEXT("Starting Directory"),1,szDirectory,MAX_PATH);
-
-  SetCurrentDirectory(szDirectory);
+  // Current/Starting Dir is the "root" of where the user keeps his disk images
+  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
+  SetCurrentDirectory(g_sCurrentDir);
   
   char szUthernetInt[MAX_PATH] = {0};
   RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
@@ -539,7 +536,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		}
 		else if((strcmp(lpCmdLine, "-l") == 0) && (g_fh == NULL))
 		{
-			g_fh = fopen("AppleWin.log", "a+t");	// Open log file (append & text mode)
+			g_fh = fopen("AppleWin.log", "a+t");	// Open log file (append & text g_nAppMode)
 			CHAR aDateStr[80], aTimeStr[80];
 			GetDateFormat(LOCALE_SYSTEM_DEFAULT, 0, NULL, NULL, (LPTSTR)aDateStr, sizeof(aDateStr));
 			GetTimeFormat(LOCALE_SYSTEM_DEFAULT, 0, NULL, NULL, (LPTSTR)aTimeStr, sizeof(aTimeStr));
@@ -623,14 +620,14 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 //	DSInit();	// Done when g_hFrameWindow is created (WM_CREATE)
 
 	// DO ONE-TIME INITIALIZATION
-	instance = passinstance;
+	g_hInstance = passinstance;
 	GdiSetBatchLimit(512);
 	GetProgramDirectory();
 	RegisterExtensions();
 	FrameRegisterClass();
 	ImageInitialize();
 	DiskInitialize();
-	CreateColorMixMap();	// For tv emulation mode
+	CreateColorMixMap();	// For tv emulation g_nAppMode
 
 	//
 
@@ -651,7 +648,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	{
 		// DO INITIALIZATION THAT MUST BE REPEATED FOR A RESTART
 		restart = 0;
-		mode    = MODE_LOGO;
+		g_nAppMode    = MODE_LOGO;
 		LoadConfiguration();
 		DebugInitialize();
 		JoyInitialize();

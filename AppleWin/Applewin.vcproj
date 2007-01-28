@@ -359,6 +359,9 @@
 			Name="Docs"
 			Filter="">
 			<File
+				RelativePath=".\docs\Bugs.txt">
+			</File>
+			<File
 				RelativePath=".\docs\CodingConventions.txt">
 			</File>
 			<File
@@ -375,10 +378,13 @@
 			Name="Resources"
 			Filter=".txt,.ico,.bmp,.rc">
 			<File
-				RelativePath=".\resource\Apple2.rom">
+				RelativePath=".\resource\Apple2e.rom">
 			</File>
 			<File
-				RelativePath=".\resource\Apple2e.rom">
+				RelativePath=".\resource\Apple2orig.rom">
+			</File>
+			<File
+				RelativePath=".\resource\Apple2plus.rom">
 			</File>
 			<File
 				RelativePath=".\resource\Applewin.bmp">
@@ -417,6 +423,9 @@
 			</File>
 			<File
 				RelativePath="RESOURCE\DEBUG.BMP">
+			</File>
+			<File
+				RelativePath=".\resource\Debug_Font.bmp">
 			</File>
 			<File
 				RelativePath="RESOURCE\DISK.ICO">

@@ -32,17 +32,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 static bool g_bKeybBufferEnable = false;
 
 #define KEY_OLD
-#define OLIVER_SCHMIDT_FIX2	// PC's delete key maps to Apple's DEL key
 
-#ifdef OLIVER_SCHMIDT_FIX2
-static BYTE asciicode[10] = {0x08,0x0B,0x15,0x0A,0x00,0x00,0x00,0x00,0x00,0x7F};	// Convert PC arrow keys to Apple keycodes
-#else
-static BYTE asciicode[4] = {0x08,0x0B,0x15,0x0A};	// Convert PC arrow keys to Apple keycodes
-#endif
+static BYTE asciicode[2][10] = {
+	{0x08,0x0D,0x15,0x2F,0x00,0x00,0x00,0x00,0x00,0x00},
+	{0x08,0x0B,0x15,0x0A,0x00,0x00,0x00,0x00,0x00,0x7F}
+};	// Convert PC arrow keys to Apple keycodes
 
-static bool  gbShiftKey = false; // +PATCH MJP
-static bool  gbCtrlKey  = false; // +PATCH MJP
-static BOOL  capslock        = 1;
+static bool  g_bShiftKey = false;
+static bool  g_bCtrlKey  = false;
+static bool  g_bAltKey   = false;
+static bool  g_bCapsLock = true;
 static int   lastvirtkey     = 0;	// Current PC keycode
 static BYTE  keycode         = 0;	// Current Apple keycode
 static DWORD keyboardqueries = 0;
@@ -107,28 +106,35 @@ void KeybReset()
 //}
 
 //===========================================================================
-void KeybGetCapsStatus (BOOL *status)
+bool KeybGetAltStatus ()
 {
-	*status = capslock;
+	return g_bAltKey;
 }
 
 //===========================================================================
-bool KeybGetShiftStatus ()
+bool KeybGetCapsStatus ()
 {
-	return gbShiftKey;
+	return g_bCapsLock;
 }
 
 //===========================================================================
 bool KeybGetCtrlStatus ()
 {
-	return gbCtrlKey;
+	return g_bCtrlKey;
+}
+
+//===========================================================================
+bool KeybGetShiftStatus ()
+{
+	return g_bShiftKey;
 }
 
 //===========================================================================
 void KeybUpdateCtrlShiftStatus()
 {
-	gbShiftKey = (GetKeyState( VK_SHIFT  ) & 0x8000) ? true : false;
-	gbCtrlKey  = (GetKeyState( VK_CONTROL) & 0x8000) ? true : false;
+	g_bShiftKey = (GetKeyState( VK_SHIFT  ) & KF_UP) ? true : false; // 0x8000 KF_UP
+	g_bCtrlKey  = (GetKeyState( VK_CONTROL) & KF_UP) ? true : false;
+	g_bAltKey   = (GetKeyState( VK_MENU   ) & KF_UP) ? true : false;
 }
 
 //===========================================================================
@@ -148,36 +154,55 @@ DWORD KeybGetNumQueries ()	// Used in determining 'idleness' of Apple system
 //===========================================================================
 void KeybQueueKeypress (int key, BOOL bASCII)
 {
+	static bool bFreshReset;
+
 	if (bASCII == ASCII)
 	{
+		if (bFreshReset && key == 0x03)
+		{
+			bFreshReset = 0;
+			return; // Swallow spurious CTRL-C caused by CTRL-BREAK
+		}
+		bFreshReset = 0;
 		if (key > 0x7F)
 			return;
 
-		if ((key >= 'a') && (key <= 'z') && (capslock || !apple2e))
-			keycode = key - ('a'-'A');
+		if (g_bApple2e) 
+		{
+			if (g_bCapsLock && (key >= 'a') && (key <='z'))
+				keycode = key - 32;
+			else
+				keycode = key;
+		}
 		else
-			keycode = key;
-
+		{
+			if (key >= '`')
+				keycode = key - 32;
+			else
+				keycode = key;
+		}
 		lastvirtkey = LOBYTE(VkKeyScan(key));
 	}
 	else
 	{
-		if ((key == VK_CANCEL) && ((!apple2e) || (GetKeyState(VK_CONTROL) < 0)) )
+		if ((key == VK_CANCEL) && (GetKeyState(VK_CONTROL) < 0))
 		{
 			// Ctrl+Reset
-			if (apple2e)
+			if (g_bApple2e)
 				MemResetPaging();
 
 			DiskReset();
 			KeybReset();
-			VideoResetState();	// Switch Alternate char set off
+			if (g_bApple2e)
+				VideoResetState();	// Switch Alternate char set off
 			MB_Reset();
 
 #ifndef KEY_OLD
 			g_nNextInIdx = g_nNextOutIdx = g_nKeyBufferCnt = 0;
 #endif
 
-			CpuInitialize();
+			CpuReset();
+			bFreshReset = 1;
 			return;
 		}
 
@@ -188,19 +213,11 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			return;
 		}
 
-#ifdef OLIVER_SCHMIDT_FIX2
-		if (!((key >= VK_LEFT) && (key <= VK_DELETE) && asciicode[key - VK_LEFT]))
+		if (!((key >= VK_LEFT) && (key <= VK_DELETE) && asciicode[g_bApple2e][key - VK_LEFT]))
 			return;
 
-		keycode = asciicode[key - VK_LEFT];		// Convert to Apple arrow keycode
+		keycode = asciicode[g_bApple2e][key - VK_LEFT];		// Convert to Apple arrow keycode
 		lastvirtkey = key;
-#else
-		if (!((key >= VK_LEFT) && (key <= VK_DOWN)))
-			return;
-
-		keycode = asciicode[key - VK_LEFT];		// Convert to Apple arrow keycode
-		lastvirtkey = key;
-#endif
 	}
 #ifdef KEY_OLD
 	keywaiting = 1;
@@ -372,9 +389,9 @@ BYTE __stdcall KeybReadFlag (WORD, BYTE, BYTE, BYTE, ULONG)
 //===========================================================================
 void KeybToggleCapsLock ()
 {
-	if (apple2e)
+	if (g_bApple2e)
 	{
-		capslock = (GetKeyState(VK_CAPITAL) & 1);
+		g_bCapsLock = (GetKeyState(VK_CAPITAL) & 1);
 		FrameRefreshStatus(DRAW_LEDS);
 	}
 }
