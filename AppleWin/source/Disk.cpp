@@ -29,6 +29,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 
+#define LOG_DISK 1
+
+#if LOG_DISK
+    static int test = 0;
+#endif
+
 // Public _________________________________________________________________________________________
 
 	BOOL      enhancedisk     = 1;
@@ -61,8 +67,9 @@ static Disk_t    g_aFloppyDisk[DRIVES];
 static BYTE      floppylatch     = 0;
 static BOOL      floppymotoron   = 0;
 static BOOL      floppywritemode = 0;
+static int       phases; // state bits for stepper magnet phases 0 - 3
 
-static void ChecSpinning();
+static void CheckSpinning();
 static Disk_Status_e GetDriveLightStatus( const int iDrive );
 static bool IsDriveValid( const int iDrive );
 static void ReadTrack (int drive);
@@ -187,6 +194,9 @@ static void ReadTrack (int iDrive)
 
 	if (pFloppy->trackimage && pFloppy->imagehandle)
 	{
+#if LOG_DISK
+        _RPT2(_CRT_WARN, "read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
+#endif
 		ImageReadTrack(
 			pFloppy->imagehandle,
 			pFloppy->track,
@@ -268,26 +278,60 @@ BYTE __stdcall DiskControlMotor (WORD, BYTE address, BYTE, BYTE, ULONG) {
 }
 
 //===========================================================================
-BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG) {
+BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
+{
   Disk_t * fptr = &g_aFloppyDisk[currdrive];
-  if (address & 1) {
-    int phase     = (address >> 1) & 3;
-    int direction = 0;
-    if (phase == ((fptr->phase+1) & 3))
-      direction = 1;
-    if (phase == ((fptr->phase+3) & 3))
-      direction = -1;
-    if (direction) {
-      fptr->phase = MAX(0,MIN(79,fptr->phase+direction));
-      if (!(fptr->phase & 1)) {
-        int newtrack = MIN(TRACKS-1,fptr->phase >> 1);
-        if (newtrack != fptr->track) {
-          if (fptr->trackimage && fptr->trackimagedirty)
-            WriteTrack(currdrive);
-          fptr->track          = newtrack;
-          fptr->trackimagedata = 0;
-        }
+  int phase     = (address >> 1) & 3;
+  int phase_bit = (1 << phase);
+
+  // update the magnet states
+  if (address & 1)
+  {
+    // phase on
+    phases |= phase_bit;
+#if LOG_DISK
+    _RPT4(_CRT_WARN, "track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+#endif
+  }
+  else
+  {
+    // phase off
+    phases &= ~phase_bit;
+#if LOG_DISK
+    _RPT4(_CRT_WARN, "track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+#endif
+  }
+
+  // check for any stepping effect from a magnet
+  // - move only when the magnet opposite the cog is off
+  // - move in the direction of an adjacent magnet if one is on
+  // - do not move if both adjacent magnets are on
+  // momentum and timing are not accounted for ... maybe one day!
+  int direction = 0;
+  if ((phases & (1 << fptr->phase)) == 0)
+  {
+    if (phases & (1 << ((fptr->phase + 1) & 3)))
+      direction += 1;
+    if (phases & (1 << ((fptr->phase + 3) & 3)))
+      direction -= 1;
+  }
+
+  // apply magnet step, if any
+  if (direction)
+  {
+    fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
+    int newtrack = MIN(TRACKS-1, fptr->phase >> 1); // (round half tracks down)
+#if LOG_DISK
+    _RPT2(_CRT_WARN, "newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
+#endif
+    if (newtrack != fptr->track)
+    {
+      if (fptr->trackimage && fptr->trackimagedirty)
+      {
+        WriteTrack(currdrive);
       }
+      fptr->track          = newtrack;
+      fptr->trackimagedata = 0;
     }
   }
   return (address == 0xE0) ? 0xFF : MemReturnRandomData(1);
@@ -455,6 +499,12 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
         return 0;
     else
       result = *(fptr->trackimage+fptr->byte);
+#if LOG_DISK
+  if (0)
+  {
+    _RPT2(_CRT_WARN, "nib %4X = %2X\r", fptr->byte, result);
+  }
+#endif
   if (++fptr->byte >= fptr->nibbles)
     fptr->byte = 0;
   return result;
@@ -463,6 +513,7 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
 //===========================================================================
 void DiskReset () {
   floppymotoron = 0;
+  phases = 0;
 }
 
 //===========================================================================
