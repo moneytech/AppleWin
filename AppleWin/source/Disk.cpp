@@ -29,10 +29,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 
-#define LOG_DISK 1
+#define LOG_DISK_ENABLED 1
 
-#if LOG_DISK
-    static int test = 0;
+#if LOG_DISK_ENABLED
+    #define LOG_DISK(format, ...) LOG(format, __VA_ARGS__)
+#else
+    #define LOG_DISK(...)
 #endif
 
 // Public _________________________________________________________________________________________
@@ -194,9 +196,7 @@ static void ReadTrack (int iDrive)
 
 	if (pFloppy->trackimage && pFloppy->imagehandle)
 	{
-#if LOG_DISK
-        _RPT2(_CRT_WARN, "read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
-#endif
+        LOG_DISK("read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
 		ImageReadTrack(
 			pFloppy->imagehandle,
 			pFloppy->track,
@@ -289,17 +289,13 @@ BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
   {
     // phase on
     phases |= phase_bit;
-#if LOG_DISK
-    _RPT4(_CRT_WARN, "track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
-#endif
+    LOG_DISK("track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
   }
   else
   {
     // phase off
     phases &= ~phase_bit;
-#if LOG_DISK
-    _RPT4(_CRT_WARN, "track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
-#endif
+    LOG_DISK("track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
   }
 
   // check for any stepping effect from a magnet
@@ -321,9 +317,7 @@ BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
   {
     fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
     int newtrack = MIN(TRACKS-1, fptr->phase >> 1); // (round half tracks down)
-#if LOG_DISK
-    _RPT2(_CRT_WARN, "newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
-#endif
+    LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
     if (newtrack != fptr->track)
     {
       if (fptr->trackimage && fptr->trackimagedirty)
@@ -499,10 +493,10 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
         return 0;
     else
       result = *(fptr->trackimage+fptr->byte);
-#if LOG_DISK
+#if LOG_DISK_ENABLED
   if (0)
   {
-    _RPT2(_CRT_WARN, "nib %4X = %2X\r", fptr->byte, result);
+    LOG_DISK("nib %4X = %2X\r", fptr->byte, result);
   }
 #endif
   if (++fptr->byte >= fptr->nibbles)

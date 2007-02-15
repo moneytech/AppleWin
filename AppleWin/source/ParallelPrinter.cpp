@@ -64,7 +64,7 @@ static BOOL CheckPrint()
     if (file == NULL)
     {
         TCHAR filepath[MAX_PATH * 2];
-        _tcsncpy(filepath, progdir, MAX_PATH);
+        _tcsncpy(filepath, g_sProgramDir, MAX_PATH);
         _tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
         file = fopen(filepath, "wb");
     }

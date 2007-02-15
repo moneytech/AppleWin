@@ -41,6 +41,7 @@
 #include "Harddisk.h"
 #include "Joystick.h"
 #include "Keyboard.h"
+#include "Log.h"
 #include "Memory.h"
 #include "Mockingboard.h"
 #include "ParallelPrinter.h"
