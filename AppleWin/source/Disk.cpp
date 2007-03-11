@@ -63,13 +63,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		int    nibbles;
 	};
 
-static int       currdrive       = 0;
+static WORD      currdrive       = 0;
 static BOOL      diskaccessed    = 0;
 static Disk_t    g_aFloppyDisk[DRIVES];
 static BYTE      floppylatch     = 0;
 static BOOL      floppymotoron   = 0;
 static BOOL      floppywritemode = 0;
-static int       phases; // state bits for stepper magnet phases 0 - 3
+static WORD      phases; // state bits for stepper magnet phases 0 - 3
 
 static void CheckSpinning();
 static Disk_Status_e GetDriveLightStatus( const int iDrive );
@@ -637,12 +637,13 @@ bool DiskDriveSwap()
 DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 {
 	pSS->Hdr.UnitHdr.dwLength = sizeof(SS_CARD_DISK2);
-	pSS->Hdr.UnitHdr.dwVersion = MAKE_VERSION(1,0,0,1);
+	pSS->Hdr.UnitHdr.dwVersion = MAKE_VERSION(1,0,0,2);
 
 	pSS->Hdr.dwSlot = dwSlot;
 	pSS->Hdr.dwType = CT_Disk2;
 
-	pSS->currdrive			= currdrive;
+	pSS->phases			    = phases; // new in 1.0.0.2 disk snapshots
+	pSS->currdrive			= currdrive; // this was an int in 1.0.0.1 disk snapshots
 	pSS->diskaccessed		= diskaccessed;
 	pSS->enhancedisk		= enhancedisk;
 	pSS->floppylatch		= floppylatch;
@@ -673,10 +674,13 @@ DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 
 DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 {
-	if(pSS->Hdr.UnitHdr.dwVersion != MAKE_VERSION(1,0,0,1))
-		return -1;
+	if(pSS->Hdr.UnitHdr.dwVersion > MAKE_VERSION(1,0,0,2))
+    {
+        return -1;
+    }
 
-	currdrive		= pSS->currdrive;
+	phases  		= pSS->phases; // new in 1.0.0.2 disk snapshots
+	currdrive		= pSS->currdrive; // this was an int in 1.0.0.1 disk snapshots
 	diskaccessed	= pSS->diskaccessed;
 	enhancedisk		= pSS->enhancedisk;
 	floppylatch		= pSS->floppylatch;
