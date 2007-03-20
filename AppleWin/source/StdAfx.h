@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_ME
+//#define WIN32_LEAN_AND_MEAN
 
 // Mouse Wheel is not supported on Win95.
 // If we didn't care about supporting Win95 (compile/run-time errors)
@@ -7,6 +7,8 @@
 #ifndef WM_MOUSEWHEEL
 #define WM_MOUSEWHEEL 0x020A
 #endif
+
+#pragma warning(disable:4996)	// disable all deprecation warnings
 
 // Not needed in VC7.1, but needed in VC Express
 #include <tchar.h> 
