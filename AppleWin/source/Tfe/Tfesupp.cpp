@@ -47,7 +47,6 @@
 
 #include "tfesupp.h"
 
-#pragma warning(disable:4996)	// disable all deprecation warnings
 
 // Lib Stuff
 /* #define LIB_DEBUG*/

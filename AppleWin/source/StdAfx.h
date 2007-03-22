@@ -8,8 +8,6 @@
 #define WM_MOUSEWHEEL 0x020A
 #endif
 
-#pragma warning(disable:4996)	// disable all deprecation warnings
-
 // Not needed in VC7.1, but needed in VC Express
 #include <tchar.h> 
 
