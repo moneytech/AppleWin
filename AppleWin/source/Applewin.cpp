@@ -324,6 +324,10 @@ void EnterMessageLoop ()
 		{
 			DebuggerUpdate();
 		}
+		else if (g_nAppMode == MODE_LOGO)
+		{
+			Sleep(100);		// Stop process hogging CPU
+		}
 	}
 }
 
