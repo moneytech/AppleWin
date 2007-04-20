@@ -1,3 +1,13 @@
+//#define WIN32_LEAN_AND_MEAN
+
+// Mouse Wheel is not supported on Win95.
+// If we didn't care about supporting Win95 (compile/run-time errors)
+// we would just define the minmimum windows version to support.
+// #define _WIN32_WINDOWS  0x0401
+#ifndef WM_MOUSEWHEEL
+#define WM_MOUSEWHEEL 0x020A
+#endif
+
 // Not needed in VC7.1, but needed in VC Express
 #include <tchar.h> 
 
@@ -11,7 +21,9 @@
 #include <string.h>
 #include <tchar.h>
 #include <time.h>
+
 #include <windows.h>
+#include <winuser.h> // WM_MOUSEWHEEL
 #include <commctrl.h>
 #include <ddraw.h>
 #include <htmlhelp.h>
@@ -29,8 +41,10 @@
 #include "Harddisk.h"
 #include "Joystick.h"
 #include "Keyboard.h"
+#include "Log.h"
 #include "Memory.h"
 #include "Mockingboard.h"
+#include "ParallelPrinter.h"
 #include "PropertySheetPage.h"
 #include "Registry.h"
 #include "Riff.h"

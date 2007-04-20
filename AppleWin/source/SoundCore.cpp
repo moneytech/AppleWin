@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -411,7 +411,7 @@ void SoundCore_SetFade(eFADE FadeType)
 {
 	static int nLastMode = -1;
 
-	if(mode == MODE_DEBUG)
+	if(g_nAppMode == MODE_DEBUG)
 		return;
 
 	// Fade in/out just for speaker, the others are demuted/muted
@@ -419,9 +419,9 @@ void SoundCore_SetFade(eFADE FadeType)
 	{
 		for(UINT i=0; i<g_uNumVoices; i++)
 		{
-			// Note: Kludge for fading speaker if curr/last mode is/was MODE_LOGO:
+			// Note: Kludge for fading speaker if curr/last g_nAppMode is/was MODE_LOGO:
 			// . Bug in DirectSound? SpeakerVoice.lpDSBvoice->SetVolume() doesn't work without this!
-			if((g_pVoices[i]->bIsSpeaker) && (mode != MODE_LOGO) && (nLastMode != MODE_LOGO))
+			if((g_pVoices[i]->bIsSpeaker) && (g_nAppMode != MODE_LOGO) && (nLastMode != MODE_LOGO))
 			{
 				g_pVoices[i]->lpDSBvoice->GetVolume(&g_pVoices[i]->nFadeVolume);
 				g_FadeType = FadeType;
@@ -449,7 +449,7 @@ void SoundCore_SetFade(eFADE FadeType)
 		}
 	}
 
-	nLastMode = mode;
+	nLastMode = g_nAppMode;
 }
 
 //-----------------------------------------------------------------------------
@@ -566,15 +566,23 @@ static bool g_bRefClockTimerActive = false;
 static DWORD g_dwLastUsecPeriod = 0;
 
 
-void SysClk_InitTimer()
+bool SysClk_InitTimer()
 {
 	g_hSemaphore = CreateSemaphore(NULL, 0, 1, NULL);		// Max count = 1
 	if (g_hSemaphore == NULL)
+	{
 		fprintf(stderr, "Error creating semaphore\n");
+		return false;
+	}
 
 	if (CoCreateInstance(CLSID_SystemClock, NULL, CLSCTX_INPROC,
                          IID_IReferenceClock, (LPVOID*)&g_pRefClock) != S_OK)
+	{
 		fprintf(stderr, "Error initialising COM\n");
+		return false;	// Fails for Win95!
+	}
+
+	return true;
 }
 
 void SysClk_UninitTimer()

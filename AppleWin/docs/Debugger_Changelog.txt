@@ -1,34 +1,237 @@
 /*
+TODO: 2.6.0.0 released with next version of AppleWin (1.12.9.2)
+
+.11 Added: Trace File Now displays filename tracing is saved to.
+.10 Fixed: Trace File wasn't displaying assembly mnemonics
+.9 Added: Internal change: Seperated Disassembling and Drawing a little more.
+   See: GetDisassemblyLine() and FormatDisassemblyLine()
+.8 Fixed: 100% CPU utilization polling for mouse events in debugger
+.7 Added: Colorized PROFILE LIST output
+.6 Fixed: Debugger mouse click not checking if in Debug mode
+.5 Fixed: HELP WA wasn't displaying help for Watch Add
+.4 Added: Colorized most of built in debugger help.
+.3 Added: In disassembly, regs X & Y in mnemonic line are now color coded
+.2 Changed internal representation of color console
+.1 Console now jumps to end, when return pressed
+2.5.7.0 Debugger using new Apple Font with color console support
+
+.41 Fixed: Breakpoints now properly handle ranges (both relative and absolute)
+   See HELP BPR
+.40 Changed: Cleaned up Bookmarks, Watches, ZeroPage to be more consistent.
+   Example:
+   ZPA         // list
+   ZPA CV      // add address
+   ZPA 0 CV    // update with new address
+   ZPA 0 CV CH // add/update a sequence
+.39 Changed: Cleaned up many commands and HELP categories.
+.38 Added: BMSAVE Bookmarks are now saved.
+.37 Changed: Breakpoints now recognize op '!=' or '!' for not equal.
+.36 Removed: Command Config menu (OPTION) since it is not needed
+.35 Changed: Command CONFIG renamed to OPTION to prevent same name collision with category
+.34 Fixed: The comment to end-of-line (//) is now a proper token 
+.33 Fixed: Parsing of operators <= >=
+.32 Fixed: HELP SYM displaying help category, not help command.
+.31 Added: Mini-help for Watches
+.30 Fixed: Command aliases are no longer displayed multiple times
+	i.e. HELP BEN // would show BENCHMARK BENCHMARK (BENCH)
+.29 Fixed: Removed hard-coded magic number spacing for Regs on info panel
+.28 Fixed: Commands and params can now be in lowercase
+.27 Fixed: Help now does partial matches. i.e. HELP OP
+.26 Fixed: FONT checking wrong arg count - bug introduced when op * was added.
+.25 Fixed: Console not handling string with length same as console width
+.24 Added: HELP RANGE
+.23 Added: HELP OPERATORS
+.22 Fixed: Memory searching now accepts ranges. see HELP S, HELP SH
+.21 Fixed: Updated BLOAD BSAVE Help
+.20 Fixed: BLOAD, BSAVE now accept ranges.
+.19 Fixed: Backspace toggles quote state for single quotes now too.
+.18 Changed: Results of searching now start at 1, not zero.
+	i.e.
+	S F000,1000 'Apple'
+	MA1 @1
+.17 Added: HELP S
+.16 Changed: Search Text (S) now uses consistent quoting
+	"...ASCII..."
+	'...High-Bit Apple Text...'
+	Commands: Search Ascii (SA), and Search Apple Text (ST) are now deprecated.
+.15 Fixed: Search Text wasn't allowing multiple apple text chars.
+.14 Single Quoting now allows lower case input
+.13 Fixed: Escape to clear console input, didn't reset quoted flag
+.12 Changed: BLOAD failure now prints path/file it tried.
+.11 Fixed: Memory Searching not handling comma seperating address,length
+.10 Fixed: console not wrapping long lines
+.9 Fixed: console resize not set to full width
+.8 Fixed: PRINTF help
+.7 Extended: command Bookmark List (BML)
+	Also displays maximum bookmarks if no current bookmarks are set.
+.6 Extended: command Breakpoint List (BL)
+	Also displays maximum breakpoints if no current breakpoints are set.
+.5 Extended: command Watch Add (W), and Watch List (WL)
+	Also displays maximum watchpoints if no current watchpoints are set.
+.4 Fixed: memory dump no longer overwrites icons when dumping SY6522 or AY8910
+	MA1 SY
+	MA1 AY
+.3 Fixed: Target display bug
+	_6502_GetTargets() Indirect (Zeropage) Indexed, Y not clamping pointer.
+	F7
+	DISASM POINTER 1
+	R PC FAC7
+	FE:55
+	R Y FF
+.2 Added: new command: DISASM POINTER [0 | 1]
+	Toggles the display of the instruction's target pointer values on / off in the info panel.
+	The default is now off, since the main disasm window shows target values for indirect addressing modes.
+.1 Added: Increased breakpoints to 15, Watches to 6, Zeropage pointers to 6.
+   Fixed: Display only active breakpoints.
+.0 Rearranged/Reorganized info panel to allow full width console
+	- Regs are now listed at the top of the window
+	- Breakpoint title has been removed
+	- Watch title has been removed
+	- Target now shares space with the stack display
+	- Memory Dump 2 is now only 2 lines
+2.5.6.x
+
+.4 Added: Help Categories: BOOKMARKS, HELP, OUTPUT
+.3 Re-organized output commands into seperate category.
+	ECHO, CALC, PRINT, PRINTF
+.2 Added: Bookmark commands
+	BM
+	BMA # address   // Bookmark add
+	BMC * | # [, #] // Bookmark clear
+.2 Added: new console output commands: PRINT, PRINTF
+.1 Fixed: '*' operator being treated as operator if only argument
+2.5.5.0 Added multiplication operator: '*'
+
+.15 Fixed: Help Category comma syntax parsing
+.14 Fixed: BP comma syntax parsing
+.13 Fixed: BSAVE comma syntax parsing. Comma after filename is mandatory now.
+	BSAVE ["Filename"], addr, len 
+.12 Fixed: BLOAD comma syntax parsing. Comma after filename is mandatory now.
+	BLOAD ["Filename"], addr[, len] 
+.11 Fixed: Go syntax parsing
+	G StopAddress [SkipAddress,Length]
+.10 Changed: internal parsing of comma operator.
+	It is now left in the command arguments.
+.9 Fixed: modifier keys (Shift,Ctrl,Alt) not being updated when mouse scrolling.
+.8 Changed scrolling page up & down to not scroll as far.
+.7 Fixed: scroll up bug, introduced with new scroll up code
+   R PC FBB4
+   up arrow
+.6 Fixed: scrolling page up & down, to keep better sync
+	U F700
+	pagedown
+	pageup
+.5 Fixed: scrolling page up & down bug, loosing sync of disassembly lines
+	U F500
+	pagedown
+	pageup
+	F500...F526 -> F523 (should be F526, +20 lines)
+.4 Fixed: scroll down bug, loosing sync of "top" disassembly
+    U F70F
+    down arrow
+.3 Fixed: scroll up bug, loosing sync on disassembly by skipping a mnemonic line:
+   i.e.
+    U FA44 (FA56)
+	up arrow
+.2 Added: Ctrl-# to jump to address
+.1 Added: Alt-# to set bookmark at address
+.0 Added: mouse wheel scrolling in debugger
+2.5.4.x
+
+.16 Swapped -> and Alt ->
+   -> Follow Target at Cursor
+   Alt -> Jump Cursor to PC
+.15 Added: Alt -> to follow target at cursor
+.14 Fixed: BLOAD/BSAVE to update console.
+.13 Changed: BLOAD/BSAVE to use more traditional order of arguments:
+    The comma after the filename must be left out for the time being.
+	BSAVE "Filename" address,length
+	BLOAD "Filename" address
+.12 Fixed: BPA to set breakpoints if no args
+.11 Fixed: Cleaned up HELP BP
+.10 Fixed: Cleaned up HELP BREAKPOINTS
+.9 Fixed: Cleaned up HELP DISASM
+.8 Added: DISASM to print current states
+.7 Added: DISASM TARGET [#]
+.6 Added: BLOAD addr[,len] "Filename"
+.5 Added: BSAVE addr,len "Filename"
+.4 Added: HELP DISASM
+.3 Added: DISASM [BRANCH | COLON | OPCODE | SPACES] #
+.2 Fixed: HELP CONFIG not working
+.1 Linards put undocumented mnemonics in lowercase
+2.5.3.x
+
+2.5.2.x
+
+3.0 Added: Ctrl-V (paste) now works.
+2.0 Added: BRKOP ## support
+2.5.1.0 Added: BRK ON|OFF support
+
+.23 Fixed: Moved columns of disasm for instructions, and target values over one char left, to leave whitespace past the target 'char' on the end
+.22 Added: Disasm window now shows target values for indirect, and indexed addressing modes.
+    i.e.
+0:34 12 00 00 AA 99
+D0:16 03
+1234:56 78 9A
+R X D0
+R Y 2
+300:A9 55      // LDA #$55
+302:4C 89 67   // JMP $6789
+305:AD 01 00   // LDA $0001 = 12
+308:A5 00      // LDA $00 = #34
+30A:DE 00 00   // DEC $0000,X $D0=FF
+30D:BE 02 00   // LDX $0002,Y
+310:B4 35      // LDY $30,X
+312:B6 00       // LDX $00,Y $02=0
+314:D0 02
+316:A1 00      // LDA ($00,X)
+318: 7C 00 00  // JMP ($0000,X)
+31B:B1 00      // LDA ($00),Y
+31D:B2 00      // LDA ($00)
+31F:6C 02 00 // JMP ($0002) = ($0000) -> 1234
+
+.21 Fixed: Disasm display of "Zeropage, X" and "Zeropage, Y" targets weren't wrapping on the zero-page.
+.20 Added: Single quoted chars in search are treated as opposite high-bit.
+    i.e. S D000,FFFF "NEX" 'T' searches for NEXT, with the 'T' having the high-bit set.
+    NEW: S search text or hex
+    NEW: SA search ASCII text (single quote refers to Apple Text)
+    NEW: ST search Apple text (single quote refers to ASCII text)
+.19 Added: Search Results can now be (de) referenced via @
+.18 Added: new operator '@'
+
+.17 Fixed bug in _GetStartEnd(). i.e. D000,FFFF -> D000,CFFF (nothing searched!)
+
+2.5.0.16 released with AppleWin 1.12.9.1
 
 .16 Added: addr:byte [byte]
 .15
-.14 Fixed Parses not to cook the args, until right before eating them
-.13 Fixed script to not append filename extension
-.12 Fixed command // to be comment
+.14 Fixed: Parses not to cook the args, until right before eating them
+.13 Fixed: script to not append filename extension
+.12 Fixed: command // to be comment
 .11 Console sometimes wouldn't draw due to g_bDebuggerViewingAppleOutput being still incorrectly set to true
 .10 Added: double forward slash on command line now ignores rest of command (same as C++ comment)
 .9 Added: Legacy Apple "Monitor" Commands in ExecuteCommand()
 	####G  (JMP $Address)
 	####L  (Unassemble)
-.8 Fixed console input length not updated from script line length in CmdConfigRun()
-.7 Fixed script read hang in GetLinePointers()
-.6 Fixed Assembler storing one too many bytes in AssemblerPokeAddress()
-.5 Fixed Assembler not parsing target address in AssemblerGetArgs()
+.8 Fixed: console input length not updated from script line length in CmdConfigRun()
+.7 Fixed: script read hang in GetLinePointers()
+.6 Fixed: Assembler storing one too many bytes in AssemblerPokeAddress()
+.5 Fixed: Assembler not parsing target address in AssemblerGetArgs()
 	A 40C7
 	 BRA $40D7
-.4 Fixed Assembler hang in AssemblerProcessDelayedSymols()
+.4 Fixed: Assembler hang in AssemblerProcessDelayedSymols()
 	A 40C7
 	 BRA $40D7
-.3 Fixed BPM to break ON the trigger, not after
+.3 Fixed: BPM to break ON the trigger, not after
 	Cleaned up Breakpoint code
-.2 Fixed BP address[,Length] to re-direct to BPX
-.1 Search Hex
+.2 Fixed: BP address[,Length] to re-direct to BPX
+.1 Added: Search Hex
 	SH Address,Len Byte [Byte ..]
 	Wildcard support
 	i.e.
 		SH FA00,FF 20 ? ? 20
-.0 DISK # PROTECT [0 | 1]
-.0 DISK # EJECT
+.0 Added: DISK # PROTECT [0 | 1]
+.0 Added: DISK # EJECT
 2.5 split Debugger files
 
 .21 Changed: Branch indicator now a little bigger +3 in DebugInitialize() (easier to read), indented ^,V to make the < stand out

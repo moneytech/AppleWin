@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,6 +28,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+
+#define LOG_DISK_ENABLED 1
+
+#ifndef _VC71	// __VA_ARGS__ not supported on MSVC++ .NET 7.x
+	#if LOG_DISK_ENABLED
+		#define LOG_DISK(format, ...) LOG(format, __VA_ARGS__)
+	#else
+		#define LOG_DISK(...)
+	#endif
+#endif
 
 // Public _________________________________________________________________________________________
 
@@ -55,14 +65,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		int    nibbles;
 	};
 
-static int       currdrive       = 0;
+static WORD      currdrive       = 0;
 static BOOL      diskaccessed    = 0;
 static Disk_t    g_aFloppyDisk[DRIVES];
 static BYTE      floppylatch     = 0;
 static BOOL      floppymotoron   = 0;
 static BOOL      floppywritemode = 0;
+static WORD      phases; // state bits for stepper magnet phases 0 - 3
 
-static void ChecSpinning();
+static void CheckSpinning();
 static Disk_Status_e GetDriveLightStatus( const int iDrive );
 static bool IsDriveValid( const int iDrive );
 static void ReadTrack (int drive);
@@ -187,6 +198,9 @@ static void ReadTrack (int iDrive)
 
 	if (pFloppy->trackimage && pFloppy->imagehandle)
 	{
+#ifndef _VC71
+        LOG_DISK("read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
+#endif
 		ImageReadTrack(
 			pFloppy->imagehandle,
 			pFloppy->track,
@@ -268,26 +282,60 @@ BYTE __stdcall DiskControlMotor (WORD, BYTE address, BYTE, BYTE, ULONG) {
 }
 
 //===========================================================================
-BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG) {
+BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
+{
   Disk_t * fptr = &g_aFloppyDisk[currdrive];
-  if (address & 1) {
-    int phase     = (address >> 1) & 3;
-    int direction = 0;
-    if (phase == ((fptr->phase+1) & 3))
-      direction = 1;
-    if (phase == ((fptr->phase+3) & 3))
-      direction = -1;
-    if (direction) {
-      fptr->phase = MAX(0,MIN(79,fptr->phase+direction));
-      if (!(fptr->phase & 1)) {
-        int newtrack = MIN(TRACKS-1,fptr->phase >> 1);
-        if (newtrack != fptr->track) {
-          if (fptr->trackimage && fptr->trackimagedirty)
-            WriteTrack(currdrive);
-          fptr->track          = newtrack;
-          fptr->trackimagedata = 0;
-        }
+  int phase     = (address >> 1) & 3;
+  int phase_bit = (1 << phase);
+
+  // update the magnet states
+  if (address & 1)
+  {
+    // phase on
+    phases |= phase_bit;
+#ifndef _VC71
+    LOG_DISK("track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+#endif
+  }
+  else
+  {
+    // phase off
+    phases &= ~phase_bit;
+#ifndef _VC71
+    LOG_DISK("track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+#endif
+  }
+
+  // check for any stepping effect from a magnet
+  // - move only when the magnet opposite the cog is off
+  // - move in the direction of an adjacent magnet if one is on
+  // - do not move if both adjacent magnets are on
+  // momentum and timing are not accounted for ... maybe one day!
+  int direction = 0;
+  if ((phases & (1 << fptr->phase)) == 0)
+  {
+    if (phases & (1 << ((fptr->phase + 1) & 3)))
+      direction += 1;
+    if (phases & (1 << ((fptr->phase + 3) & 3)))
+      direction -= 1;
+  }
+
+  // apply magnet step, if any
+  if (direction)
+  {
+    fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
+    int newtrack = MIN(TRACKS-1, fptr->phase >> 1); // (round half tracks down)
+#ifndef _VC71
+    LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
+#endif
+    if (newtrack != fptr->track)
+    {
+      if (fptr->trackimage && fptr->trackimagedirty)
+      {
+        WriteTrack(currdrive);
       }
+      fptr->track          = newtrack;
+      fptr->trackimagedata = 0;
     }
   }
   return (address == 0xE0) ? 0xFF : MemReturnRandomData(1);
@@ -349,7 +397,7 @@ void DiskInitialize () {
   while (loop--)
     ZeroMemory(&g_aFloppyDisk[loop],sizeof(Disk_t ));
   TCHAR imagefilename[MAX_PATH];
-  _tcscpy(imagefilename,progdir);
+  _tcscpy(imagefilename,g_sProgramDir);
   _tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
   DiskInsert(0,imagefilename,0,0);
 }
@@ -371,8 +419,9 @@ int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL crea
 }
 
 //===========================================================================
-BOOL DiskIsSpinning () {
-  return floppymotoron;
+BOOL DiskIsSpinning ()
+{
+	return floppymotoron;
 }
 
 //===========================================================================
@@ -380,30 +429,34 @@ void DiskNotifyInvalidImage (LPCTSTR imagefilename,int error)
 {
 	TCHAR buffer[MAX_PATH+128];
 
-  switch (error) {
+	switch (error)
+	{
 
-    case 1:
-      wsprintf(buffer,
-               TEXT("Unable to open the file %s."),
-               (LPCTSTR)imagefilename);
-      break;
+	case 1:
+		wsprintf(
+			buffer,
+			TEXT("Unable to open the file %s."),
+			(LPCTSTR)imagefilename);
+		break;
 
-    case 2:
-      wsprintf(buffer,
-               TEXT("Unable to use the file %s\nbecause the ")
-               TEXT("disk image format is not recognized."),
-               (LPCTSTR)imagefilename);
-      break;
+	case 2:
+		wsprintf(
+			buffer,
+			TEXT("Unable to use the file %s\nbecause the ")
+			TEXT("disk image format is not recognized."),
+			(LPCTSTR)imagefilename);
+		break;
 
-    default:
+	default:
+		// IGNORE OTHER ERRORS SILENTLY
+		return;
+	}
 
-      // IGNORE OTHER ERRORS SILENTLY
-      return;
-  }
-  MessageBox(g_hFrameWindow,
-             buffer,
-             TITLE,
-             MB_ICONEXCLAMATION | MB_SETFOREGROUND);
+	MessageBox(
+		g_hFrameWindow,
+		buffer,
+		g_pAppTitle,
+		MB_ICONEXCLAMATION | MB_SETFOREGROUND);
 }
 
 
@@ -450,6 +503,14 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
         return 0;
     else
       result = *(fptr->trackimage+fptr->byte);
+#if LOG_DISK_ENABLED
+  if (0)
+  {
+#ifndef _VC71
+    LOG_DISK("nib %4X = %2X\r", fptr->byte, result);
+#endif
+  }
+#endif
   if (++fptr->byte >= fptr->nibbles)
     fptr->byte = 0;
   return result;
@@ -458,6 +519,7 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
 //===========================================================================
 void DiskReset () {
   floppymotoron = 0;
+  phases = 0;
 }
 
 //===========================================================================
@@ -469,7 +531,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 
   strcpy(filename, pszFilename);
 
-  RegLoadString(TEXT("Preferences"),TEXT("Starting Directory"),1,directory,MAX_PATH);
+  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,directory,MAX_PATH);
   _tcscpy(title,TEXT("Select Disk Image For Drive "));
   _tcscat(title,drive ? TEXT("2") : TEXT("1"));
 
@@ -477,7 +539,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   ZeroMemory(&ofn,sizeof(OPENFILENAME));
   ofn.lStructSize     = sizeof(OPENFILENAME);
   ofn.hwndOwner       = g_hFrameWindow;
-  ofn.hInstance       = instance;
+  ofn.hInstance       = g_hInstance;
   ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
                         TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
                         TEXT("All Files\0*.*\0");
@@ -497,7 +559,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 	{
       filename[ofn.nFileOffset] = 0;
       if (_tcsicmp(directory,filename))
-        RegSaveString(TEXT("Preferences"),TEXT("Starting Directory"),1,filename);
+        RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,filename);
     }
     else
 	{
@@ -587,12 +649,13 @@ bool DiskDriveSwap()
 DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 {
 	pSS->Hdr.UnitHdr.dwLength = sizeof(SS_CARD_DISK2);
-	pSS->Hdr.UnitHdr.dwVersion = MAKE_VERSION(1,0,0,1);
+	pSS->Hdr.UnitHdr.dwVersion = MAKE_VERSION(1,0,0,2);
 
 	pSS->Hdr.dwSlot = dwSlot;
 	pSS->Hdr.dwType = CT_Disk2;
 
-	pSS->currdrive			= currdrive;
+	pSS->phases			    = phases; // new in 1.0.0.2 disk snapshots
+	pSS->currdrive			= currdrive; // this was an int in 1.0.0.1 disk snapshots
 	pSS->diskaccessed		= diskaccessed;
 	pSS->enhancedisk		= enhancedisk;
 	pSS->floppylatch		= floppylatch;
@@ -623,10 +686,13 @@ DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 
 DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 {
-	if(pSS->Hdr.UnitHdr.dwVersion != MAKE_VERSION(1,0,0,1))
-		return -1;
+	if(pSS->Hdr.UnitHdr.dwVersion > MAKE_VERSION(1,0,0,2))
+    {
+        return -1;
+    }
 
-	currdrive		= pSS->currdrive;
+	phases  		= pSS->phases; // new in 1.0.0.2 disk snapshots
+	currdrive		= pSS->currdrive; // this was an int in 1.0.0.1 disk snapshots
 	diskaccessed	= pSS->diskaccessed;
 	enhancedisk		= pSS->enhancedisk;
 	floppylatch		= pSS->floppylatch;
