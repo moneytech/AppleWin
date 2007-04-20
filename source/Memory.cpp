@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -201,22 +201,22 @@ iofunction ioread[0x100]  = {KeybReadData,       // $C000
                              MemSetPaging,       // $C08D
                              MemSetPaging,       // $C08E
                              MemSetPaging,       // $C08F
-                             NullIo,             // $C090
-                             NullIo,             // $C091
-                             NullIo,             // $C092
-                             NullIo,             // $C093
-                             NullIo,             // $C094
-                             NullIo,             // $C095
-                             NullIo,             // $C096
-                             NullIo,             // $C097
-                             NullIo,             // $C098
-                             NullIo,             // $C099
-                             NullIo,             // $C09A
-                             NullIo,             // $C09B
-                             NullIo,             // $C09C
-                             NullIo,             // $C09D
-                             NullIo,             // $C09E
-                             NullIo,             // $C09F
+                             PrintStatus,        // $C090
+                             PrintStatus,        // $C091
+                             PrintStatus,        // $C092
+                             PrintStatus,        // $C093
+                             PrintStatus,        // $C094
+                             PrintStatus,        // $C095
+                             PrintStatus,        // $C096
+                             PrintStatus,        // $C097
+                             PrintStatus,        // $C098
+                             PrintStatus,        // $C099
+                             PrintStatus,        // $C09A
+                             PrintStatus,        // $C09B
+                             PrintStatus,        // $C09C
+                             PrintStatus,        // $C09D
+                             PrintStatus,        // $C09E
+                             PrintStatus,        // $C09F
                              NullIo,             // $C0A0
                              CommDipSw,          // $C0A1
                              CommDipSw,          // $C0A2
@@ -464,22 +464,22 @@ iofunction iowrite[0x100] = {MemSetPaging,       // $C000
                              MemSetPaging,       // $C08D
                              MemSetPaging,       // $C08E
                              MemSetPaging,       // $C08F
-                             NullIo,             // $C090
-                             NullIo,             // $C091
-                             NullIo,             // $C092
-                             NullIo,             // $C093
-                             NullIo,             // $C094
-                             NullIo,             // $C095
-                             NullIo,             // $C096
-                             NullIo,             // $C097
-                             NullIo,             // $C098
-                             NullIo,             // $C099
-                             NullIo,             // $C09A
-                             NullIo,             // $C09B
-                             NullIo,             // $C09C
-                             NullIo,             // $C09D
-                             NullIo,             // $C09E
-                             NullIo,             // $C09F
+                             PrintTransmit,      // $C090
+                             PrintTransmit,      // $C091
+                             PrintTransmit,      // $C092
+                             PrintTransmit,      // $C093
+                             PrintTransmit,      // $C094
+                             PrintTransmit,      // $C095
+                             PrintTransmit,      // $C096
+                             PrintTransmit,      // $C097
+                             PrintTransmit,      // $C098
+                             PrintTransmit,      // $C099
+                             PrintTransmit,      // $C09A
+                             PrintTransmit,      // $C09B
+                             PrintTransmit,      // $C09C
+                             PrintTransmit,      // $C09D
+                             PrintTransmit,      // $C09E
+                             PrintTransmit,      // $C09F
                              NullIo,             // $C0A0
                              NullIo,             // $C0A1
                              NullIo,             // $C0A2
@@ -581,7 +581,7 @@ static DWORD   imagemode[MAXIMAGES];
 LPBYTE         memshadow[MAXIMAGES][0x100];
 LPBYTE         memwrite[MAXIMAGES][0x100];
 
-static BOOL    fastpaging   = 0;
+static BOOL    fastpaging   = 0;	// Redundant: only ever set to 0, by MemSetFastPaging(0)
 DWORD          image        = 0;
 DWORD          lastimage    = 0;
 static BOOL    lastwriteram = 0;
@@ -593,7 +593,6 @@ static LPBYTE  memmain      = NULL;
 static DWORD   memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
 static LPBYTE  memrom       = NULL;
 static BOOL    modechanging = 0;
-DWORD          pages        = 0;
 
 MemoryInitPattern_e g_eMemoryInitPattern = MIP_FF_FF_00_00;
 
@@ -672,7 +671,6 @@ void UpdateFastPaging () {
     mem = memimage+(image << 16);
     UpdatePaging(1,0);
   }
-  CpuReinitialize();
 }
 
 //===========================================================================
@@ -854,37 +852,39 @@ LPBYTE MemGetMainPtr (WORD offset) {
 //===========================================================================
 void MemInitialize () {
 
-  // ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA
-  // STRUCTURES
+  // ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
   //
   // THE MEMIMAGE BUFFER CAN CONTAIN EITHER MULTIPLE MEMORY IMAGES OR
   // ONE MEMORY IMAGE WITH COMPILER DATA
-  memaux   = (LPBYTE)VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE);
+  memaux   = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE); // _6502_MEM_END //  0x10000
   memdirty = (LPBYTE)VirtualAlloc(NULL,0x100  ,MEM_COMMIT,PAGE_READWRITE);
-  memmain  = (LPBYTE)VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE);
+  memmain  = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
   memrom   = (LPBYTE)VirtualAlloc(NULL,0x5000 ,MEM_COMMIT,PAGE_READWRITE);
   memimage = (LPBYTE)VirtualAlloc(NULL,
                                   MAX(0x30000,MAXIMAGES*0x10000),
                                   MEM_RESERVE,PAGE_NOACCESS);
-  if ((!memaux) || (!memdirty) || (!memimage) || (!memmain) || (!memrom)) {
-    MessageBox(GetDesktopWindow(),
-               TEXT("The emulator was unable to allocate the memory it ")
-               TEXT("requires.  Further execution is not possible."),
-               TITLE,
-               MB_ICONSTOP | MB_SETFOREGROUND);
-    ExitProcess(1);
-  }
-  {
-    LPVOID newloc = VirtualAlloc(memimage,0x30000,MEM_COMMIT,PAGE_READWRITE);
-    if (newloc != memimage)
-      MessageBox(GetDesktopWindow(),
-                 TEXT("The emulator has detected a bug in your operating ")
-                 TEXT("system.  While changing the attributes of a memory ")
-                 TEXT("object, the operating system also changed its ")
-                 TEXT("location."),
-                 TITLE,
-                 MB_ICONEXCLAMATION | MB_SETFOREGROUND);
-  }
+
+	if ((!memaux) || (!memdirty) || (!memimage) || (!memmain) || (!memrom))
+	{
+		MessageBox(
+			GetDesktopWindow(),
+			TEXT("The emulator was unable to allocate the memory it ")
+			TEXT("requires.  Further execution is not possible."),
+			g_pAppTitle,
+			MB_ICONSTOP | MB_SETFOREGROUND);
+		ExitProcess(1);
+	}
+
+	LPVOID newloc = VirtualAlloc(memimage,0x30000,MEM_COMMIT,PAGE_READWRITE);
+	if (newloc != memimage)
+		MessageBox(
+			GetDesktopWindow(),
+			TEXT("The emulator has detected a bug in your operating ")
+			TEXT("system.  While changing the attributes of a memory ")
+			TEXT("object, the operating system also changed its ")
+			TEXT("location."),
+			g_pAppTitle,
+			MB_ICONEXCLAMATION | MB_SETFOREGROUND);
 
 #ifdef RAMWORKS
 	// allocate memory for RAMWorks III - up to 8MB
@@ -894,23 +894,34 @@ void MemInitialize () {
 		i++;
 #endif
 
-  // READ THE APPLE FIRMWARE ROMS INTO THE ROM IMAGE
-	const UINT ROM_SIZE = 0x5000; // HACK: Magic #
+	// READ THE APPLE FIRMWARE ROMS INTO THE ROM IMAGE
+	const UINT ROM_SIZE = 0x5000; // HACK: Magic # -- $C000..$FFFF = 4K .. why 5K?
 
-	HRSRC hResInfo = apple2e	? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM")
-								: FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_ROM), "ROM");
+	HRSRC hResInfo = 
+		g_bApple2e
+		? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM")
+		: (g_bApple2plus
+			? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2PLUS_ROM), "ROM")
+			: FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2ORIG_ROM), "ROM") );
+
 	if(hResInfo == NULL)
 	{
-		TCHAR sRomFileName[ 128 ];
-		_tcscpy( sRomFileName, apple2e ? TEXT("APPLE2E.ROM") : TEXT("APPLE2.ROM") );
+		TCHAR sRomFileName[ MAX_PATH ];
+		_tcscpy( sRomFileName,
+			g_bApple2e
+			? TEXT("APPLE2E.ROM")
+			: (g_bApple2plus
+				? TEXT("APPLE2PLUS.ROM")
+				: TEXT("APPLE2ORIG.ROM")));
 
-		TCHAR sText[ 256 ];
+		TCHAR sText[ MAX_PATH ];
 		wsprintf( sText, TEXT("Unable to open the required firmware ROM data file.\n\nFile: %s."), sRomFileName );
 
-		MessageBox(GetDesktopWindow(),
-               sText,
-               TITLE,
-               MB_ICONSTOP | MB_SETFOREGROUND);
+		MessageBox(
+			GetDesktopWindow(),
+			sText,
+			g_pAppTitle,
+			MB_ICONSTOP | MB_SETFOREGROUND);
 		ExitProcess(1);
 	}
 
@@ -923,41 +934,40 @@ void MemInitialize () {
 		return;
 
 	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
-	if(pData == NULL)
+	if (pData == NULL)
 		return;
 
 	memcpy(memrom, pData, ROM_SIZE);
 
-  // TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
-  {
-    *(memrom+0x064C) = 0xA9;
-    *(memrom+0x064D) = 0x00;
-    *(memrom+0x064E) = 0xEA;
-  }
+	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
+	*(memrom+0x064C) = 0xA9;
+	*(memrom+0x064D) = 0x00;
+	*(memrom+0x064E) = 0xEA;
 
-  HD_Load_Rom(memrom);	// HDD f/w gets loaded to $C700
+	HD_Load_Rom(memrom);	// HDD f/w gets loaded to $C700
+  PrintLoadRom(memrom);	// parallel printer firmware gets loaded to $C100
 
-  MemReset();
+	MemReset();
 }
 
 //===========================================================================
 
-// Call by:
+// Called by:
 // . ResetMachineState()	eg. Power-cycle ('Apple-Go' button)
 // . Snapshot_LoadState()
 void MemReset ()
 {
-  // TURN OFF FAST PAGING IF IT IS CURRENTLY ACTIVE
-  MemSetFastPaging(0);
+	// TURN OFF FAST PAGING IF IT IS CURRENTLY ACTIVE
+	MemSetFastPaging(0);
 
-  // INITIALIZE THE PAGING TABLES
-  ZeroMemory(memshadow,MAXIMAGES*256*sizeof(LPBYTE));
-  ZeroMemory(memwrite ,MAXIMAGES*256*sizeof(LPBYTE));
+	// INITIALIZE THE PAGING TABLES
+	ZeroMemory(memshadow,MAXIMAGES*256*sizeof(LPBYTE));
+	ZeroMemory(memwrite ,MAXIMAGES*256*sizeof(LPBYTE));
 
-  // INITIALIZE THE RAM IMAGES
-  ZeroMemory(memaux ,0x10000);
+	// INITIALIZE THE RAM IMAGES
+	ZeroMemory(memaux ,0x10000);
 
-  ZeroMemory(memmain,0x10000);
+	ZeroMemory(memmain,0x10000);
 
 	int iByte;
 
@@ -973,17 +983,15 @@ void MemReset ()
 		}
 	}
 
-  // SET UP THE MEMORY IMAGE
-  mem   = memimage;
-  image = 0;
+	// SET UP THE MEMORY IMAGE
+	mem   = memimage;
+	image = 0;
 
-  // INITIALIZE THE CPU
-  CpuInitialize();
+	// INITIALIZE & RESET THE CPU
+	CpuInitialize();
 
-  // INITIALIZE PAGING, FILLING IN THE 64K MEMORY IMAGE
-  ResetPaging(1);
-  regs.pc = *(LPWORD)(mem+0xFFFC);
-  CpuIrqReset();
+	// INITIALIZE PAGING, FILLING IN THE 64K MEMORY IMAGE
+	ResetPaging(1);
 }
 
 //===========================================================================
@@ -1040,10 +1048,6 @@ void MemSetFastPaging (BOOL on) {
   imagemode[0] = memmode;
   if (!fastpaging)
     UpdatePaging(1,0);
-  cpuemtype = fastpaging ? CPU_FASTPAGING : CPU_COMPILING;
-  CpuReinitialize();
-  if (cpuemtype == CPU_COMPILING)
-    CpuResetCompilerData();
 }
 
 //===========================================================================
@@ -1064,7 +1068,7 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
       memmode |= MF_HIGHRAM;
     lastwriteram = writeram;
   }
-  else if (apple2e)
+  else if (g_bApple2e)
   {
     switch (address)
 	{
@@ -1099,8 +1103,6 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
 				else
 				{
 					UpdatePaging(0,0);
-					if (cpuemtype == CPU_COMPILING)
-						CpuResetCompilerData();
 				}
 			}
 			break;
@@ -1127,7 +1129,6 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
   // WRITE TABLES.
   if ((lastmemmode != memmode) || modechanging) {
     modechanging = 0;
-    ++pages;
 
     // IF FAST PAGING IS ACTIVE, WE KEEP MULTIPLE COMPLETE MEMORY IMAGES
     // AND WRITE TABLES, AND SWITCH BETWEEN THEM.  THE FAST PAGING VERSION
@@ -1139,8 +1140,6 @@ BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE
     // WRITE TABLE, AND UPDATE THEM EVERY TIME PAGING IS CHANGED.
     else {
       UpdatePaging(0,0);
-      if (cpuemtype == CPU_COMPILING)
-        CpuResetCompilerData();
     }
 
   }
@@ -1172,7 +1171,6 @@ void MemTrimImages () {
       image   = realimage;
       mem     = memimage+(image << 16);
       memmode = imagemode[image];
-      CpuReinitialize();
     }
     if (++trimnumber >= lastimage)
       trimnumber = 0;
@@ -1187,7 +1185,7 @@ BYTE __stdcall CxReadFunc(WORD, WORD nAddr, BYTE, BYTE, ULONG nCyclesLeft)
 
 	CpuCalcCycles(nCyclesLeft);
 	
-	if(!apple2e || SW_SLOTCXROM)
+	if(!g_bApple2e || SW_SLOTCXROM)
 	{
 		if((nPage == 0xC4) || (nPage == 0xC5))
 		{
@@ -1216,7 +1214,7 @@ BYTE __stdcall CxWriteFunc(WORD, WORD nAddr, BYTE, BYTE nValue, ULONG nCyclesLef
 
 	CpuCalcCycles(nCyclesLeft);
 
-	if(!apple2e || SW_SLOTCXROM)
+	if(!g_bApple2e || SW_SLOTCXROM)
 	{
 		if((nPage == 0xC4) || (nPage == 0xC5))
 		{
@@ -1261,7 +1259,6 @@ DWORD MemSetSnapshot(SS_BaseMemory* pSS)
 
 	//
 
-	pages = 0;
 	modechanging = 0;
 
 	UpdatePaging(1,0);		// Initialize=1, UpdateWriteOnly=0

@@ -14,16 +14,23 @@
 		, _6502_NUM_FLAGS = 8
 	};
 
+	enum RangeType_t
+	{
+		RANGE_MISSING_ARG_2 = 0, // error
+		RANGE_HAS_LEN          , // valid case 1
+		RANGE_HAS_END          , // valid case 2
+	};
+
 	struct AddressingMode_t
 	{
-		TCHAR m_sFormat[ MAX_OPMODE_FORMAT ];
+		char  m_sFormat[ MAX_OPMODE_FORMAT ];
 		int   m_nBytes;
 		char  m_sName  [ MAX_OPMODE_NAME ];
 	};
 
 	/*
       +---------------------+--------------------------+
-      |      mode           |     assembler format     |
+      | Opmode  e           |     assembler format     |
       +=====================+==========================+
       | Immediate           |          #aa             |
       | Absolute            |          aaaa            |
@@ -43,7 +50,7 @@
 
 	Opcode: opc aaa od
 		opc...od = Mnemonic / Opcode
-		...aaa.. = Addressing mode
+		...aaa.. = Addressing g_nAppMode
 	od = 00
 		000	#Immediate
 		001	Zero page
@@ -134,11 +141,18 @@
 	};
 
 
+// Bookmarks ______________________________________________________________________________________
+
+	enum
+	{
+		MAX_BOOKMARKS = 10
+	};
+
 // Breakpoints ____________________________________________________________________________________
 
 	enum
 	{
-		NUM_BREAKPOINTS = 5
+		MAX_BREAKPOINTS = 16
 	};
 
 	/*
@@ -189,12 +203,13 @@
 		BP_OP_LESS_EQUAL   , // <= REG
 		BP_OP_LESS_THAN    , // <  REG
 		BP_OP_EQUAL        , // =  REG
-		BP_OP_NOT_EQUAL    , // !  REG
+		BP_OP_NOT_EQUAL    , // != REG
+//		BP_OP_NOT_EQUAL_1  , // !  REG
 		BP_OP_GREATER_THAN , // >  REG
 		BP_OP_GREATER_EQUAL, // >= REG
-		BP_OP_READ         , // ?  MEM
-		BP_OP_WRITE        , // @  MEM
-		BP_OP_READ_WRITE   , // *  MEM
+		BP_OP_READ         , // @  MEM @ ? *
+		BP_OP_WRITE        , // *  MEM @ ? *
+		BP_OP_READ_WRITE   , // ?  MEM @ ? *
 		NUM_BREAKPOINT_OPERATORS
 	};
 
@@ -208,6 +223,7 @@
 		bool                 bEnabled;
 	};
 
+	typedef Breakpoint_t Bookmark_t;
 	typedef Breakpoint_t Watches_t;
 	typedef Breakpoint_t ZeroPagePointers_t;
 
@@ -290,8 +306,11 @@
 		, BG_DISASM_PC_X     // Dim Yellow (not cursor)
 		, FG_DISASM_PC_X     // White      (not cursor)
 
+		, BG_DISASM_BOOKMARK // Lite Blue    (always)
+		, FG_DISASM_BOOKMARK // White   addr (always)
+
 		, FG_DISASM_ADDRESS  // White   addr
-		, FG_DISASM_OPERATOR // Gray192     :               $ (also around instruction addressing mode)
+		, FG_DISASM_OPERATOR // Gray192     :               $ (also around instruction addressing g_nAppMode)
 		, FG_DISASM_OPCODE   // Yellow       xx xx xx
 		, FG_DISASM_MNEMONIC // White                   LDA
 		, FG_DISASM_TARGET   // Orange                       FAC8
@@ -334,7 +353,14 @@
 		, NUM_COLORS
 	};
 
+// Config _________________________________________________________________________________________
 	
+	enum ConfigSave_t
+	{
+		CONFIG_SAVE_FILE_CREATE,
+		CONFIG_SAVE_FILE_APPEND
+	};
+
 // Commands _______________________________________________________________________________________
 
 	enum Update_e
@@ -373,7 +399,7 @@
 
 	struct Command_t
 	{
-		TCHAR        m_sName[ MAX_COMMAND_LEN ];
+		char         m_sName[ MAX_COMMAND_LEN ];
 		CmdFuncPtr_t pFunction;
 		int          iCommand;     // offset (enum) for direct command name lookup
 		char        *pHelpSummary; // 1 line help summary
@@ -384,23 +410,42 @@
 	// NOTE: Commands_e and g_aCommands[] order _MUST_ match !!! Aliases are listed at the end
 	enum Commands_e
 	{
-// Main / CPU
-		  CMD_ASSEMBLE
-		, CMD_UNASSEMBLE
+// CPU
+		  CMD_CURSOR_JUMP_PC // Shift
+		, CMD_CURSOR_SET_PC  // Ctrl
+		, CMD_ASSEMBLE
 		, CMD_BREAK_INVALID
 		, CMD_BREAK_OPCODE
-		, CMD_CALC
 		, CMD_GO
-		, CMD_INPUT
+		, CMD_IN
 		, CMD_INPUT_KEY
 		, CMD_JSR
-		, CMD_OUTPUT
 		, CMD_NOP
+		, CMD_OUT
+// CPU - Meta Info
+		, CMD_PROFILE
+		, CMD_REGISTER_SET
+// CPU - Stack
+//		, CMD_STACK_LIST
+		, CMD_STACK_POP
+		, CMD_STACK_POP_PSEUDO
+		, CMD_STACK_PUSH
+//		, CMD_STACK_RETURN
 		, CMD_STEP_OVER
 		, CMD_STEP_OUT
+// CPU - Meta Info
 		, CMD_TRACE
 		, CMD_TRACE_FILE
 		, CMD_TRACE_LINE
+		, CMD_UNASSEMBLE
+// Bookmarks
+		, CMD_BOOKMARK
+		, CMD_BOOKMARK_ADD
+		, CMD_BOOKMARK_CLEAR
+		, CMD_BOOKMARK_LIST
+//		, CMD_BOOKMARK_LOAD
+		, CMD_BOOKMARK_GOTO
+		, CMD_BOOKMARK_SAVE
 // Breakpoints
 		, CMD_BREAKPOINT
 		, CMD_BREAKPOINT_ADD_SMART // smart breakpoint
@@ -410,36 +455,38 @@
 //		,	CMD_BREAKPOINT_EXEC = CMD_BREAKPOINT_ADD_ADDR // alias
 		, CMD_BREAKPOINT_ADD_IO  // break on: [$C000-$C7FF] Load/Store 
 		, CMD_BREAKPOINT_ADD_MEM // break on: [$0000-$FFFF], excluding IO
+
 		, CMD_BREAKPOINT_CLEAR
 //		,	CMD_BREAKPOINT_REMOVE = CMD_BREAKPOINT_CLEAR // alias
 		, CMD_BREAKPOINT_DISABLE
 		, CMD_BREAKPOINT_EDIT
 		, CMD_BREAKPOINT_ENABLE
 		, CMD_BREAKPOINT_LIST
-		, CMD_BREAKPOINT_LOAD
+//		, CMD_BREAKPOINT_LOAD
 		, CMD_BREAKPOINT_SAVE
 // Benchmark / Timing
-		, CMD_BENCHMARK
 //		, CMD_BENCHMARK_START
 //		, CMD_BENCHMARK_STOP
-		, CMD_PROFILE
 //		, CMD_PROFILE_START
 //		, CMD_PROFILE_STOP
 // Config (debugger settings)
+		, CMD_BENCHMARK
 		, CMD_CONFIG_BW         // BW    # rr gg bb
 		, CMD_CONFIG_COLOR      // COLOR # rr gg bb
-		, CMD_CONFIG_MENU
-		, CMD_CONFIG_ECHO
+
+		, CMD_CONFIG_DISASM
+//		, CMD_CONFIG_DISASM_BRANCH
+//		, CMD_CONFIG_DISASM_COLON
+//		, CMD_CONFIG_DISASM_OPCODE
+//		, CMD_CONFIG_DISASM_SPACES
+
 		, CMD_CONFIG_FONT
 //		, CMD_CONFIG_FONT2 // PARAM_FONT_DISASM PARAM_FONT_INFO PARAM_FONT_SOURCE
 		, CMD_CONFIG_HCOLOR     // TODO Video :: SETFRAMECOLOR(#,R,G,B)
 		, CMD_CONFIG_LOAD
 		, CMD_CONFIG_MONOCHROME // MONO  # rr gg bb
-		, CMD_CONFIG_RUN
 		, CMD_CONFIG_SAVE
 // Cursor
-		, CMD_CURSOR_JUMP_PC // Shift
-		, CMD_CURSOR_SET_PC  // Ctrl
 		, CMD_CURSOR_JUMP_RET_ADDR
 		, CMD_CURSOR_LINE_UP   // Smart Line Up
 		, CMD_CURSOR_LINE_UP_1 // Shift
@@ -489,7 +536,7 @@
 		, CMD_MEM_MINI_DUMP_HEX_1
 		, CMD_MEM_MINI_DUMP_HEX_2  
 		, _CMD_MEM_MINI_DUMP_HEX_1_3 // alias M1
-        , _CMD_MEM_MINI_DUMP_HEX_2_1 // alias M2
+		, _CMD_MEM_MINI_DUMP_HEX_2_1 // alias M2
 
 		, CMD_MEM_MINI_DUMP_ASCII_1    // ASCII
 		, CMD_MEM_MINI_DUMP_ASCII_2
@@ -504,23 +551,23 @@
 		, CMD_MEMORY_EDIT
 		, CMD_MEMORY_ENTER_BYTE
 		, CMD_MEMORY_ENTER_WORD
+		, CMD_MEMORY_LOAD
 		, CMD_MEMORY_MOVE
+		, CMD_MEMORY_SAVE
 		, CMD_MEMORY_SEARCH
-		, CMD_MEMORY_SEARCH_ASCII   // Ascii Text
-		, CMD_MEMORY_SEARCH_APPLE   // Flashing Chars, Hi-Bit Set
+//		, CMD_MEMORY_SEARCH_ASCII   // Ascii Text
+//		, CMD_MEMORY_SEARCH_APPLE   // Flashing Chars, Hi-Bit Set
 		, CMD_MEMORY_SEARCH_HEX
 		, CMD_MEMORY_FILL
-// Registers - CPU
-		, CMD_REGISTER_SET
+// Output
+		, CMD_OUTPUT_CALC
+		, CMD_OUTPUT_ECHO
+		, CMD_OUTPUT_PRINT
+		, CMD_OUTPUT_PRINTF
+		, CMD_OUTPUT_RUN
 // Source Level Debugging
 		, CMD_SOURCE
 		, CMD_SYNC
-// Stack - CPU
-//		, CMD_STACK_LIST
-		, CMD_STACK_POP
-		, CMD_STACK_POP_PSEUDO
-		, CMD_STACK_PUSH
-//		, CMD_STACK_RETURN
 // Symbols
 		, CMD_SYMBOLS_LOOKUP
 //		, CMD_SYMBOLS
@@ -535,12 +582,13 @@
 //		, CMD_SYMBOLS_LOAD_2
 //		, CMD_SYMBOLS_SAVE
 // Watch
+		, CMD_WATCH
 		, CMD_WATCH_ADD
 		, CMD_WATCH_CLEAR
 		, CMD_WATCH_DISABLE
 		, CMD_WATCH_ENABLE
 		, CMD_WATCH_LIST
-		, CMD_WATCH_LOAD
+//		, CMD_WATCH_LOAD
 		, CMD_WATCH_SAVE
 // Window
 //		, CMD_WINDOW_COLOR_CUSTOM
@@ -579,12 +627,15 @@
 		, CMD_ZEROPAGE_POINTER_2
 		, CMD_ZEROPAGE_POINTER_3
 		, CMD_ZEROPAGE_POINTER_4
+		, CMD_ZEROPAGE_POINTER_5
+		, CMD_ZEROPAGE_POINTER_6
+		, CMD_ZEROPAGE_POINTER_7
 		, CMD_ZEROPAGE_POINTER_ADD
 		, CMD_ZEROPAGE_POINTER_CLEAR
 		, CMD_ZEROPAGE_POINTER_DISABLE
 		, CMD_ZEROPAGE_POINTER_ENABLE
 		, CMD_ZEROPAGE_POINTER_LIST
-		, CMD_ZEROPAGE_POINTER_LOAD
+//		, CMD_ZEROPAGE_POINTER_LOAD
 		, CMD_ZEROPAGE_POINTER_SAVE
 
 		, NUM_COMMANDS
@@ -592,25 +643,33 @@
 
 
 // CPU
+	Update_t CmdCursorJumpPC(int nArgs);
+	Update_t CmdCursorSetPC (int nArgs);
 	Update_t CmdAssemble    (int nArgs);
-	Update_t CmdUnassemble  (int nArgs); // code dump, aka, Unassemble
 	Update_t CmdBreakInvalid(int nArgs); // Breakpoint IFF Full-speed!
 	Update_t CmdBreakOpcode (int nArgs); // Breakpoint IFF Full-speed!
-	Update_t CmdCalculator  (int nArgs);
 	Update_t CmdGo          (int nArgs);
-	Update_t CmdInput       (int nArgs);
+	Update_t CmdIn          (int nArgs);
+	Update_t CmdKey         (int nArgs);
 	Update_t CmdJSR         (int nArgs);
 	Update_t CmdNOP         (int nArgs);
-	Update_t CmdOutput      (int nArgs);
-	Update_t CmdFeedKey     (int nArgs);
-	Update_t CmdStepOut     (int nArgs);
+	Update_t CmdOut         (int nArgs);
 	Update_t CmdStepOver    (int nArgs);
+	Update_t CmdStepOut     (int nArgs);
 	Update_t CmdTrace       (int nArgs);  // alias for CmdStepIn
 	Update_t CmdTraceFile   (int nArgs);
 	Update_t CmdTraceLine   (int nArgs);
-
+	Update_t CmdUnassemble  (int nArgs); // code dump, aka, Unassemble
+// Bookmarks
+	Update_t CmdBookmark       (int nArgs);
+	Update_t CmdBookmarkAdd    (int nArgs);
+	Update_t CmdBookmarkClear  (int nArgs);
+	Update_t CmdBookmarkList   (int nArgs);
+	Update_t CmdBookmarkGoto   (int nArgs);
+//	Update_t CmdBookmarkLoad   (int nArgs);
+	Update_t CmdBookmarkSave   (int nArgs);
 // Breakpoints
-	Update_t CmdBreakpointMenu    (int nArgs);
+	Update_t CmdBreakpoint        (int nArgs);
 	Update_t CmdBreakpointAddSmart(int nArgs);
 	Update_t CmdBreakpointAddReg  (int nArgs);
 	Update_t CmdBreakpointAddPC   (int nArgs);
@@ -621,7 +680,7 @@
 	Update_t CmdBreakpointEdit    (int nArgs);
 	Update_t CmdBreakpointEnable  (int nArgs);
 	Update_t CmdBreakpointList    (int nArgs);
-	Update_t CmdBreakpointLoad    (int nArgs);
+//	Update_t CmdBreakpointLoad    (int nArgs);
 	Update_t CmdBreakpointSave    (int nArgs);
 // Benchmark
 	Update_t CmdBenchmark      (int nArgs);
@@ -631,26 +690,24 @@
 	Update_t CmdProfileStart   (int nArgs);
 	Update_t CmdProfileStop    (int nArgs);
 // Config
-	Update_t CmdConfigMenu        (int nArgs);
-	Update_t CmdConfigBase        (int nArgs);
-	Update_t CmdConfigBaseHex     (int nArgs);
-	Update_t CmdConfigBaseDec     (int nArgs);
+//	Update_t CmdConfigMenu        (int nArgs);
+//	Update_t CmdConfigBase        (int nArgs);
+//	Update_t CmdConfigBaseHex     (int nArgs);
+//	Update_t CmdConfigBaseDec     (int nArgs);
 	Update_t CmdConfigColorMono   (int nArgs);
-	Update_t CmdConfigEcho        (int nArgs);
+	Update_t CmdConfigDisasm      (int nArgs);
 	Update_t CmdConfigFont        (int nArgs);
 	Update_t CmdConfigHColor      (int nArgs);
 	Update_t CmdConfigLoad        (int nArgs);
-	Update_t CmdConfigRun         (int nArgs);
 	Update_t CmdConfigSave        (int nArgs);
 	Update_t CmdConfigSetFont     (int nArgs);
 	Update_t CmdConfigGetFont     (int nArgs);
 // Cursor
+	Update_t CmdCursorFollowTarget(int nArgs);
 	Update_t CmdCursorLineDown    (int nArgs);
 	Update_t CmdCursorLineUp      (int nArgs);
-	Update_t CmdCursorJumpPC      (int nArgs);
 	Update_t CmdCursorJumpRetAddr (int nArgs);
 	Update_t CmdCursorRunUntil    (int nArgs);
-	Update_t CmdCursorSetPC       (int nArgs);
 	Update_t CmdCursorPageDown    (int nArgs);
 	Update_t CmdCursorPageDown256 (int nArgs);
 	Update_t CmdCursorPageDown4K  (int nArgs);
@@ -664,7 +721,6 @@
 	Update_t CmdHelpSpecific      (int Argss);
 	Update_t CmdVersion           (int nArgs);
 	Update_t CmdMOTD              (int nArgs);
-	
 // Flags
 	Update_t CmdFlag      (int nArgs);
 	Update_t CmdFlagClear (int nArgs);
@@ -681,13 +737,21 @@
 	Update_t CmdMemoryEnterByte    (int nArgs);
 	Update_t CmdMemoryEnterWord    (int nArgs);
 	Update_t CmdMemoryFill         (int nArgs);
+	Update_t CmdMemoryLoad         (int nArgs);
 	Update_t CmdMemoryMove         (int nArgs);
+	Update_t CmdMemorySave         (int nArgs);
 	Update_t CmdMemorySearch       (int nArgs);
 //	Update_t CmdMemorySearchLowBit (int nArgs);
 //	Update_t CmdMemorySearchHiBit  (int nArgs);
 	Update_t CmdMemorySearchAscii  (int nArgs);
 	Update_t CmdMemorySearchApple  (int nArgs);
 	Update_t CmdMemorySearchHex    (int nArgs);
+// Output/Scripts
+	Update_t CmdOutputCalc         (int nArgs);
+	Update_t CmdOutputEcho         (int nArgs);
+	Update_t CmdOutputPrint        (int nArgs);
+	Update_t CmdOutputPrintf       (int nArgs);
+	Update_t CmdOutputRun          (int nArgs);
 // Registers
 	Update_t CmdRegisterSet     (int nArgs);
 // Source Level Debugging
@@ -709,12 +773,13 @@
 	Update_t CmdSymbolsSave     (int nArgs);
 	Update_t CmdSymbolsSource   (int nArgs);
 // Watch
+	Update_t CmdWatch        (int nArgs);
 	Update_t CmdWatchAdd     (int nArgs);
 	Update_t CmdWatchClear   (int nArgs);
 	Update_t CmdWatchDisable (int nArgs);
 	Update_t CmdWatchEnable  (int nArgs);
 	Update_t CmdWatchList    (int nArgs);
-	Update_t CmdWatchLoad    (int nArgs);
+//	Update_t CmdWatchLoad    (int nArgs);
 	Update_t CmdWatchSave    (int nArgs);
 // Window
 	Update_t CmdWindow            (int nArgs);
@@ -754,7 +819,7 @@
 	Update_t CmdZeroPageDisable (int nArgs);
 	Update_t CmdZeroPageEnable  (int nArgs);
 	Update_t CmdZeroPageList    (int nArgs);
-	Update_t CmdZeroPageLoad    (int nArgs);
+//	Update_t CmdZeroPageLoad    (int nArgs);
 	Update_t CmdZeroPageSave    (int nArgs);
 	Update_t CmdZeroPagePointer (int nArgs);
 
@@ -775,22 +840,110 @@
 
 
 // Disassembly ____________________________________________________________________________________
-	enum FormatDisasm_e
-	{
-		DISASM_IMMEDIATE_CHAR   = (1 << 0),
-		DISASM_TARGET_SYMBOL    = (1 << 1),
-		DISASM_TARGET_OFFSET    = (1 << 2),
-		DISASM_BRANCH_INDICATOR = (1 << 3),
-		DISASM_TARGET_POINTER   = (1 << 4),
-		DISASM_TARGET_VALUE     = (1 << 5),
-	};
 
 	enum DisasmBranch_e
 	{
-		DISASM_BRANCH_OFF   = 0,
-		DISASM_BRANCH_PLAIN = 1,
-		DISASM_BRANCH_FANCY = 2,
-		NUM_DISASM_BRANCH_TYPES
+		  DISASM_BRANCH_OFF = 0
+		, DISASM_BRANCH_PLAIN
+		, DISASM_BRANCH_FANCY
+		, NUM_DISASM_BRANCH_TYPES
+	};
+
+	enum DisasmFormat_e
+	{
+		DISASM_FORMAT_CHAR           = (1 << 0),
+		DISASM_FORMAT_SYMBOL         = (1 << 1),
+		DISASM_FORMAT_OFFSET         = (1 << 2),
+		DISASM_FORMAT_BRANCH         = (1 << 3),
+		DISASM_FORMAT_TARGET_POINTER = (1 << 4),
+		DISASM_FORMAT_TARGET_VALUE   = (1 << 5),
+	};
+
+	enum DisasmImmediate_e
+	{
+		  DISASM_IMMED_OFF = 0
+		, DISASM_IMMED_TARGET
+		, DISASM_IMMED_MODE
+		, DISASM_IMMED_BOTH
+		, NUM_DISASM_IMMED_TYPES
+	};
+
+	enum DisasmTargets_e
+	{
+		  DISASM_TARGET_OFF  = 0
+		, DISASM_TARGET_VAL  // Note: Also treated as bit flag !!
+		, DISASM_TARGET_ADDR // Note: Also treated as bit flag !!
+		, DISASM_TARGET_BOTH // Note: Also treated as bit flag !!
+		, NUM_DISASM_TARGET_TYPES
+	};
+
+	enum DisasmText_e
+	{
+		nMaxAddressLen    = 40,
+		nMaxOpcodes       =  3,
+		CHARS_FOR_ADDRESS =  8, // 4 digits plus null
+	};
+
+	struct DisasmLine_t
+	{
+		int iOpcode;
+		int iOpmode;
+		int nOpbyte;
+
+		char sAddress  [ CHARS_FOR_ADDRESS ];
+		char sOpCodes  [(nMaxOpcodes*3)+1];
+
+		int  nTarget;
+		char sTarget   [nMaxAddressLen];
+
+		char sTargetOffset[ CHARS_FOR_ADDRESS ]; // +/- 255, realistically +/-1
+		int  nTargetOffset;
+
+		char sTargetPointer[ CHARS_FOR_ADDRESS ];
+		char sTargetValue  [ CHARS_FOR_ADDRESS ];
+//		char sTargetAddress[ CHARS_FOR_ADDRESS ];
+
+		char sImmediate[ 4 ]; // 'c'
+		char nImmediate;
+		char sBranch   [ 4 ]; // ^
+
+		bool bTargetImmediate;
+		bool bTargetIndirect;
+		bool bTargetIndexed ;
+		bool bTargetRelative;
+		bool bTargetX       ;
+		bool bTargetY       ;
+		bool bTargetValue   ;
+
+		void Clear()
+		{
+			sAddress  [ 0 ] = 0;
+			sOpCodes  [ 0 ] = 0;
+
+			nTarget = 0;
+			sTarget   [ 0 ] = 0;
+
+			sTargetOffset[ 0 ] = 0;
+			nTargetOffset = 0;
+
+			sTargetPointer[ 0 ] = 0;
+			sTargetValue  [ 0 ] = 0;
+
+			sImmediate[ 0 ] = 0;
+			nImmediate = 0;
+
+			sBranch   [ 0 ] = 0;
+
+			bTargetImmediate = false;
+			bTargetIndexed   = false;
+			bTargetIndirect  = false;
+//			bTargetInside    = false;
+//			bTargetOutside   = false;
+			bTargetRelative  = false;
+			bTargetX         = false;
+			bTargetY         = false; // need to dislay ",Y"
+			bTargetValue     = false;
+		}
 	};
 	
 // Font ___________________________________________________________________________________________
@@ -820,7 +973,7 @@
 
 	struct FontConfig_t
 	{
-		TCHAR _sFontName[ MAX_FONT_NAME ];
+		char  _sFontName[ MAX_FONT_NAME ];
 		HFONT _hFont;
 //		int   _iFontType;
 		int   _nFontWidthAvg;
@@ -874,7 +1027,7 @@
 	
 	struct Instruction2_t
 	{
-		TCHAR  sMnemonic[MAX_MNEMONIC_LEN+1];
+		char   sMnemonic[MAX_MNEMONIC_LEN+1];
 		int    nAddressMode;
 		int    iMemoryAccess;
 	};
@@ -930,12 +1083,14 @@
 
 // Memory _________________________________________________________________________________________
 
+	extern const          int _6502_BRANCH_POS      ;//= +127
+	extern const          int _6502_BRANCH_NEG      ;//= -128
 	extern const unsigned int _6502_ZEROPAGE_END    ;//= 0x00FF;
 	extern const unsigned int _6502_STACK_END       ;//= 0x01FF;
 	extern const unsigned int _6502_IO_BEGIN        ;//= 0xC000;
 	extern const unsigned int _6502_IO_END          ;//= 0xC0FF;
-	extern const unsigned int _6502_BEG_MEM_ADDRESS ;//= 0x0000;
-	extern const unsigned int _6502_END_MEM_ADDRESS ;//= 0xFFFF;
+	extern const unsigned int _6502_MEM_BEGIN       ;//= 0x0000;
+	extern const unsigned int _6502_MEM_END         ;//= 0xFFFF;
 
 
 	enum DEVICE_e
@@ -1013,14 +1168,19 @@
 	*/
 	enum ArgToken_e // Arg Token Type
 	{
+		// Single Char Tokens must come first
 		  TOKEN_ALPHANUMERIC // 
 		, TOKEN_AMPERSAND    // &
 		, TOKEN_AT           // @  results dereference. i.e. S 0,FFFF C030; L @1
+		, TOKEN_BRACE_L      // {
+		, TOKEN_BRACE_R      // }
+		, TOKEN_BRACKET_L    // [
+		, TOKEN_BRACKET_R    // ]
 		, TOKEN_BSLASH       // \xx Hex Literal
 		, TOKEN_CARET        // ^
 //		, TOKEN_CHAR
-		, TOKEN_COLON        // : Range  Argument1.n2 = Argument2
-		, TOKEN_COMMA        // , Length Argument1.n2 = Argument2
+		, TOKEN_COLON        // : Range 
+		, TOKEN_COMMA        // , Length
 //		, TOKEN_DIGIT
 		, TOKEN_DOLLAR       // $ Address (symbol lookup forced)
 		, TOKEN_EQUAL        // = Assign Argment.n2 = Argument2
@@ -1028,25 +1188,32 @@
 		, TOKEN_FSLASH       // /
 		, TOKEN_GREATER_THAN // > 
 		, TOKEN_HASH         // # Value  no symbol lookup
-		, TOKEN_LEFT_PAREN   // (
 		, TOKEN_LESS_THAN    // <
 		, TOKEN_MINUS        // - Delta  Argument1 -= Argument2
+		, TOKEN_PAREN_L      // (
+		, TOKEN_PAREN_R      // )
 		, TOKEN_PERCENT      // %
 		, TOKEN_PIPE         // |
 		, TOKEN_PLUS         // + Delta  Argument1 += Argument2
 		, TOKEN_QUOTE_SINGLE // '
 		, TOKEN_QUOTE_DOUBLE // "
-		, TOKEN_RIGHT_PAREN  // )
 		, TOKEN_SEMI         // ; Command Seperator
 		, TOKEN_SPACE        //   Token Delimiter
+		, TOKEN_STAR         // *
 //		, TOKEN_TAB          // '\t'
+		, TOKEN_TILDE        // ~
+
+		// Multi char tokens come last
+		, TOKEN_COMMENT_EOL  // //
+		,_TOKEN_FLAG_MULTI = TOKEN_COMMENT_EOL
+		, TOKEN_GREATER_EQUAL// >=
+		, TOKEN_LESS_EQUAL   // <=
+		, TOKEN_NOT_EQUAL    // !=
+//		, TOKEN_COMMENT_1    // /*
+//		, TOKEN_COMMENT_2    // */
 
 		, NUM_TOKENS // signal none, or bad
 		, NO_TOKEN = NUM_TOKENS
-
-	// Merged tokens
-		, TOKEN_LESS_EQUAL    //
-		, TOKEN_GREATER_EQUAL //
 	};
 
 	enum ArgType_e
@@ -1067,15 +1234,16 @@
 	{
 		ArgToken_e eToken;
 		ArgType_e  eType ;
-		TCHAR      sToken; // char intentional
+		char       sToken[4];
 	};
 
 	struct Arg_t
 	{	
-		TCHAR      sArg[ MAX_ARG_LEN ]; // Array chars comes first, for alignment
+		char       sArg[ MAX_ARG_LEN ]; // Array chars comes first, for alignment
 		int        nArgLen; // Needed for TextSearch "ABC\x00"
-		WORD       nVal1  ; // 2
-		WORD       nVal2  ; // 2 If we have a Len (,)
+		WORD       nValue ; // 2
+//		WORD       nVal1  ; // 2
+//		WORD       nVal2  ; // 2 If we have a Len (,)
 		// Enums and Bools should come last for alignment
 		ArgToken_e eToken ; // 1/2/4
 		int        bType  ; // 1/2/4 // Flags of ArgType_e
@@ -1093,7 +1261,8 @@
 		, PARAM_BP_LESS_EQUAL = _PARAM_BREAKPOINT_BEGIN   // <=
 		, PARAM_BP_LESS_THAN     // <
 		, PARAM_BP_EQUAL         // =
-		, PARAM_BP_NOT_EQUAL     // !
+		, PARAM_BP_NOT_EQUAL     // !=
+		, PARAM_BP_NOT_EQUAL_1   // !
 		, PARAM_BP_GREATER_THAN  // >
 		, PARAM_BP_GREATER_EQUAL // >=
 		, PARAM_BP_READ          // R
@@ -1108,13 +1277,13 @@
 
 	// Note: Order must match Breakpoint_Source_t
 	, _PARAM_REGS_BEGIN = _PARAM_BREAKPOINT_END // Daisy Chain
+// Regs
 		, PARAM_REG_A = _PARAM_REGS_BEGIN
 		, PARAM_REG_X
 		, PARAM_REG_Y
-
 		, PARAM_REG_PC // Program Counter
 		, PARAM_REG_SP // Stack Pointer
-
+// Flags
 		, PARAM_FLAGS  // Processor Status
 		, PARAM_FLAG_C // Carry
 		, PARAM_FLAG_Z // Zero
@@ -1127,7 +1296,19 @@
 	, _PARAM_REGS_END
 	,  PARAM_REGS_NUM = _PARAM_REGS_END - _PARAM_REGS_BEGIN
 
-	, _PARAM_DISK_BEGIN = _PARAM_REGS_END // Daisy Chain
+// Disasm
+	, _PARAM_CONFIG_BEGIN = _PARAM_REGS_END // Daisy Chain
+		, PARAM_CONFIG_BRANCH = _PARAM_CONFIG_BEGIN // g_iConfigDisasmBranchType   [0|1|2]
+		, PARAM_CONFIG_COLON   // g_bConfigDisasmAddressColon [0|1]
+		, PARAM_CONFIG_OPCODE  // g_bConfigDisasmOpcodesView  [0|1]
+		, PARAM_CONFIG_POINTER // g_bConfigInfoTargetPointer  [0|1]
+		, PARAM_CONFIG_SPACES  // g_bConfigDisasmOpcodeSpaces [0|1]
+		, PARAM_CONFIG_TARGET  // g_iConfigDisasmTargets      [0|1|2]
+	, _PARAM_CONFIG_END
+	, PARAM_CONFIG_NUM = _PARAM_CONFIG_END - _PARAM_CONFIG_BEGIN
+
+// Disk
+	, _PARAM_DISK_BEGIN = _PARAM_CONFIG_END // Daisy Chain
 		, PARAM_DISK_EJECT = _PARAM_DISK_BEGIN // DISK 1 EJECT
 		, PARAM_DISK_PROTECT                   // DISK 1 PROTECT
 		, PARAM_DISK_READ                      // DISK 1 READ Track Sector NumSectors MemAddress
@@ -1142,6 +1323,7 @@
 	, _PARAM_GENERAL_BEGIN = _PARAM_FONT_END // Daisy Chain
 		, PARAM_FIND = _PARAM_GENERAL_BEGIN
 		, PARAM_BRANCH
+		, PARAM_CATEGORY
 		, PARAM_CLEAR
 		, PARAM_LOAD
 		, PARAM_LIST
@@ -1156,16 +1338,23 @@
 
 	, _PARAM_HELPCATEGORIES_BEGIN = _PARAM_GENERAL_END // Daisy Chain
 		, PARAM_WILDSTAR = _PARAM_HELPCATEGORIES_BEGIN
-		, PARAM_CAT_BREAKPOINTS
-		, PARAM_CAT_CONFIG
-		, PARAM_CAT_CPU        
-		, PARAM_CAT_FLAGS
-		, PARAM_CAT_MEMORY
-		,_PARAM_CAT_MEM  // alias MEM = MEMORY
-		, PARAM_CAT_SYMBOLS
-		, PARAM_CAT_WATCHES    
-		, PARAM_CAT_WINDOW     
-		, PARAM_CAT_ZEROPAGE
+		, PARAM_CAT_BOOKMARKS   
+		, PARAM_CAT_BREAKPOINTS 
+		, PARAM_CAT_CONFIG      
+		, PARAM_CAT_CPU         
+//		, PARAM_CAT_EXPRESSION  
+		, PARAM_CAT_FLAGS       
+		, PARAM_CAT_HELP        
+		, PARAM_CAT_KEYBOARD    
+		, PARAM_CAT_MEMORY      
+		, PARAM_CAT_OUTPUT      
+		, PARAM_CAT_OPERATORS   
+		, PARAM_CAT_RANGE       
+//		, PARAM_CAT_REGISTERS   
+		, PARAM_CAT_SYMBOLS     
+		, PARAM_CAT_WATCHES     
+		, PARAM_CAT_WINDOW      
+		, PARAM_CAT_ZEROPAGE    
 	, _PARAM_HELPCATEGORIES_END
 	,  PARAM_HELPCATEGORIES_NUM = _PARAM_HELPCATEGORIES_END - _PARAM_HELPCATEGORIES_BEGIN
 
@@ -1263,7 +1452,7 @@
 
 	enum
 	{
-		MAX_WATCHES = 5
+		MAX_WATCHES = 16
 	};
 
 
@@ -1296,6 +1485,6 @@
 
 	enum
 	{
-		MAX_ZEROPAGE_POINTERS = 5
+		MAX_ZEROPAGE_POINTERS = 8
 	};
 

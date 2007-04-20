@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -149,6 +149,7 @@ static USHORT g_nMBTimerDevice = 0;	// SY6522 device# which is generating timer 
 // SSI263 vars:
 static USHORT g_nSSI263Device = 0;	// SSI263 device# which is generating phoneme-complete IRQ
 static int g_nCurrentActivePhoneme = -1;
+static bool g_bStopPhoneme = false;
 static bool g_bVotraxPhoneme = false;
 
 static const DWORD SAMPLE_RATE = 44100;	// Use a base freq so that DirectX (or sound h/w) doesn't have to up/down-sample
@@ -303,10 +304,20 @@ static void UpdateIFR(SY6522_AY8910* pMB)
 	for(UINT i=0; i<NUM_SY6522; i++)
 		bIRQ |= g_MB[i].sy6522.IFR & 0x80;
 
+	// NB. Mockingboard generates IRQ on both 6522s:
+	// . SSI263's IRQ (A/!R) is routed via the 2nd 6522 (at $Cx80) and must generate a 6502 IRQ (not NMI)
+	// . SC-01's IRQ (A/!R) is also routed via a (2nd?) 6522
+	// Phasor's SSI263 appears to be wired directly to the 6502's IRQ (ie. not via a 6522)
+	// . I assume Phasor's 6522s just generate 6502 IRQs (not NMIs)
+
 	if (bIRQ)
-		CpuIrqAssert(IS_6522);
+	{
+	    CpuIrqAssert(IS_6522);
+	}
 	else
-		CpuIrqDeassert(IS_6522);
+	{
+	    CpuIrqDeassert(IS_6522);
+	}
 }
 
 static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
@@ -568,12 +579,19 @@ static void SSI263_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 
 		// Datasheet is not clear, but a write to DURPHON must clear the IRQ
 		if(g_bPhasorEnable)
-			CpuIrqDeassert(IS_SPEECH);
-		pMB->sy6522.IFR &= ~IxR_PERIPHERAL;
-		UpdateIFR(pMB);
+		{
+		    CpuIrqDeassert(IS_SPEECH);
+		}
+		else
+		{
+			pMB->sy6522.IFR &= ~IxR_PERIPHERAL;
+			UpdateIFR(pMB);
+		}
 		pMB->SpeechChip.CurrentMode &= ~1;	// Clear SSI263's D7 pin
 
 		pMB->SpeechChip.DurationPhonome = nValue;
+
+		g_nSSI263Device = nDevice;
 
 		// Phoneme output not dependent on CONTROL bit
 		if(g_bPhasorEnable)
@@ -585,7 +603,6 @@ static void SSI263_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 		{
 			SSI263_Play(nValue & PHONEME_MASK);
 		}
-		g_nSSI263Device = nDevice;
 		break;
 	case SSI_INFLECT:
 #if LOG_SSI263
@@ -699,6 +716,8 @@ static void Votrax_Write(BYTE nDevice, BYTE nValue)
 	SY6522_AY8910* pMB = &g_MB[nDevice];
 	pMB->sy6522.IFR &= ~IxR_VOTRAX;
 	UpdateIFR(pMB);
+
+	g_nSSI263Device = nDevice;
 
 	SSI263_Play(Votrax2SSI263[nValue & PHONEME_MASK]);
 }
@@ -882,6 +901,16 @@ static DWORD WINAPI SSI263Thread(LPVOID lpParameter)
 
 		// Phoneme completed playing
 
+		if (g_bStopPhoneme)
+		{
+			g_bStopPhoneme = false;
+			continue;
+		}
+
+#if LOG_SSI263
+		//if(g_fh) fprintf(g_fh, "IRQ: Phoneme complete (0x%02X)\n\n", g_nCurrentActivePhoneme);
+#endif
+
 		SSI263Voice[g_nCurrentActivePhoneme].bActive = false;
 		g_nCurrentActivePhoneme = -1;
 
@@ -894,7 +923,7 @@ static DWORD WINAPI SSI263Thread(LPVOID lpParameter)
 			{
 				pMB->SpeechChip.CurrentMode |= 1;	// Set SSI263's D7 pin
 
-				// Is Phasor's SSI263.IRQ wired directly to IRQ? (Bypassing the 6522)
+				// Phasor's SSI263.IRQ line appears to be wired directly to IRQ (Bypassing the 6522)
 				CpuIrqAssert(IS_SPEECH);
 			}
 		}
@@ -932,7 +961,11 @@ static void SSI263_Play(unsigned int nPhoneme)
 	HRESULT hr;
 
 	if(g_nCurrentActivePhoneme >= 0)
+	{
+		// A write to DURPHON before previous phoneme has completed
+		g_bStopPhoneme = true;
 		hr = SSI263Voice[g_nCurrentActivePhoneme].lpDSBvoice->Stop();
+	}
 
 	g_nCurrentActivePhoneme = nPhoneme;
 
@@ -1094,7 +1127,8 @@ static bool MB_DSInit()
 
 		unsigned int nPhonemeByteLength = g_nPhonemeInfo[nPhoneme].nLength * sizeof(SHORT);
 
-		hr = DSGetSoundBuffer(&SSI263Voice[i], DSBCAPS_CTRLVOLUME+DSBCAPS_CTRLPOSITIONNOTIFY, nPhonemeByteLength, 22050, 1);
+		// NB. DSBCAPS_LOCSOFTWARE required for Phoneme+2==0x28 - sample too short (see KB327698)
+		hr = DSGetSoundBuffer(&SSI263Voice[i], DSBCAPS_CTRLVOLUME+DSBCAPS_CTRLPOSITIONNOTIFY+DSBCAPS_LOCSOFTWARE, nPhonemeByteLength, 22050, 1);
 		if(FAILED(hr))
 		{
 			if(g_fh) fprintf(g_fh, "SSI263: DSGetSoundBuffer failed (%08X)\n",hr);

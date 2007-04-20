@@ -18,16 +18,22 @@ using namespace std;
 // Benchmarking
 	extern DWORD      extbench;
 
+// Bookmarks
+	extern int          g_nBookmarks;
+	extern Bookmark_t   g_aBookmarks[ MAX_BOOKMARKS ];
+//	extern vector<int> g_aBookmarks;
+
 // Breakpoints
 	extern int          g_nBreakpoints;
-	extern Breakpoint_t g_aBreakpoints[ NUM_BREAKPOINTS ];
+	extern Breakpoint_t g_aBreakpoints[ MAX_BREAKPOINTS ];
 
-	extern const TCHAR *g_aBreakpointSource [ NUM_BREAKPOINT_SOURCES   ];
+	extern const char  *g_aBreakpointSource [ NUM_BREAKPOINT_SOURCES   ];
 	extern const TCHAR *g_aBreakpointSymbols[ NUM_BREAKPOINT_OPERATORS ];
 
 	// Full-Speed debugging
-	extern int g_nDebugOnBreakInvalid;
-	extern int g_iDebugOnOpcode      ;
+	extern int  g_nDebugOnBreakInvalid;
+	extern int  g_iDebugOnOpcode      ;
+	extern bool g_bDebugDelayBreakCheck;
 
 // Commands
 	extern const int NUM_COMMANDS_WITH_ALIASES; // = sizeof(g_aCommands) / sizeof (Command_t); // Determined at compile-time ;-)
@@ -35,6 +41,9 @@ using namespace std;
 
 	extern Command_t g_aCommands[];
 	extern Command_t g_aParameters[];
+
+// Config - FileName
+	extern char      g_sFileNameConfig[];
 
 // Cursor
 	extern WORD g_nDisasmTopAddress ;
@@ -49,12 +58,18 @@ using namespace std;
 
 	extern const int WINDOW_DATA_BYTES_PER_LINE;
 
-// Disassembly
-	extern int   g_iConfigDisasmBranchType;
+// Config - Disassembly
+	extern bool  g_bConfigDisasmAddressColon ;
+	extern bool  g_bConfigDisasmOpcodesView  ;
+	extern bool  g_bConfigDisasmOpcodeSpaces ;
+	extern int   g_iConfigDisasmTargets      ;
+	extern int   g_iConfigDisasmBranchType   ;
+	extern int   g_bConfigDisasmImmediateChar;
+// Config - Info
+	extern bool  g_bConfigInfoTargetPointer  ;
 
-	extern bool  g_bConfigDisasmOpcodeSpaces ;//= true; // TODO: CONFIG DISASM SPACE  [0|1]
-	extern bool  g_bConfigDisasmAddressColon ;//= true; // TODO: CONFIG DISASM COLON  [0|1]
-	extern bool  g_bConfigDisasmFancyBranch  ;//= true; // TODO: CONFIG DISASM BRANCH [0|1]
+// Disassembly
+	extern int g_aDisasmTargets[ MAX_DISPLAY_LINES ];
 
 // Display
 	extern bool g_bDebuggerViewingAppleOutput;
@@ -95,6 +110,9 @@ using namespace std;
 
 // Prototypes _______________________________________________________________
 
+// Bookmarks
+	bool Bookmark_Find( const WORD nAddress );
+
 // Breakpoints
 	bool GetBreakpointInfo ( WORD nOffset, bool & bBreakpointActive_, bool & bBreakpointEnable_ );
 
@@ -129,8 +147,6 @@ using namespace std;
 	LPCTSTR FindSymbolFromAddress (WORD nAdress, int * iTable_ = NULL );
 	LPCTSTR GetSymbol   (WORD nAddress, int nBytes);
 
-	bool Get6502Targets ( WORD nAddress, int *pTemp_, int *pFinal_, int *pBytes_ );
-
 	Update_t DebuggerProcessCommand( const bool bEchoConsoleInput );
 
 // Prototypes _______________________________________________________________
@@ -151,3 +167,9 @@ using namespace std;
 	void	DebuggerInputConsoleChar( TCHAR ch );
 //	void	DebugProcessCommand (int);
 	void	DebuggerProcessKey( int keycode );
+
+	void	DebuggerUpdate();
+	void	DebuggerCursorNext();
+
+	void	DebuggerMouseClick( int x, int y );
+	

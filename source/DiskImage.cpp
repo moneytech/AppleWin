@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -338,16 +338,17 @@ DWORD NibblizeTrack (LPBYTE trackimagebuffer, BOOL dosorder, int track) {
     *(imageptr++) = 0xD5;
     *(imageptr++) = 0xAA;
     *(imageptr++) = 0x96;
-    *(imageptr++) = 0xFF;
-    *(imageptr++) = 0xFE;
+#define VOLUME 0xFE
 #define CODE44A(a) ((((a) >> 1) & 0x55) | 0xAA)
 #define CODE44B(a) (((a) & 0x55) | 0xAA)
+    *(imageptr++) = CODE44A(VOLUME);
+    *(imageptr++) = CODE44B(VOLUME);
     *(imageptr++) = CODE44A((BYTE)track);
     *(imageptr++) = CODE44B((BYTE)track);
     *(imageptr++) = CODE44A(sector);
     *(imageptr++) = CODE44B(sector);
-    *(imageptr++) = CODE44A(0xFE ^ ((BYTE)track) ^ sector);
-    *(imageptr++) = CODE44B(0xFE ^ ((BYTE)track) ^ sector);
+    *(imageptr++) = CODE44A(VOLUME ^ ((BYTE)track) ^ sector);
+    *(imageptr++) = CODE44B(VOLUME ^ ((BYTE)track) ^ sector);
 #undef CODE44A
 #undef CODE44B
     *(imageptr++) = 0xDE;

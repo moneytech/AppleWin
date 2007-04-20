@@ -1,7 +1,7 @@
 #pragma once
 
-const double _M14 = 14.31818e6;
-const double CLK_6502 = (_M14 / 14.0);	// 1022727 + 1/7
+const double _M14 = (157500000.0 / 11.0); // 14.3181818... * 10^6
+const double CLK_6502 = ((_M14 * 65.0) / 912.0); // 65 cycles per 912 14M clocks
 //const double CLK_6502 = 23 * 44100;			// 1014300
 
 const UINT uCyclesPerLine			= 65;	// 25 cycles of HBL & 40 cycles of HBL'
@@ -18,11 +18,20 @@ const DWORD dwClksPerFrame			= uCyclesPerLine * uLinesPerFrame;	// 17030
 // Assume base freqs are 44.1KHz & 48KHz
 const DWORD SPKR_SAMPLE_RATE = 44100;
 
-#define  MODE_LOGO         0
-#define  MODE_PAUSED       1
-#define  MODE_RUNNING      2
-#define  MODE_DEBUG        3
-#define  MODE_STEPPING     4
+enum AppMode_e
+{
+	MODE_LOGO = 0
+	, MODE_PAUSED
+	, MODE_RUNNING
+	, MODE_DEBUG
+	, MODE_STEPPING
+};
+
+//#define  MODE_LOGO         0
+//#define  MODE_PAUSED       1
+//#define  MODE_RUNNING      2
+//#define  MODE_DEBUG        3
+//#define  MODE_STEPPING     4
 
 #define  SPEED_MIN         0
 #define  SPEED_NORMAL      10
@@ -42,23 +51,34 @@ const DWORD SPKR_SAMPLE_RATE = 44100;
 #define  BTN_DEBUG         6
 #define  BTN_SETUP         7
 
-#define  MAXIMAGES         16
-#define  TITLE             TEXT("Apple //e Emulator")
+#define	MAXIMAGES          16
+// TODO: Move to StringTable.h
+#define	TITLE_APPLE_2_ORG  TEXT("Apple ][ Emulator")
+#define	TITLE_APPLE_2_PLUS TEXT("Apple ][+ Emulator")
+#define	TITLE_APPLE_2_E    TEXT("Apple //e Emulator")
+// #define	TITLE              TITLE_APPLE_2_E
+
+#define TITLE_PAUSED       TEXT(" Paused ")
+#define TITLE_STEPPING     TEXT("Stepping")
 
 #define  LOAD(a,b) RegLoadValue(TEXT("Configuration"),a,1,b)
 #define  SAVE(a,b) RegSaveValue(TEXT("Configuration"),a,1,b)
 
-#define  REGVALUE_SPKR_VOLUME "Speaker Volume"
-#define  REGVALUE_MB_VOLUME "Mockingboard Volume"
-#define  REGVALUE_SOUNDCARD_TYPE "Soundcard Type"
+// Configuration
+#define  REGVALUE_SPKR_VOLUME        "Speaker Volume"
+#define  REGVALUE_MB_VOLUME          "Mockingboard Volume"
+#define  REGVALUE_SOUNDCARD_TYPE     "Soundcard Type"
 #define  REGVALUE_KEYB_BUFFER_ENABLE "Keyboard Buffer Enable"
 #define  REGVALUE_SAVESTATE_FILENAME "Save State Filename"
 #define  REGVALUE_SAVE_STATE_ON_EXIT "Save State On Exit"
-#define  REGVALUE_HDD_ENABLED "Harddisk Enable"
-#define  REGVALUE_HDD_IMAGE1 "Harddisk Image 1"
-#define  REGVALUE_HDD_IMAGE2 "Harddisk Image 2"
-#define  REGVALUE_PDL_XTRIM "PDL X-Trim"
-#define  REGVALUE_PDL_YTRIM "PDL Y-Trim"
+#define  REGVALUE_HDD_ENABLED        "Harddisk Enable"
+#define  REGVALUE_HDD_IMAGE1         "Harddisk Image 1"
+#define  REGVALUE_HDD_IMAGE2         "Harddisk Image 2"
+#define  REGVALUE_PDL_XTRIM          "PDL X-Trim"
+#define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
+
+// Preferences 
+#define REGVALUE_PREF_START_DIR TEXT("Starting Directory")
 
 #define WM_USER_BENCHMARK	WM_USER+1
 #define WM_USER_RESTART		WM_USER+2

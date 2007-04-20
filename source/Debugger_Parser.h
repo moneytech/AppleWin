@@ -1,13 +1,13 @@
 #ifndef DEBUGGER_PARSER_H
 #define DEBUGGER_PARSER_H
 
-	#define CHAR_LF     '\x0D'
-	#define CHAR_CR     '\x0A'
-	#define CHAR_SPACE  ' '
-	#define CHAR_TAB    '\t'
+	#define CHAR_LF           '\x0D'
+	#define CHAR_CR           '\x0A'
+	#define CHAR_SPACE        ' '
+	#define CHAR_TAB          '\t'
 	#define CHAR_QUOTE_DOUBLE '"' 
 	#define CHAR_QUOTE_SINGLE '\''
-	#define CHAR_ESCAPE '\x1B'
+	#define CHAR_ESCAPE       '\x1B'
 
 // Globals __________________________________________________________________
 
@@ -33,6 +33,7 @@
 	int _Arg_1     ( int nValue );
 	int _Arg_1     ( LPTSTR pName );
 	int _Arg_Shift ( int iSrc, int iEnd, int iDst = 0 );
+	int _Args_Insert( int iSrc, int iEnd, int nLen );
 	void ArgsClear ();
 
 	bool ArgsGetValue ( Arg_t *pArg, WORD * pAddressValue_, const int nBase = 16 );
@@ -40,7 +41,7 @@
 	int	 ArgsGet ( TCHAR * pInput );
 	bool ArgsGetRegisterValue ( Arg_t *pArg, WORD * pAddressValue_ );
 	void ArgsRawParse ( void );
-	int ArgsCook ( const int nArgs, const int bProcessMask );  // ArgsRawCook
+	int ArgsCook ( const int nArgs ); // const int bProcessMask );
 
 // Token
 	const char * ParserFindToken( const char *pSrc, const TokenTable_t *aTokens, const int nTokens, ArgToken_e * pToken_ );
