@@ -65,6 +65,8 @@ DWORD       g_dwCyclesThisFrame = 0;
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
 
+CSuperSerialCard sg_SSC;
+
 //===========================================================================
 
 #define DBG_CALC_FREQ 0
@@ -132,7 +134,7 @@ void ContinueExecution()
 	VideoUpdateVbl(g_dwCyclesThisFrame);
 
 	SpkrUpdate(cyclenum);
-	CommUpdate(cyclenum);
+	sg_SSC.CommUpdate(cyclenum);
 	PrintUpdate(cyclenum);
 
 	//
@@ -346,15 +348,21 @@ void GetProgramDirectory () {
 }
 
 //===========================================================================
-void LoadConfiguration () {
+void LoadConfiguration ()
+{
   DWORD comptype;
   LOAD(TEXT("Computer Emulation"),&comptype);
   g_bApple2e = (comptype == 2);
   g_bApple2plus = (comptype == 1);
+
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
   LOAD(TEXT("Sound Emulation")   ,&soundtype);
-  LOAD(TEXT("Serial Port")       ,&serialport);
+
+  DWORD dwSerialPort;
+  LOAD(TEXT("Serial Port")       ,&dwSerialPort);
+  sg_SSC.SetSerialPort(dwSerialPort);
+
   LOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
   LOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
   LOAD(TEXT("Video Emulation")   ,&videotype);

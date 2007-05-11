@@ -228,7 +228,8 @@ static void ConfigDlg_OK(HWND window, BOOL afterclose)
 		if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
 			VideoRedrawScreen();
 	}
-	CommSetSerialPort(window,newserialport);
+
+	sg_SSC.CommSetSerialPort(window,newserialport);
 	
 	if (IsDlgButtonChecked(window,IDC_AUTHENTIC_SPEED))
 		g_dwSpeed = SPEED_NORMAL;
@@ -238,7 +239,7 @@ static void ConfigDlg_OK(HWND window, BOOL afterclose)
 	SetCurrentCLK6502();
 	
 	SAVE(TEXT("Computer Emulation"),newcomptype);
-	SAVE(TEXT("Serial Port")       ,serialport);
+	SAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
 	SAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	SAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
 	SAVE(TEXT("Video Emulation")   ,videotype);
@@ -344,7 +345,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 
       FillComboBox(window,IDC_COMPUTER,computerchoices,g_bApple2e ? 2 : (g_bApple2plus ? 1 : 0));
       FillComboBox(window,IDC_VIDEOTYPE,videochoices,videotype);
-      FillComboBox(window,IDC_SERIALPORT,serialchoices,serialport);
+      FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);

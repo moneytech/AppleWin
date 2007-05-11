@@ -57,6 +57,76 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 BYTE __stdcall NullIo (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG nCycles);
 
+static BYTE __stdcall IORead_Slot2_SSC(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0:
+		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
+	case 1:
+	case 2:
+		return sg_SSC.CommDipSw(pc, addr, bWrite, d, nCyclesLeft);
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
+	case 8:
+		return sg_SSC.CommReceive(pc, addr, bWrite, d, nCyclesLeft);
+	case 9:
+		return sg_SSC.CommStatus(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:
+		return sg_SSC.CommCommand(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:
+		return sg_SSC.CommControl(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:
+	case 0xD:
+	case 0xE:
+	case 0xF:
+		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall IOWrite_Slot2_SSC(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+		NullIo(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	case 8:
+		sg_SSC.CommTransmit(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	case 9:
+		sg_SSC.CommStatus(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	case 0xA:
+		sg_SSC.CommCommand(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	case 0xB:
+		sg_SSC.CommControl(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	case 0xC:
+	case 0xD:
+	case 0xE:
+	case 0xF:
+		NullIo(pc, addr, bWrite, d, nCyclesLeft);
+		break;
+	}
+
+	return 0;
+}
+
 iofunction ioread[0x100]  = {KeybReadData,       // $C000
                              KeybReadData,       // $C001
                              KeybReadData,       // $C002
@@ -217,22 +287,22 @@ iofunction ioread[0x100]  = {KeybReadData,       // $C000
                              PrintStatus,        // $C09D
                              PrintStatus,        // $C09E
                              PrintStatus,        // $C09F
-                             NullIo,             // $C0A0
-                             CommDipSw,          // $C0A1
-                             CommDipSw,          // $C0A2
-                             NullIo,             // $C0A3
-                             NullIo,             // $C0A4
-                             NullIo,             // $C0A5
-                             NullIo,             // $C0A6
-                             NullIo,             // $C0A7
-                             CommReceive,        // $C0A8
-                             CommStatus,         // $C0A9
-                             CommCommand,        // $C0AA
-                             CommControl,        // $C0AB
-                             NullIo,             // $C0AC
-                             NullIo,             // $C0AD
-                             NullIo,             // $C0AE
-                             NullIo,             // $C0AF
+                             IORead_Slot2_SSC,   // $C0A0
+                             IORead_Slot2_SSC,   // $C0A1
+                             IORead_Slot2_SSC,   // $C0A2
+                             IORead_Slot2_SSC,   // $C0A3
+                             IORead_Slot2_SSC,   // $C0A4
+                             IORead_Slot2_SSC,   // $C0A5
+                             IORead_Slot2_SSC,   // $C0A6
+                             IORead_Slot2_SSC,   // $C0A7
+                             IORead_Slot2_SSC,   // $C0A8
+                             IORead_Slot2_SSC,   // $C0A9
+                             IORead_Slot2_SSC,   // $C0AA
+                             IORead_Slot2_SSC,   // $C0AB
+                             IORead_Slot2_SSC,   // $C0AC
+                             IORead_Slot2_SSC,   // $C0AD
+                             IORead_Slot2_SSC,   // $C0AE
+                             IORead_Slot2_SSC,   // $C0AF
                              TfeIo,              // $C0B0
                              TfeIo,              // $C0B1
                              TfeIo,              // $C0B2
@@ -480,22 +550,22 @@ iofunction iowrite[0x100] = {MemSetPaging,       // $C000
                              PrintTransmit,      // $C09D
                              PrintTransmit,      // $C09E
                              PrintTransmit,      // $C09F
-                             NullIo,             // $C0A0
-                             NullIo,             // $C0A1
-                             NullIo,             // $C0A2
-                             NullIo,             // $C0A3
-                             NullIo,             // $C0A4
-                             NullIo,             // $C0A5
-                             NullIo,             // $C0A6
-                             NullIo,             // $C0A7
-                             CommTransmit,       // $C0A8
-                             CommStatus,         // $C0A9
-                             CommCommand,        // $C0AA
-                             CommControl,        // $C0AB
-                             NullIo,             // $C0AC
-                             NullIo,             // $C0AD
-                             NullIo,             // $C0AE
-                             NullIo,             // $C0AF
+                             IOWrite_Slot2_SSC,  // $C0A0
+                             IOWrite_Slot2_SSC,  // $C0A1
+                             IOWrite_Slot2_SSC,  // $C0A2
+                             IOWrite_Slot2_SSC,  // $C0A3
+                             IOWrite_Slot2_SSC,  // $C0A4
+                             IOWrite_Slot2_SSC,  // $C0A5
+                             IOWrite_Slot2_SSC,  // $C0A6
+                             IOWrite_Slot2_SSC,  // $C0A7
+                             IOWrite_Slot2_SSC,	 // $C0A8
+                             IOWrite_Slot2_SSC,	 // $C0A9
+                             IOWrite_Slot2_SSC,	 // $C0AA
+                             IOWrite_Slot2_SSC,	 // $C0AB
+                             IOWrite_Slot2_SSC,  // $C0AC
+                             IOWrite_Slot2_SSC,  // $C0AD
+                             IOWrite_Slot2_SSC,  // $C0AE
+                             IOWrite_Slot2_SSC,  // $C0AF
                              TfeIo,              // $C0B0
                              TfeIo,              // $C0B1
                              TfeIo,              // $C0B2
