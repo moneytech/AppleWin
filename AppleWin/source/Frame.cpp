@@ -522,7 +522,7 @@ LRESULT CALLBACK FrameWndProc (
         HD_Cleanup();
       }
       PrintDestroy();
-      CommDestroy();
+      sg_SSC.CommDestroy();
       CpuDestroy();
       MemDestroy();
       SpkrDestroy();
@@ -1071,7 +1071,7 @@ void ResetMachineState () {
   MemReset();
   DiskBoot();
   VideoResetState();
-  CommReset();
+  sg_SSC.CommReset();
   PrintReset();
   JoyReset();
   MB_Reset();
