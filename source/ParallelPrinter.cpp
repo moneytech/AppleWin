@@ -35,6 +35,10 @@ static FILE* file = NULL;
 DWORD const PRINTDRVR_SIZE = 0x100;
 
 //===========================================================================
+
+static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG);
+static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG);
+
 VOID PrintLoadRom(LPBYTE lpMemRom)
 {
 	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRINTDRVR), "FIRMWARE");
@@ -54,6 +58,11 @@ VOID PrintLoadRom(LPBYTE lpMemRom)
 		return;
 
 	memcpy(lpMemRom + 0x100, pData, PRINTDRVR_SIZE);
+
+	//
+
+	const UINT uSlot = 1;
+	RegisterIoHandler(uSlot, PrintStatus, PrintTransmit, NULL, NULL, NULL);
 }
 
 //===========================================================================
@@ -108,14 +117,14 @@ void PrintReset()
 }
 
 //===========================================================================
-BYTE __stdcall PrintStatus(WORD, BYTE, BYTE, BYTE, ULONG)
+static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG)
 {
     CheckPrint();
     return 0xFF; // status - TODO?
 }
 
 //===========================================================================
-BYTE __stdcall PrintTransmit(WORD, BYTE, BYTE, BYTE value, ULONG)
+static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 {
     if (!CheckPrint())
     {

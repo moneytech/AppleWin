@@ -10,6 +10,7 @@ public:
 	CSuperSerialCard();
 	~CSuperSerialCard();
 
+	void	CommInitialize();
 	void    CommReset();
 	void    CommDestroy();
 	void    CommSetSerialPort(HWND,DWORD);
@@ -20,14 +21,17 @@ public:
 	DWORD	GetSerialPort() { return m_dwSerialPort; }
 	void	SetSerialPort(DWORD dwSerialPort) { m_dwSerialPort = dwSerialPort; }
 
-	BYTE __stdcall CommCommand(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommControl(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommDipSw(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommReceive(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommStatus(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommTransmit(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	static BYTE __stdcall SSC_IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
+	static BYTE __stdcall SSC_IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
 
 private:
+	BYTE __stdcall CommCommand(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommControl(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommDipSw(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommReceive(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommStatus(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommTransmit(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
 	void			UpdateCommState();
 	BOOL			CheckComm();
 	void			CloseComm();

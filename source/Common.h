@@ -9,6 +9,8 @@ const UINT uVisibleLinesPerFrame	= 64*3;	// 192
 const UINT uLinesPerFrame			= 262;	// 64 in each third of the screen & 70 in VBL
 const DWORD dwClksPerFrame			= uCyclesPerLine * uLinesPerFrame;	// 17030
 
+#define NUM_SLOTS 8
+
 #define  MAX(a,b)          (((a) > (b)) ? (a) : (b))
 #define  MIN(a,b)          (((a) < (b)) ? (a) : (b))
 
@@ -87,8 +89,7 @@ enum AppMode_e
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 
-typedef BYTE (__stdcall *iofunction)(WORD nPC, BYTE nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
-typedef BYTE (__stdcall *cxfunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
+typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
 
 typedef struct _IMAGE__ { int unused; } *HIMAGE;
 

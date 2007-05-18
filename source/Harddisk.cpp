@@ -212,6 +212,8 @@ static LPCTSTR HD_DiskGetName (int nDrive)
 
 // everything below is global
 
+static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
 static const DWORD HDDRVR_SIZE = 0x100;
 static LPBYTE lpMemC000 = NULL;
 
@@ -234,6 +236,9 @@ void HD_SetEnabled(bool bEnabled)
 		HD_Load_Rom(lpMemC000);
 	else
 		memset(lpMemC000+0x700, 0, HDDRVR_SIZE);
+
+	const UINT uSlot = 7;
+	RegisterIoHandler(uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL);
 }
 
 LPCTSTR HD_GetFullName (int nDrive)
@@ -354,9 +359,10 @@ void HD_Select(int nDrive)
 #define DEVICE_UNKNOWN_ERROR	0x03
 #define DEVICE_IO_ERROR			0x08
 
-BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	BYTE r = DEVICE_OK;
+	addr &= 0xFF;
 
 	if (!HD_CardIsEnabled())
 		return r;
@@ -505,8 +511,7 @@ BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCycle
 			}
 			break;
 		default:
-			{
-			}
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
 	}
 	else // write
@@ -547,21 +552,9 @@ BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCycle
 			}
 			break;
 		default:
-			break;
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
 	}
 
 	return r;
 }
-
-
-
-
-
-
-
-
-
-
-
-
