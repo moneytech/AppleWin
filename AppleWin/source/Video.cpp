@@ -1572,7 +1572,9 @@ void VideoBenchmark () {
 }
             
 //===========================================================================
-BYTE __stdcall VideoCheckMode (WORD, BYTE address, BYTE, BYTE, ULONG) {
+BYTE __stdcall VideoCheckMode (WORD, WORD address, BYTE, BYTE, ULONG)
+{
+  address &= 0xFF;
   if (address == 0x7F)
     return MemReadFloatingBus(SW_DHIRES != 0);
   else {
@@ -1601,7 +1603,7 @@ void VideoCheckPage (BOOL force) {
 }
 
 //===========================================================================
-BYTE __stdcall VideoCheckVbl (WORD, BYTE, BYTE, BYTE, ULONG)
+BYTE __stdcall VideoCheckVbl (WORD, WORD, BYTE, BYTE, ULONG)
 {
 	/*
 		// Drol expects = 80
@@ -2042,7 +2044,9 @@ void VideoResetState () {
 }
 
 //===========================================================================
-BYTE __stdcall VideoSetMode (WORD, BYTE address, BYTE write, BYTE, ULONG) {
+BYTE __stdcall VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG)
+{
+  address &= 0xFF;
   DWORD oldpage2 = SW_PAGE2;
   int   oldvalue = g_nAltCharSetOffset+(int)(vidmode & ~(VF_MASK2 | VF_PAGE2));
   switch (address) {

@@ -314,7 +314,7 @@ static char ClipboardCurrChar(bool bIncPtr)
 
 //===========================================================================
 
-BYTE __stdcall KeybReadData (WORD, BYTE, BYTE, BYTE, ULONG)
+BYTE __stdcall KeybReadData (WORD, WORD, BYTE, BYTE, ULONG)
 {
 	keyboardqueries++;
 
@@ -352,7 +352,7 @@ BYTE __stdcall KeybReadData (WORD, BYTE, BYTE, BYTE, ULONG)
 
 //===========================================================================
 
-BYTE __stdcall KeybReadFlag (WORD, BYTE, BYTE, BYTE, ULONG)
+BYTE __stdcall KeybReadFlag (WORD, WORD, BYTE, BYTE, ULONG)
 {
 	keyboardqueries++;
 

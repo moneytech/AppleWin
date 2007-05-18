@@ -149,13 +149,9 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 		 if (regs.sp < 0x100)					    \
 		   regs.sp = 0x1FF;
 #define READ	 (							    \
-		    ((addr & 0xFF00) == 0xC000)				    \
-		    ? ioread[addr & 0xFF](regs.pc,(BYTE)addr,0,0,uExecutedCycles) \
-		    : (							    \
-			(((addr & 0xFF00) == 0xC400) || ((addr & 0xFF00) == 0xC500)) \
-			? CxReadFunc(regs.pc, addr, 0, 0, uExecutedCycles) \
+		    ((addr & 0xF000) == 0xC000)				    \
+		    ? IORead[(addr>>4) & 0xFF](regs.pc,addr,0,0,uExecutedCycles) \
 			: *(mem+addr)					    \
-		      )							    \
 		 )
 #define SETNZ(a) {							    \
 		   flagn = ((a) & 0x80);				    \
@@ -167,10 +163,8 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 		   LPBYTE page = memwrite[0][addr >> 8];		    \
 		   if (page)						    \
 		     *(page+(addr & 0xFF)) = (BYTE)(a);			    \
-		   else if ((addr & 0xFF00) == 0xC000)			    \
-		     iowrite[addr & 0xFF](regs.pc,(BYTE)addr,1,(BYTE)(a),uExecutedCycles); \
-		   else if(((addr & 0xFF00) == 0xC400) || ((addr & 0xFF00) == 0xC500)) \
-		     CxWriteFunc(regs.pc, addr, 1, (BYTE)(a), uExecutedCycles); \
+		   else if ((addr & 0xF000) == 0xC000)			    \
+		     IOWrite[(addr>>4) & 0xFF](regs.pc,addr,1,(BYTE)(a),uExecutedCycles); \
 		 }
 
 //

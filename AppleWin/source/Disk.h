@@ -39,10 +39,5 @@ bool    DiskDriveSwap();
 DWORD   DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
 DWORD   DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
 
-BYTE __stdcall DiskControlMotor (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskControlStepper (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskEnable (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskReadWrite (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskSetLatchValue (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskSetReadMode (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall DiskSetWriteMode (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft, LPVOID lpParam=NULL);
+BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft, LPVOID lpParam=NULL);

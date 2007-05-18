@@ -630,6 +630,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 	// DO ONE-TIME INITIALIZATION
 	g_hInstance = passinstance;
+	MemPreInitialize();		// Call before any of the slot devices are initialized
 	GdiSetBatchLimit(512);
 	GetProgramDirectory();
 	RegisterExtensions();
@@ -637,6 +638,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	ImageInitialize();
 	DiskInitialize();
 	CreateColorMixMap();	// For tv emulation g_nAppMode
+	sg_SSC.CommInitialize();
 
 	//
 

@@ -55,601 +55,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #define  SW_SLOTCXROM  (memmode & MF_SLOTCXROM)
 #define  SW_WRITERAM   (memmode & MF_WRITERAM)
 
-BYTE __stdcall NullIo (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG nCycles);
-
-static BYTE __stdcall IORead_Slot2_SSC(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
-{
-	switch (addr & 0xf)
-	{
-	case 0:
-		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
-	case 1:
-	case 2:
-		return sg_SSC.CommDipSw(pc, addr, bWrite, d, nCyclesLeft);
-	case 3:
-	case 4:
-	case 5:
-	case 6:
-	case 7:
-		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
-	case 8:
-		return sg_SSC.CommReceive(pc, addr, bWrite, d, nCyclesLeft);
-	case 9:
-		return sg_SSC.CommStatus(pc, addr, bWrite, d, nCyclesLeft);
-	case 0xA:
-		return sg_SSC.CommCommand(pc, addr, bWrite, d, nCyclesLeft);
-	case 0xB:
-		return sg_SSC.CommControl(pc, addr, bWrite, d, nCyclesLeft);
-	case 0xC:
-	case 0xD:
-	case 0xE:
-	case 0xF:
-		return NullIo(pc, addr, bWrite, d, nCyclesLeft);
-	}
-
-	return 0;
-}
-
-static BYTE __stdcall IOWrite_Slot2_SSC(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
-{
-	switch (addr & 0xf)
-	{
-	case 0:
-	case 1:
-	case 2:
-	case 3:
-	case 4:
-	case 5:
-	case 6:
-	case 7:
-		NullIo(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	case 8:
-		sg_SSC.CommTransmit(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	case 9:
-		sg_SSC.CommStatus(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	case 0xA:
-		sg_SSC.CommCommand(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	case 0xB:
-		sg_SSC.CommControl(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	case 0xC:
-	case 0xD:
-	case 0xE:
-	case 0xF:
-		NullIo(pc, addr, bWrite, d, nCyclesLeft);
-		break;
-	}
-
-	return 0;
-}
-
-iofunction ioread[0x100]  = {KeybReadData,       // $C000
-                             KeybReadData,       // $C001
-                             KeybReadData,       // $C002
-                             KeybReadData,       // $C003
-                             KeybReadData,       // $C004
-                             KeybReadData,       // $C005
-                             KeybReadData,       // $C006
-                             KeybReadData,       // $C007
-                             KeybReadData,       // $C008
-                             KeybReadData,       // $C009
-                             KeybReadData,       // $C00A
-                             KeybReadData,       // $C00B
-                             KeybReadData,       // $C00C
-                             KeybReadData,       // $C00D
-                             KeybReadData,       // $C00E
-                             KeybReadData,       // $C00F
-                             KeybReadFlag,       // $C010
-                             MemCheckPaging,     // $C011
-                             MemCheckPaging,     // $C012
-                             MemCheckPaging,     // $C013
-                             MemCheckPaging,     // $C014
-                             MemCheckPaging,     // $C015
-                             MemCheckPaging,     // $C016
-                             MemCheckPaging,     // $C017
-                             MemCheckPaging,     // $C018
-                             VideoCheckVbl,      // $C019
-                             VideoCheckMode,     // $C01A
-                             VideoCheckMode,     // $C01B
-                             MemCheckPaging,     // $C01C
-                             MemCheckPaging,     // $C01D
-                             VideoCheckMode,     // $C01E
-                             VideoCheckMode,     // $C01F
-                             NullIo,             // $C020
-                             NullIo,             // $C021
-                             NullIo,             // $C022
-                             NullIo,             // $C023
-                             NullIo,             // $C024
-                             NullIo,             // $C025
-                             NullIo,             // $C026
-                             NullIo,             // $C027
-                             NullIo,             // $C028
-                             NullIo,             // $C029
-                             NullIo,             // $C02A
-                             NullIo,             // $C02B
-                             NullIo,             // $C02C
-                             NullIo,             // $C02D
-                             NullIo,             // $C02E
-                             NullIo,             // $C02F
-                             SpkrToggle,         // $C030
-                             SpkrToggle,         // $C031
-                             SpkrToggle,         // $C032
-                             SpkrToggle,         // $C033
-                             SpkrToggle,         // $C034
-                             SpkrToggle,         // $C035
-                             SpkrToggle,         // $C036
-                             SpkrToggle,         // $C037
-                             SpkrToggle,         // $C038
-                             SpkrToggle,         // $C039
-                             SpkrToggle,         // $C03A
-                             SpkrToggle,         // $C03B
-                             SpkrToggle,         // $C03C
-                             SpkrToggle,         // $C03D
-                             SpkrToggle,         // $C03E
-                             SpkrToggle,         // $C03F
-                             NullIo,             // $C040
-                             NullIo,             // $C041
-                             NullIo,             // $C042
-                             NullIo,             // $C043
-                             NullIo,             // $C044
-                             NullIo,             // $C045
-                             NullIo,             // $C046
-                             NullIo,             // $C047
-                             NullIo,             // $C048
-                             NullIo,             // $C049
-                             NullIo,             // $C04A
-                             NullIo,             // $C04B
-                             NullIo,             // $C04C
-                             NullIo,             // $C04D
-                             NullIo,             // $C04E
-                             NullIo,             // $C04F
-                             VideoSetMode,       // $C050
-                             VideoSetMode,       // $C051
-                             VideoSetMode,       // $C052
-                             VideoSetMode,       // $C053
-                             MemSetPaging,       // $C054
-                             MemSetPaging,       // $C055
-                             MemSetPaging,       // $C056
-                             MemSetPaging,       // $C057
-                             NullIo,             // $C058
-                             NullIo,             // $C059
-                             NullIo,             // $C05A
-                             NullIo,             // $C05B
-                             NullIo,             // $C05C
-                             NullIo,             // $C05D
-                             VideoSetMode,       // $C05E
-                             VideoSetMode,       // $C05F
-                             NullIo,             // $C060
-                             JoyReadButton,      // $C061
-                             JoyReadButton,      // $C062
-                             JoyReadButton,      // $C063
-                             JoyReadPosition,    // $C064
-                             JoyReadPosition,    // $C065
-                             JoyReadPosition,    // $C066
-                             JoyReadPosition,    // $C067
-                             NullIo,             // $C068
-                             NullIo,             // $C069
-                             NullIo,             // $C06A
-                             NullIo,             // $C06B
-                             NullIo,             // $C06C
-                             NullIo,             // $C06D
-                             NullIo,             // $C06E
-                             NullIo,             // $C06F
-                             JoyResetPosition,   // $C070
-                             NullIo,             // $C071
-                             NullIo,             // $C072
-                             NullIo,             // $C073
-                             NullIo,             // $C074
-                             NullIo,             // $C075
-                             NullIo,             // $C076
-                             NullIo,             // $C077
-                             NullIo,             // $C078
-                             NullIo,             // $C079
-                             NullIo,             // $C07A
-                             NullIo,             // $C07B
-                             NullIo,             // $C07C
-                             NullIo,             // $C07D
-                             NullIo,             // $C07E
-                             VideoCheckMode,     // $C07F
-                             MemSetPaging,       // $C080
-                             MemSetPaging,       // $C081
-                             MemSetPaging,       // $C082
-                             MemSetPaging,       // $C083
-                             MemSetPaging,       // $C084
-                             MemSetPaging,       // $C085
-                             MemSetPaging,       // $C086
-                             MemSetPaging,       // $C087
-                             MemSetPaging,       // $C088
-                             MemSetPaging,       // $C089
-                             MemSetPaging,       // $C08A
-                             MemSetPaging,       // $C08B
-                             MemSetPaging,       // $C08C
-                             MemSetPaging,       // $C08D
-                             MemSetPaging,       // $C08E
-                             MemSetPaging,       // $C08F
-                             PrintStatus,        // $C090
-                             PrintStatus,        // $C091
-                             PrintStatus,        // $C092
-                             PrintStatus,        // $C093
-                             PrintStatus,        // $C094
-                             PrintStatus,        // $C095
-                             PrintStatus,        // $C096
-                             PrintStatus,        // $C097
-                             PrintStatus,        // $C098
-                             PrintStatus,        // $C099
-                             PrintStatus,        // $C09A
-                             PrintStatus,        // $C09B
-                             PrintStatus,        // $C09C
-                             PrintStatus,        // $C09D
-                             PrintStatus,        // $C09E
-                             PrintStatus,        // $C09F
-                             IORead_Slot2_SSC,   // $C0A0
-                             IORead_Slot2_SSC,   // $C0A1
-                             IORead_Slot2_SSC,   // $C0A2
-                             IORead_Slot2_SSC,   // $C0A3
-                             IORead_Slot2_SSC,   // $C0A4
-                             IORead_Slot2_SSC,   // $C0A5
-                             IORead_Slot2_SSC,   // $C0A6
-                             IORead_Slot2_SSC,   // $C0A7
-                             IORead_Slot2_SSC,   // $C0A8
-                             IORead_Slot2_SSC,   // $C0A9
-                             IORead_Slot2_SSC,   // $C0AA
-                             IORead_Slot2_SSC,   // $C0AB
-                             IORead_Slot2_SSC,   // $C0AC
-                             IORead_Slot2_SSC,   // $C0AD
-                             IORead_Slot2_SSC,   // $C0AE
-                             IORead_Slot2_SSC,   // $C0AF
-                             TfeIo,              // $C0B0
-                             TfeIo,              // $C0B1
-                             TfeIo,              // $C0B2
-                             TfeIo,              // $C0B3
-                             TfeIo,              // $C0B4
-                             TfeIo,              // $C0B5
-                             TfeIo,              // $C0B6
-                             TfeIo,              // $C0B7
-                             TfeIo,              // $C0B8
-                             TfeIo,              // $C0B9
-                             TfeIo,              // $C0BA
-                             TfeIo,              // $C0BB
-                             TfeIo,              // $C0BC
-                             TfeIo,              // $C0BD
-                             TfeIo,              // $C0BE
-                             TfeIo,              // $C0BF
-                             PhasorIO,           // $C0C0
-                             PhasorIO,           // $C0C1
-                             PhasorIO,           // $C0C2
-                             PhasorIO,           // $C0C3
-                             PhasorIO,           // $C0C4
-                             PhasorIO,           // $C0C5
-                             PhasorIO,           // $C0C6
-                             PhasorIO,           // $C0C7
-                             PhasorIO,           // $C0C8
-                             PhasorIO,           // $C0C9
-                             PhasorIO,           // $C0CA
-                             PhasorIO,           // $C0CB
-                             PhasorIO,           // $C0CC
-                             PhasorIO,           // $C0CD
-                             PhasorIO,           // $C0CE
-                             PhasorIO,           // $C0CF
-                             PhasorIO,           // $C0D0
-                             PhasorIO,           // $C0D1
-                             PhasorIO,           // $C0D2
-                             PhasorIO,           // $C0D3
-                             PhasorIO,           // $C0D4
-                             PhasorIO,           // $C0D5
-                             PhasorIO,           // $C0D6
-                             PhasorIO,           // $C0D7
-                             PhasorIO,           // $C0D8
-                             PhasorIO,           // $C0D9
-                             PhasorIO,           // $C0DA
-                             PhasorIO,           // $C0DB
-                             PhasorIO,           // $C0DC
-                             PhasorIO,           // $C0DD
-                             PhasorIO,           // $C0DE
-                             PhasorIO,           // $C0DF
-                             DiskControlStepper, // $C0E0
-                             DiskControlStepper, // $C0E1
-                             DiskControlStepper, // $C0E2
-                             DiskControlStepper, // $C0E3
-                             DiskControlStepper, // $C0E4
-                             DiskControlStepper, // $C0E5
-                             DiskControlStepper, // $C0E6
-                             DiskControlStepper, // $C0E7
-                             DiskControlMotor,   // $C0E8
-                             DiskControlMotor,   // $C0E9
-                             DiskEnable,         // $C0EA
-                             DiskEnable,         // $C0EB
-                             DiskReadWrite,      // $C0EC
-                             DiskSetLatchValue,  // $C0ED
-                             DiskSetReadMode,    // $C0EE
-                             DiskSetWriteMode,   // $C0EF
-                             HD_IO_EMUL,         // $C0F0
-                             HD_IO_EMUL,         // $C0F1
-                             HD_IO_EMUL,         // $C0F2
-                             HD_IO_EMUL,         // $C0F3
-                             HD_IO_EMUL,         // $C0F4
-                             HD_IO_EMUL,         // $C0F5
-                             HD_IO_EMUL,         // $C0F6
-                             HD_IO_EMUL,         // $C0F7
-                             HD_IO_EMUL,         // $C0F8
-                             NullIo,             // $C0F9
-                             NullIo,             // $C0FA
-                             NullIo,             // $C0FB
-                             NullIo,             // $C0FC
-                             NullIo,             // $C0FD
-                             NullIo,             // $C0FE
-                             NullIo};            // $C0FF
-
-iofunction iowrite[0x100] = {MemSetPaging,       // $C000
-                             MemSetPaging,       // $C001
-                             MemSetPaging,       // $C002
-                             MemSetPaging,       // $C003
-                             MemSetPaging,       // $C004
-                             MemSetPaging,       // $C005
-                             MemSetPaging,       // $C006
-                             MemSetPaging,       // $C007
-                             MemSetPaging,       // $C008
-                             MemSetPaging,       // $C009
-                             MemSetPaging,       // $C00A
-                             MemSetPaging,       // $C00B
-                             VideoSetMode,       // $C00C
-                             VideoSetMode,       // $C00D
-                             VideoSetMode,       // $C00E
-                             VideoSetMode,       // $C00F
-                             KeybReadFlag,       // $C010
-                             KeybReadFlag,       // $C011
-                             KeybReadFlag,       // $C012
-                             KeybReadFlag,       // $C013
-                             KeybReadFlag,       // $C014
-                             KeybReadFlag,       // $C015
-                             KeybReadFlag,       // $C016
-                             KeybReadFlag,       // $C017
-                             KeybReadFlag,       // $C018
-                             KeybReadFlag,       // $C019
-                             KeybReadFlag,       // $C01A
-                             KeybReadFlag,       // $C01B
-                             KeybReadFlag,       // $C01C
-                             KeybReadFlag,       // $C01D
-                             KeybReadFlag,       // $C01E
-                             KeybReadFlag,       // $C01F
-                             NullIo,             // $C020
-                             NullIo,             // $C021
-                             NullIo,             // $C022
-                             NullIo,             // $C023
-                             NullIo,             // $C024
-                             NullIo,             // $C025
-                             NullIo,             // $C026
-                             NullIo,             // $C027
-                             NullIo,             // $C028
-                             NullIo,             // $C029
-                             NullIo,             // $C02A
-                             NullIo,             // $C02B
-                             NullIo,             // $C02C
-                             NullIo,             // $C02D
-                             NullIo,             // $C02E
-                             NullIo,             // $C02F
-                             SpkrToggle,         // $C030
-                             SpkrToggle,         // $C031
-                             SpkrToggle,         // $C032
-                             SpkrToggle,         // $C033
-                             SpkrToggle,         // $C034
-                             SpkrToggle,         // $C035
-                             SpkrToggle,         // $C036
-                             SpkrToggle,         // $C037
-                             SpkrToggle,         // $C038
-                             SpkrToggle,         // $C039
-                             SpkrToggle,         // $C03A
-                             SpkrToggle,         // $C03B
-                             SpkrToggle,         // $C03C
-                             SpkrToggle,         // $C03D
-                             SpkrToggle,         // $C03E
-                             SpkrToggle,         // $C03F
-                             NullIo,             // $C040
-                             NullIo,             // $C041
-                             NullIo,             // $C042
-                             NullIo,             // $C043
-                             NullIo,             // $C044
-                             NullIo,             // $C045
-                             NullIo,             // $C046
-                             NullIo,             // $C047
-                             NullIo,             // $C048
-                             NullIo,             // $C049
-                             NullIo,             // $C04A
-                             NullIo,             // $C04B
-                             NullIo,             // $C04C
-                             NullIo,             // $C04D
-                             NullIo,             // $C04E
-                             NullIo,             // $C04F
-                             VideoSetMode,       // $C050
-                             VideoSetMode,       // $C051
-                             VideoSetMode,       // $C052
-                             VideoSetMode,       // $C053
-                             MemSetPaging,       // $C054
-                             MemSetPaging,       // $C055
-                             MemSetPaging,       // $C056
-                             MemSetPaging,       // $C057
-                             NullIo,             // $C058
-                             NullIo,             // $C059
-                             NullIo,             // $C05A
-                             NullIo,             // $C05B
-                             NullIo,             // $C05C
-                             NullIo,             // $C05D
-                             VideoSetMode,       // $C05E
-                             VideoSetMode,       // $C05F
-                             NullIo,             // $C060
-                             NullIo,             // $C061
-                             NullIo,             // $C062
-                             NullIo,             // $C063
-                             NullIo,             // $C064
-                             NullIo,             // $C065
-                             NullIo,             // $C066
-                             NullIo,             // $C067
-                             NullIo,             // $C068
-                             NullIo,             // $C069
-                             NullIo,             // $C06A
-                             NullIo,             // $C06B
-                             NullIo,             // $C06C
-                             NullIo,             // $C06D
-                             NullIo,             // $C06E
-                             NullIo,             // $C06F
-                             JoyResetPosition,   // $C070
-#ifdef RAMWORKS
-							 MemSetPaging,		 // $C071 - extended memory card set page
-							 NullIo,			 // $C072
-							 MemSetPaging,		 // $C073 - Ramworks III set page
-#else
-							 NullIo,			 // $C071
-							 NullIo,			 // $C072
-							 NullIo,			 // $C073
-#endif
-                             NullIo,             // $C074
-                             NullIo,             // $C075
-                             NullIo,             // $C076
-                             NullIo,             // $C077
-                             NullIo,             // $C078
-                             NullIo,             // $C079
-                             NullIo,             // $C07A
-                             NullIo,             // $C07B
-                             NullIo,             // $C07C
-                             NullIo,             // $C07D
-                             NullIo,             // $C07E
-                             NullIo,             // $C07F
-                             MemSetPaging,       // $C080
-                             MemSetPaging,       // $C081
-                             MemSetPaging,       // $C082
-                             MemSetPaging,       // $C083
-                             MemSetPaging,       // $C084
-                             MemSetPaging,       // $C085
-                             MemSetPaging,       // $C086
-                             MemSetPaging,       // $C087
-                             MemSetPaging,       // $C088
-                             MemSetPaging,       // $C089
-                             MemSetPaging,       // $C08A
-                             MemSetPaging,       // $C08B
-                             MemSetPaging,       // $C08C
-                             MemSetPaging,       // $C08D
-                             MemSetPaging,       // $C08E
-                             MemSetPaging,       // $C08F
-                             PrintTransmit,      // $C090
-                             PrintTransmit,      // $C091
-                             PrintTransmit,      // $C092
-                             PrintTransmit,      // $C093
-                             PrintTransmit,      // $C094
-                             PrintTransmit,      // $C095
-                             PrintTransmit,      // $C096
-                             PrintTransmit,      // $C097
-                             PrintTransmit,      // $C098
-                             PrintTransmit,      // $C099
-                             PrintTransmit,      // $C09A
-                             PrintTransmit,      // $C09B
-                             PrintTransmit,      // $C09C
-                             PrintTransmit,      // $C09D
-                             PrintTransmit,      // $C09E
-                             PrintTransmit,      // $C09F
-                             IOWrite_Slot2_SSC,  // $C0A0
-                             IOWrite_Slot2_SSC,  // $C0A1
-                             IOWrite_Slot2_SSC,  // $C0A2
-                             IOWrite_Slot2_SSC,  // $C0A3
-                             IOWrite_Slot2_SSC,  // $C0A4
-                             IOWrite_Slot2_SSC,  // $C0A5
-                             IOWrite_Slot2_SSC,  // $C0A6
-                             IOWrite_Slot2_SSC,  // $C0A7
-                             IOWrite_Slot2_SSC,	 // $C0A8
-                             IOWrite_Slot2_SSC,	 // $C0A9
-                             IOWrite_Slot2_SSC,	 // $C0AA
-                             IOWrite_Slot2_SSC,	 // $C0AB
-                             IOWrite_Slot2_SSC,  // $C0AC
-                             IOWrite_Slot2_SSC,  // $C0AD
-                             IOWrite_Slot2_SSC,  // $C0AE
-                             IOWrite_Slot2_SSC,  // $C0AF
-                             TfeIo,              // $C0B0
-                             TfeIo,              // $C0B1
-                             TfeIo,              // $C0B2
-                             TfeIo,              // $C0B3
-                             TfeIo,              // $C0B4
-                             TfeIo,              // $C0B5
-                             TfeIo,              // $C0B6
-                             TfeIo,              // $C0B7
-                             TfeIo,              // $C0B8
-                             TfeIo,              // $C0B9
-                             TfeIo,              // $C0BA
-                             TfeIo,              // $C0BB
-                             TfeIo,              // $C0BC
-                             TfeIo,              // $C0BD
-                             TfeIo,              // $C0BE
-                             TfeIo,              // $C0BF
-                             PhasorIO,           // $C0C0
-                             PhasorIO,           // $C0C1
-                             PhasorIO,           // $C0C2
-                             PhasorIO,           // $C0C3
-                             PhasorIO,           // $C0C4
-                             PhasorIO,           // $C0C5
-                             PhasorIO,           // $C0C6
-                             PhasorIO,           // $C0C7
-                             PhasorIO,           // $C0C8
-                             PhasorIO,           // $C0C9
-                             PhasorIO,           // $C0CA
-                             PhasorIO,           // $C0CB
-                             PhasorIO,           // $C0CC
-                             PhasorIO,           // $C0CD
-                             PhasorIO,           // $C0CE
-                             PhasorIO,           // $C0CF
-                             PhasorIO,           // $C0D0
-                             PhasorIO,           // $C0D1
-                             PhasorIO,           // $C0D2
-                             PhasorIO,           // $C0D3
-                             PhasorIO,           // $C0D4
-                             PhasorIO,           // $C0D5
-                             PhasorIO,           // $C0D6
-                             PhasorIO,           // $C0D7
-                             PhasorIO,           // $C0D8
-                             PhasorIO,           // $C0D9
-                             PhasorIO,           // $C0DA
-                             PhasorIO,           // $C0DB
-                             PhasorIO,           // $C0DC
-                             PhasorIO,           // $C0DD
-                             PhasorIO,           // $C0DE
-                             PhasorIO,           // $C0DF
-                             DiskControlStepper, // $C0E0
-                             DiskControlStepper, // $C0E1
-                             DiskControlStepper, // $C0E2
-                             DiskControlStepper, // $C0E3
-                             DiskControlStepper, // $C0E4
-                             DiskControlStepper, // $C0E5
-                             DiskControlStepper, // $C0E6
-                             DiskControlStepper, // $C0E7
-                             DiskControlMotor,   // $C0E8
-                             DiskControlMotor,   // $C0E9
-                             DiskEnable,         // $C0EA
-                             DiskEnable,         // $C0EB
-                             DiskReadWrite,      // $C0EC
-                             DiskSetLatchValue,  // $C0ED
-                             DiskSetReadMode,    // $C0EE
-                             DiskSetWriteMode,   // $C0EF
-                             HD_IO_EMUL,         // $C0F0
-                             HD_IO_EMUL,         // $C0F1
-                             HD_IO_EMUL,         // $C0F2
-                             HD_IO_EMUL,         // $C0F3
-                             HD_IO_EMUL,         // $C0F4
-                             HD_IO_EMUL,         // $C0F5
-                             HD_IO_EMUL,         // $C0F6
-                             HD_IO_EMUL,         // $C0F7
-                             HD_IO_EMUL,         // $C0F8
-                             NullIo,             // $C0F9
-                             NullIo,             // $C0FA
-                             NullIo,             // $C0FB
-                             NullIo,             // $C0FC
-                             NullIo,             // $C0FD
-                             NullIo,             // $C0FE
-                             NullIo};            // $C0FF
+//-----------------------------------------------------------------------------
 
 static DWORD   imagemode[MAXIMAGES];
 LPBYTE         memshadow[MAXIMAGES][0x100];
 LPBYTE         memwrite[MAXIMAGES][0x100];
+
+iofunction		IORead[256];
+iofunction		IOWrite[256];
+static LPVOID	SlotParameters[NUM_SLOTS];
 
 static BOOL    fastpaging   = 0;	// Redundant: only ever set to 0, by MemSetFastPaging(0)
 DWORD          image        = 0;
@@ -671,7 +85,366 @@ UINT			g_uMaxExPages	= 1;			// user requested ram pages
 static LPBYTE	RWpages[128];					// pointers to RW memory banks
 #endif
 
-void UpdatePaging (BOOL initialize, BOOL updatewriteonly);
+BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles);
+void UpdatePaging(BOOL initialize, BOOL updatewriteonly);
+
+//=============================================================================
+
+static BYTE __stdcall IORead_C00x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return KeybReadData(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+static BYTE __stdcall IOWrite_C00x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	if ((addr & 0xf) <= 0xB)
+		return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	else
+		return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C01x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return KeybReadFlag(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return VideoCheckVbl(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return VideoCheckMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return VideoCheckMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return MemCheckPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return VideoCheckMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return VideoCheckMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall IOWrite_C01x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return KeybReadFlag(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C02x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+static BYTE __stdcall IOWrite_C02x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C03x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return SpkrToggle(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+static BYTE __stdcall IOWrite_C03x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return SpkrToggle(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C04x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+static BYTE __stdcall IOWrite_C04x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C05x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall IOWrite_C05x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Annunciator(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall IOWrite_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+}
+
+//-------------------------------------
+
+static BYTE __stdcall IORead_C07x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return JoyResetPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return VideoCheckMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall IOWrite_C07x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	switch (addr & 0xf)
+	{
+	case 0x0:	return JoyResetPosition(pc, addr, bWrite, d, nCyclesLeft);
+#ifdef RAMWORKS
+	case 0x1:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);	// extended memory card set page
+	case 0x2:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);	// Ramworks III set page
+#else
+	case 0x1:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+#endif
+	case 0x4:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+
+static iofunction IORead_C0xx[8] =
+{
+	IORead_C00x,		// Keyboard
+	IORead_C01x,		// Memory/Video
+	IORead_C02x,		// Cassette
+	IORead_C03x,		// Speaker
+	IORead_C04x,
+	IORead_C05x,		// Video
+	IORead_C06x,		// Joystick
+	IORead_C07x,		// Joystick/Video
+};
+
+static iofunction IOWrite_C0xx[8] =
+{
+	IOWrite_C00x,		// Memory/Video
+	IOWrite_C01x,		// Keyboard
+	IOWrite_C02x,		// Cassette
+	IOWrite_C03x,		// Speaker
+	IOWrite_C04x,
+	IOWrite_C05x,		// Video/Memory
+	IOWrite_C06x,
+	IOWrite_C07x,		// Joystick/Ramworks
+};
+
+//=============================================================================
+
+BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+{
+	if (!write)
+		return MemReadFloatingBus();
+	else
+		return 0;
+}
+
+BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+{
+	// Apple//e ROM:
+	// . PC=FA6F: LDA $C058 (SETAN0)
+	// . PC=FA72: LDA $C05A (SETAN1)
+	// . PC=C2B5: LDA $C05D (CLRAN2)
+
+	// NB. AN3: For //e & //c these locations are now used to enabled/disabled DHIRES
+	return 0;
+}
+
+BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+{
+	// TODO: Fix this!
+	//if(!g_bApple2e || SW_SLOTCXROM)
+	//	return IO_Null(programcounter, address, write, value, nCycles);
+	//else
+		return mem[address];
+}
+
+BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+{
+	return 0;
+}
+
+BYTE __stdcall IO_CFFx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+{
+	if (address == 0xFF)
+	{
+		// TODO:
+		// Evict ROM from [$C800..$CFFE]
+	}
+
+	if(!g_bApple2e || SW_SLOTCXROM)
+		return IO_Null(programcounter, address, write, value, nCycles);
+	else
+		return mem[address];
+}
+
+//===========================================================================
+
+static BYTE g_bmSlotInit = 0;
+
+static void InitIoHandlers()
+{
+	g_bmSlotInit = 0;
+	UINT i=0;
+
+	for (; i<8; i++)	// C00x..C07x
+	{
+		IORead[i]	= IORead_C0xx[i];
+		IOWrite[i]	= IOWrite_C0xx[i];
+	}
+
+	for (; i<16; i++)	// C08x..C0Fx
+	{
+		IORead[i]	= IO_Null;
+		IOWrite[i]	= IO_Null;
+	}
+
+	//
+
+	for (; i<255; i++)	// C10x..CFEx
+	{
+		IORead[i]	= IORead_Cxxx;
+		IOWrite[i]	= IOWrite_Cxxx;
+	}
+
+	IORead[i]	= IO_CFFx;
+	IOWrite[i]	= IO_CFFx;
+}
+
+// All slots [0..7] must register their handlers
+void RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter)
+{
+	_ASSERT(uSlot < NUM_SLOTS);
+	g_bmSlotInit |= 1<<uSlot;
+	SlotParameters[uSlot] = lpSlotParameter;
+
+	IORead[uSlot+8]		= IOReadC0;
+	IOWrite[uSlot+8]	= IOWriteC0;
+
+	if (uSlot == 0)		// Don't trash C0xx handlers
+		return;
+
+	if (IOReadCx == NULL)	IOReadCx = IORead_Cxxx;
+	if (IOWriteCx == NULL)	IOWriteCx = IOWrite_Cxxx;
+
+	for (UINT i=0; i<16; i++)
+	{
+		IORead[uSlot*16+i]	= IOReadCx;
+		IOWrite[uSlot*16+i]	= IOWriteCx;
+	}
+
+	// What about [$C80x..$CFEx]? - Do any cards use this as I/O memory?
+}
 
 //===========================================================================
 void BackMainImage () {
@@ -682,18 +455,6 @@ void BackMainImage () {
       CopyMemory(memshadow[0][loop],memimage+(loop << 8),256);
     *(memdirty+loop) &= ~1;
   }
-}
-
-//===========================================================================
-BYTE __stdcall NullIo (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG nCycles) {
-	if (!write)
-	{
-		return MemReadFloatingBus();
-	}
-	else
-	{
-		return 0;
-	}
 }
 
 //===========================================================================
@@ -835,7 +596,8 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
 //
 
 //===========================================================================
-BYTE __stdcall MemCheckPaging (WORD, BYTE address, BYTE, BYTE, ULONG) {
+BYTE __stdcall MemCheckPaging (WORD, WORD address, BYTE, BYTE, ULONG) {
+  address &= 0xFF;
   BOOL result = 0;
   switch (address) {
     case 0x11: result = SW_BANK2;       break;
@@ -920,6 +682,15 @@ LPBYTE MemGetMainPtr (WORD offset) {
 }
 
 //===========================================================================
+
+void MemPreInitialize ()
+{
+	// Init the I/O handlers
+	InitIoHandlers();
+}
+
+//===========================================================================
+
 void MemInitialize () {
 
   // ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
@@ -1014,8 +785,13 @@ void MemInitialize () {
 	*(memrom+0x064D) = 0x00;
 	*(memrom+0x064E) = 0xEA;
 
+	//
+
+	const UINT uSlot = 0;
+	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL);
+
 	HD_Load_Rom(memrom);	// HDD f/w gets loaded to $C700
-  PrintLoadRom(memrom);	// parallel printer firmware gets loaded to $C100
+	PrintLoadRom(memrom);	// parallel printer firmware gets loaded to $C100
 
 	MemReset();
 }
@@ -1023,6 +799,7 @@ void MemInitialize () {
 //===========================================================================
 
 // Called by:
+// . MemInitialize()
 // . ResetMachineState()	eg. Power-cycle ('Apple-Go' button)
 // . Snapshot_LoadState()
 void MemReset ()
@@ -1057,11 +834,12 @@ void MemReset ()
 	mem   = memimage;
 	image = 0;
 
-	// INITIALIZE & RESET THE CPU
-	CpuInitialize();
-
 	// INITIALIZE PAGING, FILLING IN THE 64K MEMORY IMAGE
 	ResetPaging(1);
+
+	// INITIALIZE & RESET THE CPU
+	// . Do this after ROM has been copied back to mem[], so that PC is correctly init'ed from 6502's reset vector
+	CpuInitialize();
 }
 
 //===========================================================================
@@ -1121,7 +899,9 @@ void MemSetFastPaging (BOOL on) {
 }
 
 //===========================================================================
-BYTE __stdcall MemSetPaging (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG) {
+BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE value, ULONG)
+{
+  address &= 0xFF;
   DWORD lastmemmode = memmode;
 
   // DETERMINE THE NEW MEMORY PAGING MODE.
@@ -1249,58 +1029,17 @@ void MemTrimImages () {
 
 //===========================================================================
 
-BYTE __stdcall CxReadFunc(WORD, WORD nAddr, BYTE, BYTE, ULONG nCyclesLeft)
+LPVOID MemGetSlotParameters (UINT uSlot)
 {
-	USHORT nPage = nAddr>>8;	// Don't use BYTE - Bug in VC++ 6.0 (SP5)!
-
-	CpuCalcCycles(nCyclesLeft);
-	
-	if(!g_bApple2e || SW_SLOTCXROM)
-	{
-		if((nPage == 0xC4) || (nPage == 0xC5))
-		{
-			// Slot 4 or 5: Mockingboard
-			return MB_Read(nAddr);
-		}
-		else
-		{
-			return mem[nAddr];
-		}
-	}
-	else
-	{
-#if _DEBUG
-		// Gets triggered by opcode $29 (IMM AND) by internal emulation code
-//		if((nPage == 0xC4) || (nPage == 0xC5))
-//			_ASSERT(0);
-#endif
-		return mem[nAddr];
-	}
+	_ASSERT(uSlot < NUM_SLOTS);
+	return SlotParameters[uSlot];
 }
 
-BYTE __stdcall CxWriteFunc(WORD, WORD nAddr, BYTE, BYTE nValue, ULONG nCyclesLeft)
+//===========================================================================
+
+bool MemCheckSLOTCXROM()
 {
-	BYTE nPage = nAddr>>8;
-
-	CpuCalcCycles(nCyclesLeft);
-
-	if(!g_bApple2e || SW_SLOTCXROM)
-	{
-		if((nPage == 0xC4) || (nPage == 0xC5))
-		{
-			// Slot 4 or 5: Mockingboard
-			MB_Write(nAddr, nValue);
-		}
-	}
-#if _DEBUG
-	else
-	{
-		if((nPage == 0xC4) || (nPage == 0xC5))
-			_ASSERT(0);
-	}
-#endif
-
-	return 0;
+	return SW_SLOTCXROM ? true : false;
 }
 
 //===========================================================================
