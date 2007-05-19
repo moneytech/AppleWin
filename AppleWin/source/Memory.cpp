@@ -58,7 +58,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //-----------------------------------------------------------------------------
 
 static DWORD   imagemode[MAXIMAGES];
-LPBYTE         memshadow[MAXIMAGES][0x100];
+static LPBYTE  memshadow[MAXIMAGES][0x100];
 LPBYTE         memwrite[MAXIMAGES][0x100];
 
 iofunction		IORead[256];
@@ -66,8 +66,8 @@ iofunction		IOWrite[256];
 static LPVOID	SlotParameters[NUM_SLOTS];
 
 static BOOL    fastpaging   = 0;	// Redundant: only ever set to 0, by MemSetFastPaging(0)
-DWORD          image        = 0;
-DWORD          lastimage    = 0;
+static DWORD   image        = 0;
+static DWORD   lastimage    = 0;
 static BOOL    lastwriteram = 0;
 LPBYTE         mem          = NULL;
 static LPBYTE  memaux       = NULL;
@@ -363,7 +363,7 @@ BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYT
 BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
 {
 	// TODO: Fix this!
-	//if(!g_bApple2e || SW_SLOTCXROM)
+	//if(IS_APPLE2 || SW_SLOTCXROM)
 	//	return IO_Null(programcounter, address, write, value, nCycles);
 	//else
 		return mem[address];
@@ -382,7 +382,7 @@ BYTE __stdcall IO_CFFx(WORD programcounter, WORD address, BYTE write, BYTE value
 		// Evict ROM from [$C800..$CFFE]
 	}
 
-	if(!g_bApple2e || SW_SLOTCXROM)
+	if(IS_APPLE2 || SW_SLOTCXROM)
 		return IO_Null(programcounter, address, write, value, nCycles);
 	else
 		return mem[address];
@@ -505,7 +505,9 @@ void UpdateFastPaging () {
 }
 
 //===========================================================================
-void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
+
+void UpdatePaging (BOOL initialize, BOOL updatewriteonly)
+{
 
   // SAVE THE CURRENT PAGING SHADOW TABLE
   LPBYTE oldshadow[256];
@@ -515,15 +517,15 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
   // UPDATE THE PAGING TABLES BASED ON THE NEW PAGING SWITCH VALUES
   int loop;
   if (initialize) {
-    for (loop = 0; loop < 192; loop++)
+    for (loop = 0x00; loop < 0xC0; loop++)
       memwrite[image][loop] = mem+(loop << 8);
-    for (loop = 192; loop < 208; loop++)	// TC: [0xC000..0xCF00]
+    for (loop = 0xC0; loop < 0xD0; loop++)
       memwrite[image][loop] = NULL;
   }
   if (!updatewriteonly)
-    for (loop = 0; loop < 2; loop++)
+    for (loop = 0x00; loop < 0x02; loop++)
       memshadow[image][loop] = SW_ALTZP ? memaux+(loop << 8) : memmain+(loop << 8);
-  for (loop = 2; loop < 192; loop++) {
+  for (loop = 0x02; loop < 0xC0; loop++) {
     memshadow[image][loop] = SW_AUXREAD ? memaux+(loop << 8)
                                         : memmain+(loop << 8);
     memwrite[image][loop]  = ((SW_AUXREAD != 0) == (SW_AUXWRITE != 0))
@@ -532,17 +534,17 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
                                              : memmain+(loop << 8);
   }
   if (!updatewriteonly) {
-    for (loop = 192; loop < 200; loop++)
-      if (loop == 195)
+    for (loop = 0xC0; loop < 0xC8; loop++)
+      if (loop == 0xC3)
         memshadow[image][loop] = (SW_SLOTC3ROM && SW_SLOTCXROM) ? memrom+0x0300
                                                                 : memrom+0x1300;
       else
         memshadow[image][loop] = SW_SLOTCXROM ? memrom+(loop << 8)-0xC000
                                               : memrom+(loop << 8)-0xB000;
-    for (loop = 200; loop < 208; loop++)
+    for (loop = 0xC8; loop < 0xD0; loop++)
       memshadow[image][loop] = memrom+(loop << 8)-0xB000;
   }
-  for (loop = 208; loop < 224; loop++) {
+  for (loop = 0xD0; loop < 0xE0; loop++) {
     int bankoffset = (SW_BANK2 ? 0 : 0x1000);
     memshadow[image][loop] = SW_HIGHRAM ? SW_ALTZP ? memaux+(loop << 8)-bankoffset
                                                    : memmain+(loop << 8)-bankoffset
@@ -552,7 +554,7 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
                                                                  : memmain+(loop << 8)-bankoffset
                                          : NULL;
   }
-  for (loop = 224; loop < 256; loop++) {
+  for (loop = 0xE0; loop < 0x100; loop++) {
     memshadow[image][loop] = SW_HIGHRAM ? SW_ALTZP ? memaux+(loop << 8)
                                                    : memmain+(loop << 8)
                                         : memrom+(loop << 8)-0xB000;
@@ -562,13 +564,13 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
                                          : NULL;
   }
   if (SW_80STORE) {
-    for (loop = 4; loop < 8; loop++) {
+    for (loop = 0x04; loop < 0x08; loop++) {
       memshadow[image][loop] = SW_PAGE2 ? memaux+(loop << 8)
                                         : memmain+(loop << 8);
       memwrite[image][loop]  = mem+(loop << 8);
     }
     if (SW_HIRES)
-      for (loop = 32; loop < 64; loop++) {
+      for (loop = 0x20; loop < 0x40; loop++) {
         memshadow[image][loop] = SW_PAGE2 ? memaux+(loop << 8)
                                           : memmain+(loop << 8);
         memwrite[image][loop]  = mem+(loop << 8);
@@ -579,7 +581,7 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly) {
   // THE MAIN RAM IMAGE TO KEEP BOTH SETS OF MEMORY CONSISTENT WITH THE NEW
   // PAGING SHADOW TABLE
   if (!updatewriteonly)
-    for (loop = 0; loop < 256; loop++)
+    for (loop = 0x00; loop < 0x100; loop++)
       if (initialize || (oldshadow[loop] != memshadow[image][loop])) {
         if ((!(initialize || fastpaging)) &&
             ((*(memdirty+loop) & 1) || (loop <= 1))) {
@@ -736,27 +738,33 @@ void MemInitialize () {
 #endif
 
 	// READ THE APPLE FIRMWARE ROMS INTO THE ROM IMAGE
-	const UINT ROM_SIZE = 0x5000; // HACK: Magic # -- $C000..$FFFF = 4K .. why 5K?
+	// . 1st 4K: C000..CFFF - Only has cards' f/w at $200(SSC) & $600(Disk][)
+	// . 2st 4K: C000..CFFF - Apple//e's CXROM
+	// . Remaining 12K is Apple ROM at D000..FFFF
+	const UINT ROM_SIZE = 0x5000; // HACK: Magic # -- $C000..$FFFF = 16K .. why 20K?
 
-	HRSRC hResInfo = 
-		g_bApple2e
-		? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM")
-		: (g_bApple2plus
-			? FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2PLUS_ROM), "ROM")
-			: FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2ORIG_ROM), "ROM") );
+	HRSRC hResInfo = NULL;
+	switch (g_Apple2Type)
+	{
+	case A2TYPE_APPLE2:			hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_ROM), "ROM"); break;
+	case A2TYPE_APPLE2PLUS:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_PLUS_ROM), "ROM"); break;
+	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); break;
+	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); break;
+	}
 
 	if(hResInfo == NULL)
 	{
 		TCHAR sRomFileName[ MAX_PATH ];
-		_tcscpy( sRomFileName,
-			g_bApple2e
-			? TEXT("APPLE2E.ROM")
-			: (g_bApple2plus
-				? TEXT("APPLE2PLUS.ROM")
-				: TEXT("APPLE2ORIG.ROM")));
+		switch (g_Apple2Type)
+		{
+		case A2TYPE_APPLE2:			_tcscpy(sRomFileName, TEXT("APPLE2.ROM")); break;
+		case A2TYPE_APPLE2PLUS:		_tcscpy(sRomFileName, TEXT("APPLE2_PLUS.ROM")); break;
+		case A2TYPE_APPLE2E:		_tcscpy(sRomFileName, TEXT("APPLE2E.ROM")); break;
+		case A2TYPE_APPLE2EEHANCED:	_tcscpy(sRomFileName, TEXT("APPLE2E_ENHANCED.ROM")); break;
+		}
 
 		TCHAR sText[ MAX_PATH ];
-		wsprintf( sText, TEXT("Unable to open the required firmware ROM data file.\n\nFile: %s."), sRomFileName );
+		wsprintf( sText, TEXT("Unable to open the required firmware ROM data file.\n\nFile: %s"), sRomFileName );
 
 		MessageBox(
 			GetDesktopWindow(),
@@ -780,18 +788,15 @@ void MemInitialize () {
 
 	memcpy(memrom, pData, ROM_SIZE);
 
-	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
-	*(memrom+0x064C) = 0xA9;
-	*(memrom+0x064D) = 0x00;
-	*(memrom+0x064E) = 0xEA;
-
 	//
 
 	const UINT uSlot = 0;
 	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL);
 
-	HD_Load_Rom(memrom);	// HDD f/w gets loaded to $C700
-	PrintLoadRom(memrom);	// parallel printer firmware gets loaded to $C100
+	PrintLoadRom(memrom, 1);	// parallel printer firmware gets loaded to $C100
+	sg_SSC.CommInitialize(2);	// SSC in $C200
+	DiskLoadRom(memrom, 6);		// Disk][ f/w gets loaded to $C600
+	HD_Load_Rom(memrom, 7);		// HDD f/w gets loaded to $C700
 
 	MemReset();
 }
@@ -853,7 +858,10 @@ void MemResetPaging ()
 }
 
 //===========================================================================
-BYTE MemReturnRandomData (BYTE highbit) {
+
+// Called by Disk][ I/O only
+BYTE MemReturnRandomData (BYTE highbit)
+{
   static const BYTE retval[16] = {0x00,0x2D,0x2D,0x30,0x30,0x32,0x32,0x34,
                                   0x35,0x39,0x43,0x43,0x43,0x60,0x7F,0x7F};
   BYTE r = (BYTE)(rand() & 0xFF);
@@ -918,7 +926,7 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
       memmode |= MF_HIGHRAM;
     lastwriteram = writeram;
   }
-  else if (g_bApple2e)
+  else if (!IS_APPLE2)
   {
     switch (address)
 	{

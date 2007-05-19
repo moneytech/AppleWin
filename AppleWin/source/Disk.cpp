@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "..\resource\resource.h"
 
 static BYTE __stdcall DiskControlMotor (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 static BYTE __stdcall DiskControlStepper (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
@@ -414,9 +415,6 @@ void DiskInitialize ()
 	_tcscpy(imagefilename,g_sProgramDir);
 	_tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
 	DiskInsert(0,imagefilename,0,0);
-
-	const UINT uSlot = 6;
-	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL);
 }
 
 //===========================================================================
@@ -666,7 +664,44 @@ bool DiskDriveSwap()
 
 //===========================================================================
 
-BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+static BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
+void DiskLoadRom(LPBYTE lpMemRom, UINT uSlot)
+{
+	const UINT DISK2_FW_SIZE = 256;
+
+	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_DISK2_FW), "FIRMWARE");
+	if(hResInfo == NULL)
+		return;
+
+	DWORD dwResSize = SizeofResource(NULL, hResInfo);
+	if(dwResSize != DISK2_FW_SIZE)
+		return;
+
+	HGLOBAL hResData = LoadResource(NULL, hResInfo);
+	if(hResData == NULL)
+		return;
+
+	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+	if(pData == NULL)
+		return;
+
+	memcpy(lpMemRom + uSlot*256, pData, DISK2_FW_SIZE);
+
+	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
+	*(lpMemRom+0x064C) = 0xA9;
+	*(lpMemRom+0x064D) = 0x00;
+	*(lpMemRom+0x064E) = 0xEA;
+
+	//
+
+	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL);
+}
+
+//===========================================================================
+
+static BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	addr &= 0xFF;
 
@@ -693,7 +728,7 @@ BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCycle
 	return 0;
 }
 
-BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+static BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	addr &= 0xFF;
 

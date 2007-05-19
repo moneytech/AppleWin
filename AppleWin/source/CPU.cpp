@@ -1466,10 +1466,10 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 static DWORD InternalCpuExecute (DWORD uTotalCycles)
 {
-	if (g_bApple2e)
-		return Cpu65C02(uTotalCycles);
-	else // Apple ][
-		return Cpu6502(uTotalCycles);
+	if (IS_APPLE2 || (g_Apple2Type == A2TYPE_APPLE2E))
+		return Cpu6502(uTotalCycles);	// Apple ][, ][+, //e
+	else
+		return Cpu65C02(uTotalCycles);	// Enhanced Apple //e
 }
 
 //

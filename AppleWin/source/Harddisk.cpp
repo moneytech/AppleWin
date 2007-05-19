@@ -127,6 +127,8 @@ static BYTE	g_nHD_Command;
 
 static HDD g_HardDrive[2] = {0};
 
+static UINT g_uSlot = 7;
+
 //===========================================================================
 
 static void GetImageTitle (LPCTSTR imagefilename, PHDD pHardDrive)
@@ -233,12 +235,11 @@ void HD_SetEnabled(bool bEnabled)
 		return;
 
 	if(g_bHD_Enabled)
-		HD_Load_Rom(lpMemC000);
+		HD_Load_Rom(lpMemC000, g_uSlot);
 	else
-		memset(lpMemC000+0x700, 0, HDDRVR_SIZE);
+		memset(lpMemC000 + g_uSlot*256, 0, HDDRVR_SIZE);
 
-	const UINT uSlot = 7;
-	RegisterIoHandler(uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL);
+	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL);
 }
 
 LPCTSTR HD_GetFullName (int nDrive)
@@ -246,14 +247,14 @@ LPCTSTR HD_GetFullName (int nDrive)
 	return g_HardDrive[nDrive].hd_fullname;
 }
 
-VOID HD_Load_Rom(LPBYTE lpMemRom)
+VOID HD_Load_Rom(LPBYTE lpMemRom, UINT uSlot)
 {
 	lpMemC000 = lpMemRom;	// Keep a copy for HD_SetEnabled()
 
 	if(!g_bHD_Enabled)
 		return;
 
-	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR), "FIRMWARE");
+	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR_FW), "FIRMWARE");
 	if(hResInfo == NULL)
 		return;
 
@@ -269,7 +270,8 @@ VOID HD_Load_Rom(LPBYTE lpMemRom)
 	if(pData == NULL)
 		return;
 
-	memcpy(lpMemRom+0x700, pData, HDDRVR_SIZE);
+	g_uSlot = uSlot;
+	memcpy(lpMemRom + uSlot*256, pData, HDDRVR_SIZE);
 	g_bHD_RomLoaded = true;
 }
 

@@ -8150,13 +8150,18 @@ void DebugBegin ()
 	g_nAppMode = MODE_DEBUG;
 	FrameRefreshStatus(DRAW_TITLE);
 
-	if (g_bApple2e)
-		g_aOpcodes = & g_aOpcodes65C02[ 0 ]; // Enhanced Apple //e
+	if (IS_APPLE2 || (g_Apple2Type == A2TYPE_APPLE2E))
+	{
+		g_aOpcodes = & g_aOpcodes6502[ 0 ];		// Apple ][, ][+, //e
+		g_aOpmodes[ AM_2 ].m_nBytes = 1;
+		g_aOpmodes[ AM_3 ].m_nBytes = 1;
+	}
 	else
-		g_aOpcodes = & g_aOpcodes6502[ 0 ]; // Original Apple ][ ][+
-
-	g_aOpmodes[ AM_2 ].m_nBytes = g_bApple2e ? 2 : 1;
-	g_aOpmodes[ AM_3 ].m_nBytes = g_bApple2e ? 3 : 1;
+	{
+		g_aOpcodes = & g_aOpcodes65C02[ 0 ];	// Enhanced Apple //e
+		g_aOpmodes[ AM_2 ].m_nBytes = 2;
+		g_aOpmodes[ AM_3 ].m_nBytes = 3;
+	}
 
 	g_nDisasmCurAddress = regs.pc;
 	DisasmCalcTopBotAddress();

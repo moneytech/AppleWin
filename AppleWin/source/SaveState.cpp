@@ -116,7 +116,7 @@ void Snapshot_LoadState()
 		// Reset all sub-systems
 		MemReset();
 
-		if (g_bApple2e)
+		if (!IS_APPLE2)
 			MemResetPaging();
 
 		DiskReset();
