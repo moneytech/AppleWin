@@ -31,10 +31,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 char VERSIONSTRING[] = "xx.yy.zz.ww";
 
-TCHAR *g_pAppTitle = TITLE_APPLE_2_E;
+TCHAR *g_pAppTitle = TITLE_APPLE_2E_ENHANCED;
 
-bool      g_bApple2e           = true;
-bool      g_bApple2plus        = true;
+eApple2Type	g_Apple2Type	= A2TYPE_APPLE2EEHANCED;
 
 BOOL      behind            = 0;			// Redundant
 DWORD     cumulativecycles  = 0;			// Wraps after ~1hr 9mins
@@ -350,10 +349,26 @@ void GetProgramDirectory () {
 //===========================================================================
 void LoadConfiguration ()
 {
-  DWORD comptype;
-  LOAD(TEXT("Computer Emulation"),&comptype);
-  g_bApple2e = (comptype == 2);
-  g_bApple2plus = (comptype == 1);
+  DWORD dwComputerType;
+
+  if (LOAD(TEXT(REGVALUE_APPLE2_TYPE),&dwComputerType))
+  {
+	  if (dwComputerType >= A2TYPE_MAX)
+		dwComputerType = A2TYPE_APPLE2EEHANCED;
+	  g_Apple2Type = (eApple2Type) dwComputerType;
+  }
+  else
+  {
+	  LOAD(TEXT("Computer Emulation"),&dwComputerType);
+	  switch (dwComputerType)
+	  {
+      // NB. No A2TYPE_APPLE2E
+	  case 0:	g_Apple2Type = A2TYPE_APPLE2;
+	  case 1:	g_Apple2Type = A2TYPE_APPLE2PLUS;
+	  case 2:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
+	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
+	  }
+  }
 
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
@@ -638,7 +653,6 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	ImageInitialize();
 	DiskInitialize();
 	CreateColorMixMap();	// For tv emulation g_nAppMode
-	sg_SSC.CommInitialize();
 
 	//
 

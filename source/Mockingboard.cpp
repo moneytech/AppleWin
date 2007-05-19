@@ -1356,7 +1356,7 @@ static BYTE __stdcall MB_Read(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULO
 {
 	CpuCalcCycles(nCyclesLeft);
 
-	if((!g_bApple2e || MemCheckSLOTCXROM()) == false)	// TODO - check this for all Apple2 types
+	if((IS_APPLE2 || MemCheckSLOTCXROM()) == false)
 		return mem[nAddr];
 
 	if(g_SoundcardType == SC_NONE)
@@ -1406,7 +1406,7 @@ static BYTE __stdcall MB_Write(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, UL
 {
 	CpuCalcCycles(nCyclesLeft);
 
-	if((!g_bApple2e || MemCheckSLOTCXROM()) == false)	// TODO - check this for all Apple2 types
+	if((IS_APPLE2 || MemCheckSLOTCXROM()) == false)
 		return 0;
 
 	if(g_SoundcardType == SC_NONE)

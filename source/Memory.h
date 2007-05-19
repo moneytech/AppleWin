@@ -11,10 +11,7 @@ extern MemoryInitPattern_e g_eMemoryInitPattern;
 
 extern iofunction IORead[256];
 extern iofunction IOWrite[256];
-extern LPBYTE     memshadow[MAXIMAGES][0x100];
 extern LPBYTE     memwrite[MAXIMAGES][0x100];
-extern DWORD      image;
-extern DWORD      lastimage;
 extern LPBYTE     mem;
 extern LPBYTE     memdirty;
 

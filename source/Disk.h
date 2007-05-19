@@ -36,8 +36,6 @@ void    DiskSetProtect( const int iDrive, const bool bWriteProtect );
 void    DiskSelect (int);
 void    DiskUpdatePosition (DWORD);
 bool    DiskDriveSwap();
+void    DiskLoadRom(LPBYTE lpMemRom, UINT uSlot);
 DWORD   DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
 DWORD   DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
-
-BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft, LPVOID lpParam=NULL);
-BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft, LPVOID lpParam=NULL);

@@ -476,10 +476,8 @@ BYTE __stdcall CSuperSerialCard::CommDipSw(WORD, WORD addr, BYTE, BYTE, ULONG)
 
 //===========================================================================
 
-void CSuperSerialCard::CommInitialize()
+void CSuperSerialCard::CommInitialize(UINT uSlot)
 {
-
-	const UINT uSlot = 2;
 	RegisterIoHandler(uSlot, &CSuperSerialCard::SSC_IORead, &CSuperSerialCard::SSC_IOWrite, NULL, NULL, this);
 }
 

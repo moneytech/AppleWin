@@ -10,7 +10,7 @@ public:
 	CSuperSerialCard();
 	~CSuperSerialCard();
 
-	void	CommInitialize();
+	void	CommInitialize(UINT uSlot);
 	void    CommReset();
 	void    CommDestroy();
 	void    CommSetSerialPort(HWND,DWORD);
