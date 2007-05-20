@@ -247,9 +247,9 @@ LPCTSTR HD_GetFullName (int nDrive)
 	return g_HardDrive[nDrive].hd_fullname;
 }
 
-VOID HD_Load_Rom(LPBYTE lpMemRom, UINT uSlot)
+VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
-	lpMemC000 = lpMemRom;	// Keep a copy for HD_SetEnabled()
+	lpMemC000 = pCxRomPeripheral;	// Keep a copy for HD_SetEnabled()
 
 	if(!g_bHD_Enabled)
 		return;
@@ -271,7 +271,7 @@ VOID HD_Load_Rom(LPBYTE lpMemRom, UINT uSlot)
 		return;
 
 	g_uSlot = uSlot;
-	memcpy(lpMemRom + uSlot*256, pData, HDDRVR_SIZE);
+	memcpy(pCxRomPeripheral + uSlot*256, pData, HDDRVR_SIZE);
 	g_bHD_RomLoaded = true;
 }
 

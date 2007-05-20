@@ -673,7 +673,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	{
 		// DO INITIALIZATION THAT MUST BE REPEATED FOR A RESTART
 		restart = 0;
-		g_nAppMode    = MODE_LOGO;
+		g_nAppMode = MODE_LOGO;
 		LoadConfiguration();
 		DebugInitialize();
 		JoyInitialize();

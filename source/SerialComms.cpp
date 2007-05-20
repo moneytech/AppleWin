@@ -40,6 +40,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "..\resource\resource.h"
 
 //#define SUPPORT_MODEM
 
@@ -476,8 +477,32 @@ BYTE __stdcall CSuperSerialCard::CommDipSw(WORD, WORD addr, BYTE, BYTE, ULONG)
 
 //===========================================================================
 
-void CSuperSerialCard::CommInitialize(UINT uSlot)
+void CSuperSerialCard::CommInitialize(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
+	const UINT SSC_FW_SIZE = 2*1024;
+	const UINT SSC_SLOT_FW_SIZE = 256;
+	const UINT SSC_SLOT_FW_OFFSET = 7*256;
+
+	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_SSC_FW), "FIRMWARE");
+	if(hResInfo == NULL)
+		return;
+
+	DWORD dwResSize = SizeofResource(NULL, hResInfo);
+	if(dwResSize != SSC_FW_SIZE)
+		return;
+
+	HGLOBAL hResData = LoadResource(NULL, hResInfo);
+	if(hResData == NULL)
+		return;
+
+	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+	if(pData == NULL)
+		return;
+
+	memcpy(pCxRomPeripheral + uSlot*256, pData+SSC_SLOT_FW_OFFSET, SSC_SLOT_FW_SIZE);
+
+	//
+
 	RegisterIoHandler(uSlot, &CSuperSerialCard::SSC_IORead, &CSuperSerialCard::SSC_IOWrite, NULL, NULL, this);
 }
 

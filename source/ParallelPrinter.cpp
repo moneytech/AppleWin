@@ -39,7 +39,7 @@ DWORD const PRINTDRVR_SIZE = 0x100;
 static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG);
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG);
 
-VOID PrintLoadRom(LPBYTE lpMemRom, const UINT uSlot)
+VOID PrintLoadRom(LPBYTE pCxRomPeripheral, const UINT uSlot)
 {
 	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRINTDRVR_FW), "FIRMWARE");
 	if(hResInfo == NULL)
@@ -57,7 +57,7 @@ VOID PrintLoadRom(LPBYTE lpMemRom, const UINT uSlot)
 	if(pData == NULL)
 		return;
 
-	memcpy(lpMemRom + uSlot*256, pData, PRINTDRVR_SIZE);
+	memcpy(pCxRomPeripheral + uSlot*256, pData, PRINTDRVR_SIZE);
 
 	//
 
