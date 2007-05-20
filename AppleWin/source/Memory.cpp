@@ -57,25 +57,37 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 //-----------------------------------------------------------------------------
 
-static DWORD   imagemode[MAXIMAGES];
-static LPBYTE  memshadow[MAXIMAGES][0x100];
-LPBYTE         memwrite[MAXIMAGES][0x100];
+//static DWORD   imagemode;
+static LPBYTE  memshadow[0x100];
+LPBYTE         memwrite[0x100];
 
 iofunction		IORead[256];
 iofunction		IOWrite[256];
 static LPVOID	SlotParameters[NUM_SLOTS];
 
-static BOOL    fastpaging   = 0;	// Redundant: only ever set to 0, by MemSetFastPaging(0)
-static DWORD   image        = 0;
-static DWORD   lastimage    = 0;
+//static BOOL    fastpaging   = 0;	// Redundant: only ever set to 0, by MemSetFastPaging(0)
+//static DWORD   image        = 0;
+//static DWORD   lastimage    = 0;
 static BOOL    lastwriteram = 0;
+
 LPBYTE         mem          = NULL;
+
+//
+
 static LPBYTE  memaux       = NULL;
-LPBYTE         memdirty     = NULL;
-static LPBYTE  memimage     = NULL;
 static LPBYTE  memmain      = NULL;
-static DWORD   memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
+
+LPBYTE         memdirty     = NULL;
 static LPBYTE  memrom       = NULL;
+
+static LPBYTE  memimage     = NULL;
+
+static LPBYTE	pCxRomInternal		= NULL;
+static LPBYTE	pCxRomPeripheral	= NULL;
+
+//
+
+static DWORD   memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
 static BOOL    modechanging = 0;
 
 MemoryInitPattern_e g_eMemoryInitPattern = MIP_FF_FF_00_00;
@@ -379,7 +391,8 @@ BYTE __stdcall IO_CFFx(WORD programcounter, WORD address, BYTE write, BYTE value
 	if (address == 0xFF)
 	{
 		// TODO:
-		// Evict ROM from [$C800..$CFFE]
+		// Evict ROM from [$C800..$CFFF]
+		// . Also SSC may evict on an access to $CFxx
 	}
 
 	if(IS_APPLE2 || SW_SLOTCXROM)
@@ -447,149 +460,191 @@ void RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, io
 }
 
 //===========================================================================
-void BackMainImage () {
-  int loop = 0;
-  for (loop = 0; loop < 256; loop++) {
-    if (memshadow[0][loop] &&
-        ((*(memdirty+loop) & 1) || (loop <= 1)))
-      CopyMemory(memshadow[0][loop],memimage+(loop << 8),256);
-    *(memdirty+loop) &= ~1;
-  }
-}
 
-//===========================================================================
-void ResetPaging (BOOL initialize) {
-  if (!initialize)
-    MemSetFastPaging(0);
-  lastwriteram = 0;
-  memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
-  UpdatePaging(initialize,0);
-}
-
-//===========================================================================
-void UpdateFastPaging () {
-  BOOL  found    = 0;
-  DWORD imagenum = 0;
-  do
-    if ((imagemode[imagenum] == memmode) ||
-        ((lastimage >= 3) &&
-         ((imagemode[imagenum] & MF_IMAGEMASK) == (memmode & MF_IMAGEMASK))))
-      found = 1;
-    else
-      ++imagenum;
-  while ((imagenum <= lastimage) && !found);
-  if (found) {
-    image = imagenum;
-    mem   = memimage+(image << 16);
-    if (imagemode[image] != memmode) {
-      imagemode[image] = memmode;
-      UpdatePaging(0,1);
-    }
-  }
-  else {
-    if (lastimage < MAXIMAGES-1) {
-      imagenum = ++lastimage;
-      if (lastimage >= 3)
-        VirtualAlloc(memimage+lastimage*0x10000,0x10000,MEM_COMMIT,PAGE_READWRITE);
-    }
-    else {
-      static DWORD nextimage = 0;
-      if (nextimage > lastimage)
-        nextimage = 0;
-      imagenum = nextimage++;
-    }
-    imagemode[image = imagenum] = memmode;
-    mem = memimage+(image << 16);
-    UpdatePaging(1,0);
-  }
-}
+//// Only called by MemSetFastPaging()
+//void BackMainImage ()
+//{
+//	for (UINT loop = 0; loop < 256; loop++)
+//	{
+//		if (memshadow[loop] && ((*(memdirty+loop) & 1) || (loop <= 1)))
+//			CopyMemory(memshadow[loop],memimage+(loop << 8),256);
+//
+//		*(memdirty+loop) &= ~1;
+//	}
+//}
 
 //===========================================================================
 
-void UpdatePaging (BOOL initialize, BOOL updatewriteonly)
+void ResetPaging (BOOL initialize)
 {
+	//if (!initialize)
+	//  MemSetFastPaging(0);
 
-  // SAVE THE CURRENT PAGING SHADOW TABLE
-  LPBYTE oldshadow[256];
-  if (!(initialize || fastpaging || updatewriteonly))
-    CopyMemory(oldshadow,memshadow[image],256*sizeof(LPBYTE));
+	lastwriteram = 0;
+	memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
+	UpdatePaging(initialize, 0);
+}
 
-  // UPDATE THE PAGING TABLES BASED ON THE NEW PAGING SWITCH VALUES
-  int loop;
-  if (initialize) {
-    for (loop = 0x00; loop < 0xC0; loop++)
-      memwrite[image][loop] = mem+(loop << 8);
-    for (loop = 0xC0; loop < 0xD0; loop++)
-      memwrite[image][loop] = NULL;
-  }
-  if (!updatewriteonly)
-    for (loop = 0x00; loop < 0x02; loop++)
-      memshadow[image][loop] = SW_ALTZP ? memaux+(loop << 8) : memmain+(loop << 8);
-  for (loop = 0x02; loop < 0xC0; loop++) {
-    memshadow[image][loop] = SW_AUXREAD ? memaux+(loop << 8)
-                                        : memmain+(loop << 8);
-    memwrite[image][loop]  = ((SW_AUXREAD != 0) == (SW_AUXWRITE != 0))
-                               ? mem+(loop << 8)
-                               : SW_AUXWRITE ? memaux+(loop << 8)
-                                             : memmain+(loop << 8);
-  }
-  if (!updatewriteonly) {
-    for (loop = 0xC0; loop < 0xC8; loop++)
-      if (loop == 0xC3)
-        memshadow[image][loop] = (SW_SLOTC3ROM && SW_SLOTCXROM) ? memrom+0x0300
-                                                                : memrom+0x1300;
-      else
-        memshadow[image][loop] = SW_SLOTCXROM ? memrom+(loop << 8)-0xC000
-                                              : memrom+(loop << 8)-0xB000;
-    for (loop = 0xC8; loop < 0xD0; loop++)
-      memshadow[image][loop] = memrom+(loop << 8)-0xB000;
-  }
-  for (loop = 0xD0; loop < 0xE0; loop++) {
-    int bankoffset = (SW_BANK2 ? 0 : 0x1000);
-    memshadow[image][loop] = SW_HIGHRAM ? SW_ALTZP ? memaux+(loop << 8)-bankoffset
-                                                   : memmain+(loop << 8)-bankoffset
-                                        : memrom+(loop << 8)-0xB000;
-    memwrite[image][loop]  = SW_WRITERAM ? SW_HIGHRAM ? mem+(loop << 8)
-                                                      : SW_ALTZP ? memaux+(loop << 8)-bankoffset
-                                                                 : memmain+(loop << 8)-bankoffset
-                                         : NULL;
-  }
-  for (loop = 0xE0; loop < 0x100; loop++) {
-    memshadow[image][loop] = SW_HIGHRAM ? SW_ALTZP ? memaux+(loop << 8)
-                                                   : memmain+(loop << 8)
-                                        : memrom+(loop << 8)-0xB000;
-    memwrite[image][loop]  = SW_WRITERAM ? SW_HIGHRAM ? mem+(loop << 8)
-                                                      : SW_ALTZP ? memaux+(loop << 8)
-                                                                 : memmain+(loop << 8)
-                                         : NULL;
-  }
-  if (SW_80STORE) {
-    for (loop = 0x04; loop < 0x08; loop++) {
-      memshadow[image][loop] = SW_PAGE2 ? memaux+(loop << 8)
-                                        : memmain+(loop << 8);
-      memwrite[image][loop]  = mem+(loop << 8);
-    }
-    if (SW_HIRES)
-      for (loop = 0x20; loop < 0x40; loop++) {
-        memshadow[image][loop] = SW_PAGE2 ? memaux+(loop << 8)
-                                          : memmain+(loop << 8);
-        memwrite[image][loop]  = mem+(loop << 8);
-      }
-  }
+//===========================================================================
+//void UpdateFastPaging () {
+//  BOOL  found    = 0;
+//  DWORD imagenum = 0;
+//  do
+//    if ((imagemode[imagenum] == memmode) ||
+//        ((lastimage >= 3) &&
+//         ((imagemode[imagenum] & MF_IMAGEMASK) == (memmode & MF_IMAGEMASK))))
+//      found = 1;
+//    else
+//      ++imagenum;
+//  while ((imagenum <= lastimage) && !found);
+//  if (found) {
+//    image = imagenum;
+//    mem   = memimage+(image << 16);
+//    if (imagemode[image] != memmode) {
+//      imagemode[image] = memmode;
+//      UpdatePaging(0,1);
+//    }
+//  }
+//  else {
+//    if (lastimage < MAXIMAGES-1) {
+//      imagenum = ++lastimage;
+//      if (lastimage >= 3)
+//        VirtualAlloc(memimage+lastimage*0x10000,0x10000,MEM_COMMIT,PAGE_READWRITE);
+//    }
+//    else {
+//      static DWORD nextimage = 0;
+//      if (nextimage > lastimage)
+//        nextimage = 0;
+//      imagenum = nextimage++;
+//    }
+//    imagemode[image = imagenum] = memmode;
+//    mem = memimage+(image << 16);
+//    UpdatePaging(1,0);
+//  }
+//}
 
-  // MOVE MEMORY BACK AND FORTH AS NECESSARY BETWEEN THE SHADOW AREAS AND
-  // THE MAIN RAM IMAGE TO KEEP BOTH SETS OF MEMORY CONSISTENT WITH THE NEW
-  // PAGING SHADOW TABLE
-  if (!updatewriteonly)
-    for (loop = 0x00; loop < 0x100; loop++)
-      if (initialize || (oldshadow[loop] != memshadow[image][loop])) {
-        if ((!(initialize || fastpaging)) &&
-            ((*(memdirty+loop) & 1) || (loop <= 1))) {
-          *(memdirty+loop) &= ~1;
-          CopyMemory(oldshadow[loop],mem+(loop << 8),256);
-        }
-        CopyMemory(mem+(loop << 8),memshadow[image][loop],256);
-      }
+//===========================================================================
+
+static void UpdatePaging (BOOL initialize, BOOL updatewriteonly)
+{
+	// SAVE THE CURRENT PAGING SHADOW TABLE
+	LPBYTE oldshadow[256];
+	if (!(initialize || updatewriteonly /*|| fastpaging*/ ))
+		CopyMemory(oldshadow,memshadow,256*sizeof(LPBYTE));
+
+	// UPDATE THE PAGING TABLES BASED ON THE NEW PAGING SWITCH VALUES
+	UINT loop;
+	if (initialize)
+	{
+		for (loop = 0x00; loop < 0xC0; loop++)
+			memwrite[loop] = mem+(loop << 8);
+
+		for (loop = 0xC0; loop < 0xD0; loop++)
+			memwrite[loop] = NULL;
+	}
+
+	if (!updatewriteonly)
+	{
+		for (loop = 0x00; loop < 0x02; loop++)
+			memshadow[loop] = SW_ALTZP ? memaux+(loop << 8) : memmain+(loop << 8);
+	}
+
+	for (loop = 0x02; loop < 0xC0; loop++)
+	{
+		memshadow[loop] = SW_AUXREAD ? memaux+(loop << 8)
+			: memmain+(loop << 8);
+
+		memwrite[loop]  = ((SW_AUXREAD != 0) == (SW_AUXWRITE != 0))
+			? mem+(loop << 8)
+			: SW_AUXWRITE	? memaux+(loop << 8)
+							: memmain+(loop << 8);
+	}
+
+	if (!updatewriteonly)
+	{
+		for (loop = 0xC0; loop < 0xC8; loop++)
+		{
+			const UINT uSlotOffset = (loop & 0x0f) * 0x100;
+			if (loop == 0xC3)
+				memshadow[loop] = (SW_SLOTC3ROM && SW_SLOTCXROM)	? pCxRomPeripheral+uSlotOffset	// C300..C3FF - Slot 3 ROM (all 0x00's)
+																	: pCxRomInternal+uSlotOffset;	// C300..C3FF - Internal ROM
+			else
+				memshadow[loop] = SW_SLOTCXROM	? pCxRomPeripheral+uSlotOffset						// C000..C7FF - SSC/Disk][/etc
+												: pCxRomInternal+uSlotOffset;						// C000..C7FF - Internal ROM
+		}
+
+		for (loop = 0xC8; loop < 0xD0; loop++)
+		{
+			const UINT uRomOffset = (loop & 0x0f) * 0x100;
+			memshadow[loop] = pCxRomInternal+uRomOffset;											// C800..CFFF - Internal ROM
+		}
+	}
+
+	for (loop = 0xD0; loop < 0xE0; loop++)
+	{
+		int bankoffset = (SW_BANK2 ? 0 : 0x1000);
+		memshadow[loop] = SW_HIGHRAM ? SW_ALTZP	? memaux+(loop << 8)-bankoffset
+												: memmain+(loop << 8)-bankoffset
+									: memrom+((loop-0xD0) * 0x100);
+
+		memwrite[loop]  = SW_WRITERAM	? SW_HIGHRAM	? mem+(loop << 8)
+														: SW_ALTZP	? memaux+(loop << 8)-bankoffset
+																	: memmain+(loop << 8)-bankoffset
+										: NULL;
+	}
+
+	for (loop = 0xE0; loop < 0x100; loop++)
+	{
+		memshadow[loop] = SW_HIGHRAM	? SW_ALTZP	? memaux+(loop << 8)
+													: memmain+(loop << 8)
+										: memrom+((loop-0xD0) * 0x100);
+
+		memwrite[loop]  = SW_WRITERAM	? SW_HIGHRAM	? mem+(loop << 8)
+														: SW_ALTZP	? memaux+(loop << 8)
+																	: memmain+(loop << 8)
+										: NULL;
+	}
+
+	if (SW_80STORE)
+	{
+		for (loop = 0x04; loop < 0x08; loop++)
+		{
+			memshadow[loop] = SW_PAGE2	? memaux+(loop << 8)
+										: memmain+(loop << 8);
+			memwrite[loop]  = mem+(loop << 8);
+		}
+
+		if (SW_HIRES)
+		{
+			for (loop = 0x20; loop < 0x40; loop++)
+			{
+				memshadow[loop] = SW_PAGE2	? memaux+(loop << 8)
+											: memmain+(loop << 8);
+				memwrite[loop]  = mem+(loop << 8);
+			}
+		}
+	}
+
+	// MOVE MEMORY BACK AND FORTH AS NECESSARY BETWEEN THE SHADOW AREAS AND
+	// THE MAIN RAM IMAGE TO KEEP BOTH SETS OF MEMORY CONSISTENT WITH THE NEW
+	// PAGING SHADOW TABLE
+	if (!updatewriteonly)
+	{
+		for (loop = 0x00; loop < 0x100; loop++)
+		{
+			if (initialize || (oldshadow[loop] != memshadow[loop]))
+			{
+				if ((!(initialize/* || fastpaging*/)) &&
+					((*(memdirty+loop) & 1) || (loop <= 1)))
+				{
+					*(memdirty+loop) &= ~1;
+					CopyMemory(oldshadow[loop],mem+(loop << 8),256);
+				}
+
+				CopyMemory(mem+(loop << 8),memshadow[loop],256);
+			}
+		}
+	}
 
 }
 
@@ -598,34 +653,45 @@ void UpdatePaging (BOOL initialize, BOOL updatewriteonly)
 //
 
 //===========================================================================
-BYTE __stdcall MemCheckPaging (WORD, WORD address, BYTE, BYTE, ULONG) {
-  address &= 0xFF;
-  BOOL result = 0;
-  switch (address) {
-    case 0x11: result = SW_BANK2;       break;
-    case 0x12: result = SW_HIGHRAM;     break;
-    case 0x13: result = SW_AUXREAD;     break;
-    case 0x14: result = SW_AUXWRITE;    break;
-    case 0x15: result = !SW_SLOTCXROM;  break;
-    case 0x16: result = SW_ALTZP;       break;
-    case 0x17: result = SW_SLOTC3ROM;   break;
-    case 0x18: result = SW_80STORE;     break;
-    case 0x1C: result = SW_PAGE2;       break;
-    case 0x1D: result = SW_HIRES;       break;
-  }
-  return KeybGetKeycode() | (result ? 0x80 : 0);
+
+// TODO: >= Apple2e only?
+BYTE __stdcall MemCheckPaging (WORD, WORD address, BYTE, BYTE, ULONG)
+{
+	address &= 0xFF;
+	BOOL result = 0;
+	switch (address)
+	{
+	case 0x11: result = SW_BANK2;       break;
+	case 0x12: result = SW_HIGHRAM;     break;
+	case 0x13: result = SW_AUXREAD;     break;
+	case 0x14: result = SW_AUXWRITE;    break;
+	case 0x15: result = !SW_SLOTCXROM;  break;
+	case 0x16: result = SW_ALTZP;       break;
+	case 0x17: result = SW_SLOTC3ROM;   break;
+	case 0x18: result = SW_80STORE;     break;
+	case 0x1C: result = SW_PAGE2;       break;
+	case 0x1D: result = SW_HIRES;       break;
+	}
+	return KeybGetKeycode() | (result ? 0x80 : 0);
 }
 
 //===========================================================================
-void MemDestroy () {
-  if (fastpaging)
-    MemSetFastPaging(0);
-  VirtualFree(memimage,MAX(0x30000,0x10000*(lastimage+1)),MEM_DECOMMIT);
-  VirtualFree(memaux  ,0,MEM_RELEASE);
-  VirtualFree(memdirty,0,MEM_RELEASE);
-  VirtualFree(memimage,0,MEM_RELEASE);
-  VirtualFree(memmain ,0,MEM_RELEASE);
-  VirtualFree(memrom  ,0,MEM_RELEASE);
+
+void MemDestroy ()
+{
+  //if (fastpaging)
+  //  MemSetFastPaging(0);
+//  VirtualFree(memimage,MAX(0x30000,0x10000*1),MEM_DECOMMIT);
+
+	VirtualFree(memaux  ,0,MEM_RELEASE);
+	VirtualFree(memmain ,0,MEM_RELEASE);
+	VirtualFree(memdirty,0,MEM_RELEASE);
+	VirtualFree(memrom  ,0,MEM_RELEASE);
+	VirtualFree(memimage,0,MEM_RELEASE);
+
+	VirtualFree(pCxRomInternal,0,MEM_RELEASE);
+	VirtualFree(pCxRomPeripheral,0,MEM_RELEASE);
+
 #ifdef RAMWORKS
 	for (UINT i=1; i<g_uMaxExPages; i++)
 	{
@@ -637,14 +703,20 @@ void MemDestroy () {
 	}
 	RWpages[0]=NULL;
 #endif
-  memaux   = NULL;
-  memdirty = NULL;
-  memimage = NULL;
-  memmain  = NULL;
-  memrom   = NULL;
-  mem      = NULL;
-  ZeroMemory(memwrite, sizeof(memwrite));
-  ZeroMemory(memshadow,sizeof(memshadow));
+
+	memaux   = NULL;
+	memmain  = NULL;
+	memdirty = NULL;
+	memrom   = NULL;
+	memimage = NULL;
+
+	pCxRomInternal		= NULL;
+	pCxRomPeripheral	= NULL;
+
+	mem      = NULL;
+
+	ZeroMemory(memwrite, sizeof(memwrite));
+	ZeroMemory(memshadow,sizeof(memshadow));
 }
 
 //===========================================================================
@@ -655,9 +727,16 @@ bool MemGet80Store()
 }
 
 //===========================================================================
+
+bool MemCheckSLOTCXROM()
+{
+	return SW_SLOTCXROM ? true : false;
+}
+
+//===========================================================================
 LPBYTE MemGetAuxPtr (WORD offset)
 {
-	LPBYTE lpMem = (memshadow[image][(offset >> 8)] == (memaux+(offset & 0xFF00)))
+	LPBYTE lpMem = (memshadow[(offset >> 8)] == (memaux+(offset & 0xFF00)))
 			? mem+offset
 			: memaux+offset;
 
@@ -667,7 +746,7 @@ LPBYTE MemGetAuxPtr (WORD offset)
 		((offset & 0xFF00)<=0700) ) ||
 		( SW_HIRES && ((offset & 0xFF00)>=0x2000) &&
 		((offset & 0xFF00)<=0x3F00) ) ) ) {
-		lpMem = (memshadow[image][(offset >> 8)] == (RWpages[0]+(offset & 0xFF00)))
+		lpMem = (memshadow[(offset >> 8)] == (RWpages[0]+(offset & 0xFF00)))
 			? mem+offset
 			: RWpages[0]+offset;
 	}
@@ -677,8 +756,9 @@ LPBYTE MemGetAuxPtr (WORD offset)
 }
 
 //===========================================================================
-LPBYTE MemGetMainPtr (WORD offset) {
-  return (memshadow[image][(offset >> 8)] == (memmain+(offset & 0xFF00)))
+LPBYTE MemGetMainPtr (WORD offset)
+{
+  return (memshadow[(offset >> 8)] == (memmain+(offset & 0xFF00)))
            ? mem+offset
            : memmain+offset;
 }
@@ -693,21 +773,27 @@ void MemPreInitialize ()
 
 //===========================================================================
 
-void MemInitialize () {
+void MemInitialize()
+{
+	const UINT CxRomSize = 4*1024;
+	const UINT Apple2RomSize = 12*1024;
+	const UINT Apple2eRomSize = Apple2RomSize+CxRomSize;
 
-  // ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
-  //
-  // THE MEMIMAGE BUFFER CAN CONTAIN EITHER MULTIPLE MEMORY IMAGES OR
-  // ONE MEMORY IMAGE WITH COMPILER DATA
-  memaux   = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE); // _6502_MEM_END //  0x10000
-  memdirty = (LPBYTE)VirtualAlloc(NULL,0x100  ,MEM_COMMIT,PAGE_READWRITE);
-  memmain  = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
-  memrom   = (LPBYTE)VirtualAlloc(NULL,0x5000 ,MEM_COMMIT,PAGE_READWRITE);
-  memimage = (LPBYTE)VirtualAlloc(NULL,
-                                  MAX(0x30000,MAXIMAGES*0x10000),
-                                  MEM_RESERVE,PAGE_NOACCESS);
+	// ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
+	memaux   = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
+	memmain  = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
+	memdirty = (LPBYTE)VirtualAlloc(NULL,0x100  ,MEM_COMMIT,PAGE_READWRITE);
+	memrom   = (LPBYTE)VirtualAlloc(NULL,0x5000 ,MEM_COMMIT,PAGE_READWRITE);
+//  // THE MEMIMAGE BUFFER CAN CONTAIN EITHER MULTIPLE MEMORY IMAGES OR ONE MEMORY IMAGE WITH COMPILER DATA
+//  memimage = (LPBYTE)VirtualAlloc(NULL,
+//                                  MAX(0x30000,MAXIMAGES*0x10000),
+//                                  MEM_RESERVE,PAGE_NOACCESS);
+	memimage = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_RESERVE,PAGE_NOACCESS);
 
-	if ((!memaux) || (!memdirty) || (!memimage) || (!memmain) || (!memrom))
+	pCxRomInternal		= (LPBYTE) VirtualAlloc(NULL, CxRomSize, MEM_COMMIT, PAGE_READWRITE);
+	pCxRomPeripheral	= (LPBYTE) VirtualAlloc(NULL, CxRomSize, MEM_COMMIT, PAGE_READWRITE);
+
+	if (!memaux || !memdirty || !memimage || !memmain || !memrom || !pCxRomInternal || !pCxRomPeripheral)
 	{
 		MessageBox(
 			GetDesktopWindow(),
@@ -718,7 +804,8 @@ void MemInitialize () {
 		ExitProcess(1);
 	}
 
-	LPVOID newloc = VirtualAlloc(memimage,0x30000,MEM_COMMIT,PAGE_READWRITE);
+//	LPVOID newloc = VirtualAlloc(memimage,0x30000,MEM_COMMIT,PAGE_READWRITE);
+	LPVOID newloc = VirtualAlloc(memimage,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
 	if (newloc != memimage)
 		MessageBox(
 			GetDesktopWindow(),
@@ -733,7 +820,7 @@ void MemInitialize () {
 	// allocate memory for RAMWorks III - up to 8MB
 	RWpages[0] = memaux;
 	UINT i = 1;
-	while ((i < g_uMaxExPages) && (RWpages[i] = (LPBYTE) VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE)))
+	while ((i < g_uMaxExPages) && (RWpages[i] = (LPBYTE) VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE)))
 		i++;
 #endif
 
@@ -741,15 +828,14 @@ void MemInitialize () {
 	// . 1st 4K: C000..CFFF - Only has cards' f/w at $200(SSC) & $600(Disk][)
 	// . 2st 4K: C000..CFFF - Apple//e's CXROM
 	// . Remaining 12K is Apple ROM at D000..FFFF
-	const UINT ROM_SIZE = 0x5000; // HACK: Magic # -- $C000..$FFFF = 16K .. why 20K?
-
+	UINT ROM_SIZE = 0;
 	HRSRC hResInfo = NULL;
 	switch (g_Apple2Type)
 	{
-	case A2TYPE_APPLE2:			hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_ROM), "ROM"); break;
-	case A2TYPE_APPLE2PLUS:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_PLUS_ROM), "ROM"); break;
-	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); break;
-	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); break;
+	case A2TYPE_APPLE2:			hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break;
+	case A2TYPE_APPLE2PLUS:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_PLUS_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break;
+	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
+	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	}
 
 	if(hResInfo == NULL)
@@ -786,17 +872,30 @@ void MemInitialize () {
 	if (pData == NULL)
 		return;
 
-	memcpy(memrom, pData, ROM_SIZE);
+	//
+
+	memset(pCxRomInternal,0,CxRomSize);
+	memset(pCxRomPeripheral,0,CxRomSize);
+
+	if (ROM_SIZE == Apple2eRomSize)
+	{
+		memcpy(pCxRomInternal, pData, CxRomSize);
+		pData += CxRomSize;
+		ROM_SIZE -= CxRomSize;
+	}
+
+	_ASSERT(ROM_SIZE == Apple2RomSize);
+	memcpy(memrom, pData, Apple2RomSize);		// ROM at $D000...$FFFF 
 
 	//
 
 	const UINT uSlot = 0;
 	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL);
 
-	PrintLoadRom(memrom, 1);	// parallel printer firmware gets loaded to $C100
-	sg_SSC.CommInitialize(2);	// SSC in $C200
-	DiskLoadRom(memrom, 6);		// Disk][ f/w gets loaded to $C600
-	HD_Load_Rom(memrom, 7);		// HDD f/w gets loaded to $C700
+	PrintLoadRom(pCxRomPeripheral, 1);			// $C100 : Parallel printer f/w
+	sg_SSC.CommInitialize(pCxRomPeripheral, 2);	// $C200 : SSC
+	DiskLoadRom(pCxRomPeripheral, 6);			// $C600 : Disk][ f/w
+	HD_Load_Rom(pCxRomPeripheral, 7);			// $C700 : HDD f/w
 
 	MemReset();
 }
@@ -809,12 +908,12 @@ void MemInitialize () {
 // . Snapshot_LoadState()
 void MemReset ()
 {
-	// TURN OFF FAST PAGING IF IT IS CURRENTLY ACTIVE
-	MemSetFastPaging(0);
+	//// TURN OFF FAST PAGING IF IT IS CURRENTLY ACTIVE
+	//MemSetFastPaging(0);
 
 	// INITIALIZE THE PAGING TABLES
-	ZeroMemory(memshadow,MAXIMAGES*256*sizeof(LPBYTE));
-	ZeroMemory(memwrite ,MAXIMAGES*256*sizeof(LPBYTE));
+	ZeroMemory(memshadow,256*sizeof(LPBYTE));
+	ZeroMemory(memwrite ,256*sizeof(LPBYTE));
 
 	// INITIALIZE THE RAM IMAGES
 	ZeroMemory(memaux ,0x10000);
@@ -837,7 +936,7 @@ void MemReset ()
 
 	// SET UP THE MEMORY IMAGE
 	mem   = memimage;
-	image = 0;
+	//image = 0;
 
 	// INITIALIZE PAGING, FILLING IN THE 64K MEMORY IMAGE
 	ResetPaging(1);
@@ -887,24 +986,24 @@ BYTE MemReadFloatingBus(BYTE const highbit)
 }
 
 //===========================================================================
-void MemSetFastPaging (BOOL on) {
-  if (fastpaging && modechanging) {
-    modechanging = 0;
-    UpdateFastPaging();
-  }
-  else if (!fastpaging) {
-    BackMainImage();
-    if (lastimage >= 3)
-      VirtualFree(memimage+0x30000,(lastimage-2) << 16,MEM_DECOMMIT);
-  }
-  fastpaging   = on;
-  image        = 0;
-  mem          = memimage;
-  lastimage    = 0;
-  imagemode[0] = memmode;
-  if (!fastpaging)
-    UpdatePaging(1,0);
-}
+//void MemSetFastPaging (BOOL on) {
+//  if (fastpaging && modechanging) {
+//    modechanging = 0;
+//    UpdateFastPaging();
+//  }
+//  else if (!fastpaging) {
+//    BackMainImage();
+//    if (lastimage >= 3)
+//      VirtualFree(memimage+0x30000,(lastimage-2) << 16,MEM_DECOMMIT);
+//  }
+//  fastpaging   = on;
+//  image        = 0;
+//  mem          = memimage;
+//  lastimage    = 0;
+//  imagemode[0] = memmode;
+//  if (!fastpaging)
+//    UpdatePaging(1,0);
+//}
 
 //===========================================================================
 BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE value, ULONG)
@@ -954,14 +1053,10 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
 				memaux = RWpages[value];
 				//memmode &= ~MF_RWPMASK;
 				//memmode |= value;
-				if (fastpaging)
-				{
-					UpdateFastPaging();
-				}
-				else
-				{
+				//if (fastpaging)
+				//	UpdateFastPaging();
+				//else
 					UpdatePaging(0,0);
-				}
 			}
 			break;
 #endif
@@ -985,20 +1080,20 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
 
   // IF THE MEMORY PAGING MODE HAS CHANGED, UPDATE OUR MEMORY IMAGES AND
   // WRITE TABLES.
-  if ((lastmemmode != memmode) || modechanging) {
+  if ((lastmemmode != memmode) || modechanging)
+  {
     modechanging = 0;
 
-    // IF FAST PAGING IS ACTIVE, WE KEEP MULTIPLE COMPLETE MEMORY IMAGES
-    // AND WRITE TABLES, AND SWITCH BETWEEN THEM.  THE FAST PAGING VERSION
-    // OF THE CPU EMULATOR KEEPS ALL OF THE IMAGES COHERENT.
-    if (fastpaging)
-      UpdateFastPaging();
+    //// IF FAST PAGING IS ACTIVE, WE KEEP MULTIPLE COMPLETE MEMORY IMAGES
+    //// AND WRITE TABLES, AND SWITCH BETWEEN THEM.  THE FAST PAGING VERSION
+    //// OF THE CPU EMULATOR KEEPS ALL OF THE IMAGES COHERENT.
+    //if (fastpaging)
+    //  UpdateFastPaging();
 
     // IF FAST PAGING IS NOT ACTIVE THEN WE KEEP ONLY ONE MEMORY IMAGE AND
     // WRITE TABLE, AND UPDATE THEM EVERY TIME PAGING IS CHANGED.
-    else {
+    //else
       UpdatePaging(0,0);
-    }
 
   }
 
@@ -1009,31 +1104,32 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
 }
 
 //===========================================================================
-void MemTrimImages () {
-  if (fastpaging && (lastimage > 2)) {
-    if (modechanging) {
-      modechanging = 0;
-      UpdateFastPaging();
-    }
-    static DWORD trimnumber = 0;
-    if ((image != trimnumber) &&
-        (image != lastimage) &&
-        (trimnumber < lastimage)) {
-      imagemode[trimnumber] = imagemode[lastimage];
-      VirtualFree(memimage+(lastimage-- << 16),0x10000,MEM_DECOMMIT);
-      DWORD realimage = image;
-      image   = trimnumber;
-      mem     = memimage+(image << 16);
-      memmode = imagemode[image];
-      UpdatePaging(1,0);
-      image   = realimage;
-      mem     = memimage+(image << 16);
-      memmode = imagemode[image];
-    }
-    if (++trimnumber >= lastimage)
-      trimnumber = 0;
-  }
-}
+//void MemTrimImages () {
+//  if (fastpaging && (lastimage > 2))
+//  {
+//    if (modechanging) {
+//      modechanging = 0;
+//      UpdateFastPaging();
+//    }
+//    static DWORD trimnumber = 0;
+//    if ((image != trimnumber) &&
+//        (image != lastimage) &&
+//        (trimnumber < lastimage)) {
+//      imagemode[trimnumber] = imagemode[lastimage];
+//      VirtualFree(memimage+(lastimage-- << 16),0x10000,MEM_DECOMMIT);
+//      DWORD realimage = image;
+//      image   = trimnumber;
+//      mem     = memimage+(image << 16);
+//      memmode = imagemode[image];
+//      UpdatePaging(1,0);
+//      image   = realimage;
+//      mem     = memimage+(image << 16);
+//      memmode = imagemode[image];
+//    }
+//    if (++trimnumber >= lastimage)
+//      trimnumber = 0;
+//  }
+//}
 
 //===========================================================================
 
@@ -1041,13 +1137,6 @@ LPVOID MemGetSlotParameters (UINT uSlot)
 {
 	_ASSERT(uSlot < NUM_SLOTS);
 	return SlotParameters[uSlot];
-}
-
-//===========================================================================
-
-bool MemCheckSLOTCXROM()
-{
-	return SW_SLOTCXROM ? true : false;
 }
 
 //===========================================================================

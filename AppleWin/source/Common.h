@@ -53,7 +53,8 @@ enum AppMode_e
 #define  BTN_DEBUG         6
 #define  BTN_SETUP         7
 
-#define	MAXIMAGES          16
+//#define	MAXIMAGES          16
+
 // TODO: Move to StringTable.h
 #define	TITLE_APPLE_2			TEXT("Apple ][ Emulator")
 #define	TITLE_APPLE_2_PLUS		TEXT("Apple ][+ Emulator")

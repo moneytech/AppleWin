@@ -11,7 +11,7 @@ extern MemoryInitPattern_e g_eMemoryInitPattern;
 
 extern iofunction IORead[256];
 extern iofunction IOWrite[256];
-extern LPBYTE     memwrite[MAXIMAGES][0x100];
+extern LPBYTE     memwrite[0x100];
 extern LPBYTE     mem;
 extern LPBYTE     memdirty;
 
@@ -23,6 +23,7 @@ void	RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, io
 
 void    MemDestroy ();
 bool    MemGet80Store();
+bool	MemCheckSLOTCXROM();
 LPBYTE  MemGetAuxPtr (WORD);
 LPBYTE  MemGetMainPtr (WORD);
 void	MemPreInitialize ();
@@ -35,7 +36,6 @@ BYTE    MemReturnRandomData (BYTE highbit);
 void    MemSetFastPaging (BOOL);
 void    MemTrimImages ();
 LPVOID	MemGetSlotParameters (UINT uSlot);
-bool	MemCheckSLOTCXROM();
 DWORD   MemGetSnapshot(SS_BaseMemory* pSS);
 DWORD   MemSetSnapshot(SS_BaseMemory* pSS);
 

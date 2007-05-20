@@ -667,7 +667,7 @@ bool DiskDriveSwap()
 static BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 static BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
-void DiskLoadRom(LPBYTE lpMemRom, UINT uSlot)
+void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
 	const UINT DISK2_FW_SIZE = 256;
 
@@ -687,12 +687,12 @@ void DiskLoadRom(LPBYTE lpMemRom, UINT uSlot)
 	if(pData == NULL)
 		return;
 
-	memcpy(lpMemRom + uSlot*256, pData, DISK2_FW_SIZE);
+	memcpy(pCxRomPeripheral + uSlot*256, pData, DISK2_FW_SIZE);
 
 	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
-	*(lpMemRom+0x064C) = 0xA9;
-	*(lpMemRom+0x064D) = 0x00;
-	*(lpMemRom+0x064E) = 0xEA;
+	*(pCxRomPeripheral+0x064C) = 0xA9;
+	*(pCxRomPeripheral+0x064D) = 0x00;
+	*(pCxRomPeripheral+0x064E) = 0xEA;
 
 	//
 

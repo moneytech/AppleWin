@@ -160,7 +160,7 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 #define SETZ(a)	 flagz = !((a) & 0xFF);
 #define WRITE(a) {							    \
 		   memdirty[addr >> 8] = 0xFF;				    \
-		   LPBYTE page = memwrite[0][addr >> 8];		    \
+		   LPBYTE page = memwrite[addr >> 8];		    \
 		   if (page)						    \
 		     *(page+(addr & 0xFF)) = (BYTE)(a);			    \
 		   else if ((addr & 0xF000) == 0xC000)			    \
