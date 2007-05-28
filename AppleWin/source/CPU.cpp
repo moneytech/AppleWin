@@ -835,7 +835,11 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		g_uInternalExecutedCycles = uExecutedCycles;
 		USHORT uExtraCycles = 0;
 
-		BYTE iOpcode = *(mem+regs.pc);
+//		BYTE iOpcode = *(mem+regs.pc);
+		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
+		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)	// Fetch opcode from I/O memory, but params are still from mem[]
+			: *(mem+regs.pc);
+
 		if (CheckDebugBreak( iOpcode ))
 			break;
 
@@ -1160,7 +1164,11 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		g_uInternalExecutedCycles = uExecutedCycles;
 		USHORT uExtraCycles = 0;
 
-		BYTE iOpcode = *(mem+regs.pc);
+//		BYTE iOpcode = *(mem+regs.pc);
+		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
+		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)
+			: *(mem+regs.pc);
+
 		if (CheckDebugBreak( iOpcode ))
 			break;
 

@@ -3,6 +3,21 @@
 extern class CSuperSerialCard sg_SSC;
 
 enum {COMMEVT_WAIT=0, COMMEVT_ACK, COMMEVT_TERM, COMMEVT_MAX};
+enum eFWMODE {FWMODE_CIC=0, FWMODE_SIC_P8, FWMODE_PPC, FWMODE_SIC_P8A};	// NB. CIC = SSC
+
+typedef struct
+{
+	//DIPSW1
+	UINT	uBaudRate;
+	eFWMODE	eFirmwareMode;
+
+	//DIPSW2
+	UINT	uStopBits;
+	UINT	uByteSize;
+	UINT	uParity;
+	bool	bLinefeed;
+	bool	bInterrupts;
+} SSC_DIPSW;
 
 class CSuperSerialCard
 {
@@ -32,27 +47,42 @@ private:
 	BYTE __stdcall CommStatus(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 	BYTE __stdcall CommTransmit(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
-	void			UpdateCommState();
-	BOOL			CheckComm();
-	void			CloseComm();
-	void			CheckCommEvent(DWORD dwEvtMask);
+	void	GetDIPSW();
+	void	SetDIPSWDefaults();
+	BYTE	GenerateControl();
+	UINT	BaudRateToIndex(UINT uBaudRate);
+	void	UpdateCommState();
+	BOOL	CheckComm();
+	void	CloseComm();
+	void	CheckCommEvent(DWORD dwEvtMask);
 	static DWORD WINAPI	CommThread(LPVOID lpParameter);
-	bool			CommThInit();
-	void			CommThUninit();
+	bool	CommThInit();
+	void	CommThUninit();
 
 	//
 
 private:
-	DWORD  m_dwSerialPort;
+	DWORD	m_dwSerialPort;
 
-	DWORD  m_dwBaudRate;
-	BYTE   m_uByteSize;
+	static SSC_DIPSW	m_DIPSWDefault;
+	SSC_DIPSW			m_DIPSWCurrent;
+
+	// Derived from DIPSW1
+	UINT	m_uBaudRate;
+
+	// Derived from DIPSW2
+	UINT	m_uStopBits;
+	UINT	m_uByteSize;
+	UINT	m_uParity;
+
+	// SSC Registers
+	BYTE   m_uControlByte;
 	BYTE   m_uCommandByte;
+
+	//
+
 	HANDLE m_hCommHandle;
 	DWORD  m_dwCommInactivity;
-	BYTE   m_uControlByte;
-	BYTE   m_uParity;
-	BYTE   m_uStopBits;
 
 	//
 
@@ -74,4 +104,6 @@ private:
 
 	HANDLE m_hCommEvent[COMMEVT_MAX];
 	OVERLAPPED m_o;
+
+	BYTE* m_pExpansionRom;
 };
