@@ -19,7 +19,7 @@ extern LPBYTE     memdirty;
 extern UINT       g_uMaxExPages;	// user requested ram pages (from cmd line)
 #endif
 
-void	RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter);
+void	RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter, BYTE* pExpansionRom);
 
 void    MemDestroy ();
 bool    MemGet80Store();

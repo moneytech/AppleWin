@@ -1308,10 +1308,10 @@ void MB_Initialize()
 	//
 
 	const UINT uSlot4 = 4;
-	RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL);
+	RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
 
 	const UINT uSlot5 = 5;
-	RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL);
+	RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
 }
 
 //-----------------------------------------------------------------------------
@@ -1356,7 +1356,7 @@ static BYTE __stdcall MB_Read(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULO
 {
 	CpuCalcCycles(nCyclesLeft);
 
-	if((IS_APPLE2 || MemCheckSLOTCXROM()) == false)
+	if(!IS_APPLE2 && !MemCheckSLOTCXROM())
 		return mem[nAddr];
 
 	if(g_SoundcardType == SC_NONE)
@@ -1406,7 +1406,7 @@ static BYTE __stdcall MB_Write(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, UL
 {
 	CpuCalcCycles(nCyclesLeft);
 
-	if((IS_APPLE2 || MemCheckSLOTCXROM()) == false)
+	if(!IS_APPLE2 && !MemCheckSLOTCXROM())
 		return 0;
 
 	if(g_SoundcardType == SC_NONE)

@@ -44,22 +44,34 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 //#define SUPPORT_MODEM
 
+// Default: 19200-8-N-1
+// Maybe a better default is: 9600-7-N-1 (for HyperTrm)
+SSC_DIPSW CSuperSerialCard::m_DIPSWDefault =
+{
+	// DIPSW1:
+	CBR_19200,
+	FWMODE_CIC,
+
+	// DIPSW2:
+	ONESTOPBIT,
+	8,				// ByteSize
+	NOPARITY,
+	true,			// LF
+	false,			// INT
+};
+
 //===========================================================================
 
 CSuperSerialCard::CSuperSerialCard()
 {
-	m_dwSerialPort     = 0;
+	m_dwSerialPort = 0;
 
-	m_dwBaudRate       = CBR_19200;
-	m_uByteSize       = 8;
-	m_uCommandByte    = 0x00;
-	m_hCommHandle     = INVALID_HANDLE_VALUE;
-	m_dwCommInactivity = 0;
-	m_uControlByte    = 0x1F;
-	m_uParity         = NOPARITY;
-	m_uStopBits       = ONESTOPBIT;
+	GetDIPSW();
 
 	m_vRecvBytes = 0;
+
+	m_hCommHandle = INVALID_HANDLE_VALUE;
+	m_dwCommInactivity	= 0;
 
 	m_bTxIrqEnabled = false;
 	m_bRxIrqEnabled = false;
@@ -72,11 +84,88 @@ CSuperSerialCard::CSuperSerialCard()
 	for (UINT i=0; i<COMMEVT_MAX; i++)
 		m_hCommEvent[i] = NULL;
 
-	m_o;
+	memset(&m_o, 0, sizeof(m_o));
 }
 
 CSuperSerialCard::~CSuperSerialCard()
 {
+}
+
+//===========================================================================
+
+// TODO: Serial Comms - UI Property Sheet Page:
+// . Ability to config the 2x DIPSWs - only takes affect after next Apple2 reset
+// . 'Default' button that resets DIPSWs to DIPSWDefaults
+
+void CSuperSerialCard::GetDIPSW()
+{
+	// TODO: Read settings from Registry
+	// In the meantime, use the defaults:
+	SetDIPSWDefaults();
+
+	//
+
+	m_uBaudRate	= m_DIPSWCurrent.uBaudRate;
+
+	m_uStopBits	= m_DIPSWCurrent.uStopBits;
+	m_uByteSize	= m_DIPSWCurrent.uByteSize;
+	m_uParity	= m_DIPSWCurrent.uParity;
+
+	//
+
+	m_uControlByte	= GenerateControl();
+	m_uCommandByte	= 0x00;
+}
+
+void CSuperSerialCard::SetDIPSWDefaults()
+{
+	// Default DIPSW settings (comms mode)
+
+	// DIPSW1:
+	m_DIPSWCurrent.uBaudRate		= m_DIPSWDefault.uBaudRate;
+	m_DIPSWCurrent.eFirmwareMode	= m_DIPSWDefault.eFirmwareMode;
+
+	// DIPSW2:
+	m_DIPSWCurrent.uStopBits		= m_DIPSWDefault.uStopBits;
+	m_DIPSWCurrent.uByteSize		= m_DIPSWDefault.uByteSize;
+	m_DIPSWCurrent.uParity			= m_DIPSWDefault.uParity;
+	m_DIPSWCurrent.bLinefeed		= m_DIPSWDefault.bLinefeed;
+	m_DIPSWCurrent.bInterrupts		= m_DIPSWDefault.bInterrupts;
+}
+
+BYTE CSuperSerialCard::GenerateControl()
+{
+	const UINT CLK=1;	// Internal
+
+	UINT bmByteSize = (8 - m_uByteSize);	// [8,7,6,5] -> [0,1,2,3]
+	_ASSERT(bmByteSize <= 3);
+
+	UINT StopBit;
+	if (	((m_uByteSize == 8) && (m_uParity != NOPARITY))	||
+			( m_uStopBits != ONESTOPBIT	)	)
+		StopBit = 1;
+	else
+		StopBit = 0;
+
+	return (StopBit<<7) | (bmByteSize<<5) | (CLK<<4) | BaudRateToIndex(m_uBaudRate);
+}
+
+UINT CSuperSerialCard::BaudRateToIndex(UINT uBaudRate)
+{
+	switch (uBaudRate)
+	{
+	case CBR_110: return 0x05;
+	case CBR_300: return 0x06;
+	case CBR_600: return 0x07;
+	case CBR_1200: return 0x08;
+	case CBR_2400: return 0x0A;
+	case CBR_4800: return 0x0C;
+	case CBR_9600: return 0x0E;
+	case CBR_19200: return 0x0F;
+	}
+
+	_ASSERT(0);
+	return BaudRateToIndex(CBR_9600);
 }
 
 //===========================================================================
@@ -90,7 +179,7 @@ void CSuperSerialCard::UpdateCommState()
 	ZeroMemory(&dcb,sizeof(DCB));
 	dcb.DCBlength = sizeof(DCB);
 	GetCommState(m_hCommHandle,&dcb);
-	dcb.BaudRate = m_dwBaudRate;
+	dcb.BaudRate = m_uBaudRate;
 	dcb.ByteSize = m_uByteSize;
 	dcb.Parity   = m_uParity;
 	dcb.StopBits = m_uStopBits;
@@ -224,10 +313,10 @@ BYTE __stdcall CSuperSerialCard::CommCommand(WORD, WORD, BYTE write, BYTE value,
 		{
 			switch (m_uCommandByte	& 0xC0)
 			{
-			case 0x00 :	m_uParity = ODDPARITY;	   break;
-			case 0x40 :	m_uParity = EVENPARITY;   break;
-			case 0x80 :	m_uParity = MARKPARITY;   break;
-			case 0xC0 :	m_uParity = SPACEPARITY;  break;
+			case 0x00 :	m_uParity = ODDPARITY; break;
+			case 0x40 :	m_uParity = EVENPARITY; break;
+			case 0x80 :	m_uParity = MARKPARITY; break;
+			case 0xC0 :	m_uParity = SPACEPARITY; break;
 			}
 		}
 		else
@@ -297,17 +386,17 @@ BYTE __stdcall CSuperSerialCard::CommControl(WORD, WORD, BYTE write, BYTE value,
 			case 0x02: // fall through [75 bps]
 			case 0x03: // fall through [109.92 bps]
 			case 0x04: // fall through [134.58 bps]
-			case 0x05: m_dwBaudRate = CBR_110;     break;	// [150 bps]
-			case 0x06: m_dwBaudRate = CBR_300;     break;
-			case 0x07: m_dwBaudRate = CBR_600;     break;
-			case 0x08: m_dwBaudRate = CBR_1200;    break;
+			case 0x05: m_uBaudRate = CBR_110;     break;	// [150 bps]
+			case 0x06: m_uBaudRate = CBR_300;     break;
+			case 0x07: m_uBaudRate = CBR_600;     break;
+			case 0x08: m_uBaudRate = CBR_1200;    break;
 			case 0x09: // fall through [1800 bps]
-			case 0x0A: m_dwBaudRate = CBR_2400;    break;
+			case 0x0A: m_uBaudRate = CBR_2400;    break;
 			case 0x0B: // fall through [3600 bps]
-			case 0x0C: m_dwBaudRate = CBR_4800;    break;
+			case 0x0C: m_uBaudRate = CBR_4800;    break;
 			case 0x0D: // fall through [7200 bps]
-			case 0x0E: m_dwBaudRate = CBR_9600;    break;
-			case 0x0F: m_dwBaudRate = CBR_19200;   break;
+			case 0x0E: m_uBaudRate = CBR_9600;    break;
+			case 0x0F: m_uBaudRate = CBR_19200;   break;
 		}
 
 		if (m_uControlByte & 0x10)
@@ -327,7 +416,7 @@ BYTE __stdcall CSuperSerialCard::CommControl(WORD, WORD, BYTE write, BYTE value,
 		// UPDATE THE NUMBER OF STOP BITS
 		if (m_uControlByte & 0x80)
 		{
-			if ((m_uByteSize == 8) && (m_uParity == NOPARITY))
+			if ((m_uByteSize == 8) && (m_uParity != NOPARITY))
 				m_uStopBits = ONESTOPBIT;
 			else if ((m_uByteSize == 5) && (m_uParity == NOPARITY))
 				m_uStopBits = ONE5STOPBITS;
@@ -470,8 +559,44 @@ BYTE __stdcall CSuperSerialCard::CommStatus(WORD, WORD, BYTE, BYTE, ULONG)
 
 BYTE __stdcall CSuperSerialCard::CommDipSw(WORD, WORD addr, BYTE, BYTE, ULONG)
 {
-	// TO DO: determine what values a real SSC returns
 	BYTE sw = 0;
+	switch (addr & 0xf)
+	{
+	case 1:	// DIPSW1
+		sw = (BaudRateToIndex(m_DIPSWCurrent.uBaudRate)<<4) | m_DIPSWCurrent.eFirmwareMode;
+		break;
+
+	case 2:	// DIPSW2
+		// Comms mode - SSC manual, pg23/24
+		BYTE INT = m_DIPSWCurrent.uStopBits == TWOSTOPBITS ? 1 : 0;	// SW2-1 (Stop bits: 1-ON(0); 2-OFF(1))
+		BYTE DSR = 0;												// Always zero
+		BYTE DCD = m_DIPSWCurrent.uByteSize == 7 ? 1 : 0;			// SW2-2 (Data bits: 8-ON(0); 7-OFF(1))
+		BYTE TDR = 0;												// Always zero
+
+		// SW2-3 (Parity: odd-ON(0); even-OFF(1))
+		// SW2-4 (Parity: none-ON(0); SW2-3-OFF(1))
+		BYTE RDR,OVR;
+		switch (m_DIPSWCurrent.uParity)
+		{
+		case ODDPARITY:
+			RDR = 0; OVR = 1;
+			break;
+		case EVENPARITY:
+			RDR = 1; OVR = 1;
+			break;
+		default:
+			_ASSERT(0);
+		case NOPARITY:
+			RDR = 0; OVR = 0;
+			break;
+		}
+
+		BYTE FE = m_DIPSWCurrent.bLinefeed ? 1 : 0;					// SW2-5 (LF: yes-ON(0); no-OFF(1))
+		BYTE PE = m_DIPSWCurrent.bInterrupts ? 1 : 0;				// SW2-6 (Interrupts: yes-ON(0); no-OFF(1))
+
+		sw = (INT<<7) | (DSR<<6) | (DCD<<5) | (TDR<<4) | (RDR<<3) | (OVR<<2) | (FE<<1) | (PE<<0);
+		break;
+	}
 	return sw;
 }
 
@@ -501,9 +626,18 @@ void CSuperSerialCard::CommInitialize(LPBYTE pCxRomPeripheral, UINT uSlot)
 
 	memcpy(pCxRomPeripheral + uSlot*256, pData+SSC_SLOT_FW_OFFSET, SSC_SLOT_FW_SIZE);
 
+	// Expansion ROM
+	if (m_pExpansionRom == NULL)
+	{
+		m_pExpansionRom = new BYTE [SSC_FW_SIZE];
+
+		if (m_pExpansionRom)
+			memcpy(m_pExpansionRom, pData, SSC_FW_SIZE);
+	}
+
 	//
 
-	RegisterIoHandler(uSlot, &CSuperSerialCard::SSC_IORead, &CSuperSerialCard::SSC_IOWrite, NULL, NULL, this);
+	RegisterIoHandler(uSlot, &CSuperSerialCard::SSC_IORead, &CSuperSerialCard::SSC_IOWrite, NULL, NULL, this, m_pExpansionRom);
 }
 
 //===========================================================================
@@ -512,28 +646,28 @@ void CSuperSerialCard::CommReset()
 {
 	CloseComm();
 
-	m_dwBaudRate    = CBR_19200;
-	m_uByteSize    = 8;
-	m_uCommandByte = 0x00;
-	m_uControlByte = 0x1F;
-	m_uParity      = NOPARITY;
-	m_vRecvBytes   = 0;
-	m_uStopBits    = ONESTOPBIT;
+	GetDIPSW();
+
+	m_vRecvBytes = 0;
+
+	//
+
+	m_bTxIrqEnabled = false;
+	m_bRxIrqEnabled = false;
+
+	m_bWrittenTx = false;
+
+	m_vbCommIRQ = false;
 }
 
 //===========================================================================
 
 void CSuperSerialCard::CommDestroy()
 {
-	if ((m_dwBaudRate != CBR_19200) ||
-		(m_uByteSize != 8) ||
-		(m_uParity   != NOPARITY) ||
-		(m_uStopBits != ONESTOPBIT))
-	{
-		CommReset();
-	}
+	CommReset();
 
-	CloseComm();
+	delete [] m_pExpansionRom;
+	m_pExpansionRom = NULL;
 }
 
 //===========================================================================
@@ -646,6 +780,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 		if (!bRes)
 		{
 			DWORD dwRet = GetLastError();
+			// Got this error once: ERROR_OPERATION_ABORTED
 			_ASSERT(dwRet == ERROR_IO_PENDING);
 			if (dwRet != ERROR_IO_PENDING)
 				return -1;
@@ -814,7 +949,7 @@ void CSuperSerialCard::CommThUninit()
 
 DWORD CSuperSerialCard::CommGetSnapshot(SS_IO_Comms* pSS)
 {
-	pSS->baudrate		= m_dwBaudRate;
+	pSS->baudrate		= m_uBaudRate;
 	pSS->bytesize		= m_uByteSize;
 	pSS->commandbyte	= m_uCommandByte;
 	pSS->comminactivity	= m_dwCommInactivity;
@@ -828,7 +963,7 @@ DWORD CSuperSerialCard::CommGetSnapshot(SS_IO_Comms* pSS)
 
 DWORD CSuperSerialCard::CommSetSnapshot(SS_IO_Comms* pSS)
 {
-	m_dwBaudRate		= pSS->baudrate;
+	m_uBaudRate		= pSS->baudrate;
 	m_uByteSize		= pSS->bytesize;
 	m_uCommandByte		= pSS->commandbyte;
 	m_dwCommInactivity	= pSS->comminactivity;

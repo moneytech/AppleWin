@@ -61,7 +61,7 @@ VOID PrintLoadRom(LPBYTE pCxRomPeripheral, const UINT uSlot)
 
 	//
 
-	RegisterIoHandler(uSlot, PrintStatus, PrintTransmit, NULL, NULL, NULL);
+	RegisterIoHandler(uSlot, PrintStatus, PrintTransmit, NULL, NULL, NULL, NULL);
 }
 
 //===========================================================================

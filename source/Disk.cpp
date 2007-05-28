@@ -696,7 +696,7 @@ void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
 
 	//
 
-	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL);
+	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL, NULL);
 }
 
 //===========================================================================

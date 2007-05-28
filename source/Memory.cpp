@@ -351,6 +351,15 @@ static iofunction IOWrite_C0xx[8] =
 	IOWrite_C07x,		// Joystick/Ramworks
 };
 
+static BYTE IO_SELECT;
+static BYTE IO_SELECT_InternalROM;
+
+static BYTE* ExpansionRom[NUM_SLOTS];
+
+enum eExpansionRomType {eExpRomNull=0, eExpRomInternal, eExpRomPeripheral};
+static eExpansionRomType g_eExpansionRomType = eExpRomNull;
+static UINT	g_uPeripheralRomSlot = 0;
+
 //=============================================================================
 
 BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
@@ -372,33 +381,116 @@ BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYT
 	return 0;
 }
 
+// Enabling expansion ROM ($C800..$CFFF]:
+// . Enable if: Enable1 && Enable2
+// . Enable1 = I/O SELECT' (6502 accesses $Csxx)
+//   - Reset when 6502 accesses $CFFF
+// . Enable2 = I/O STROBE' (6502 accesses [$C800..$CFFF])
+
 BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
 {
-	// TODO: Fix this!
-	//if(IS_APPLE2 || SW_SLOTCXROM)
-	//	return IO_Null(programcounter, address, write, value, nCycles);
-	//else
+	if (address == 0xCFFF)
+	{
+		// Disable expansion ROM at [$C800..$CFFF]
+		// . SSC will disable on an access to $CFxx - but ROM only writes to $CFFF, so it doesn't matter
+		IO_SELECT = 0;
+		IO_SELECT_InternalROM = 0;
+		g_uPeripheralRomSlot = 0;
+
+		if (SW_SLOTCXROM)
+		{
+			// NB. SW_SLOTCXROM==0 ensures that internal rom stays switched in
+			memset(pCxRomPeripheral+0x800, 0, 0x800);
+			memset(mem+0xC800, 0, 0x800);
+			g_eExpansionRomType = eExpRomNull;
+		}
+
+		// NB. IO_SELECT won't get set, so ROM won't be switched back in...
+	}
+
+	//
+
+	BYTE IO_STROBE = 0;
+
+	if (IS_APPLE2 || SW_SLOTCXROM)
+	{
+		if ((address >= 0xC100) && (address <= 0xC7FF))
+		{
+			const UINT uSlot = (address >> 8) & 0xF;
+			if ((uSlot != 3) && ExpansionRom[uSlot])
+				IO_SELECT |= 1<<uSlot;
+			else if ((SW_SLOTC3ROM) && ExpansionRom[uSlot])
+				IO_SELECT |= 1<<uSlot;		// Slot3 & Peripheral ROM
+			else if (!SW_SLOTC3ROM)
+				IO_SELECT_InternalROM = 1;	// Slot3 & Internal ROM
+		}
+		else if ((address >= 0xC800) && (address <= 0xCFFF))
+		{
+			IO_STROBE = 1;
+		}
+
+		//
+
+		if (IO_SELECT && IO_STROBE)
+		{
+			// Enable Peripheral Expansion ROM
+			UINT uSlot=1;
+			for (; uSlot<NUM_SLOTS; uSlot++)
+			{
+				if (IO_SELECT & (1<<uSlot))
+				{
+					BYTE RemainingSelected = IO_SELECT & ~(1<<uSlot);
+					_ASSERT(RemainingSelected == 0);
+					break;
+				}
+			}
+
+			if (ExpansionRom[uSlot] && (g_uPeripheralRomSlot != uSlot))
+			{
+				memcpy(pCxRomPeripheral+0x800, ExpansionRom[uSlot], 0x800);
+				memcpy(mem+0xC800, ExpansionRom[uSlot], 0x800);
+				g_eExpansionRomType = eExpRomPeripheral;
+				g_uPeripheralRomSlot = uSlot;
+			}
+		}
+		else if (IO_SELECT_InternalROM && IO_STROBE && (g_eExpansionRomType != eExpRomInternal))
+		{
+			// Enable Internal ROM
+			// . Get this for PR#3
+			memcpy(mem+0xC800, pCxRomInternal+0x800, 0x800);
+			g_eExpansionRomType = eExpRomInternal;
+			g_uPeripheralRomSlot = 0;
+		}
+	}
+
+	if (!IS_APPLE2 && !SW_SLOTCXROM)
+	{
+		// !SW_SLOTC3ROM = Internal ROM: $C300-C3FF
+		// !SW_SLOTCXROM = Internal ROM: $C100-CFFF
+
+		if ((address >= 0xC100) && (address <= 0xC7FF))	// Don't care about state of SW_SLOTC3ROM
+			IO_SELECT_InternalROM = 1;
+		else if ((address >= 0xC800) && (address <= 0xCFFF))
+			IO_STROBE = 1;
+
+		if (!SW_SLOTCXROM && IO_SELECT_InternalROM && IO_STROBE && (g_eExpansionRomType != eExpRomInternal))
+		{
+			// Enable Internal ROM
+			memcpy(mem+0xC800, pCxRomInternal+0x800, 0x800);
+			g_eExpansionRomType = eExpRomInternal;
+			g_uPeripheralRomSlot = 0;
+		}
+	}
+
+	if ((g_eExpansionRomType == eExpRomNull) && (address >= 0xC800))
+		return IO_Null(programcounter, address, write, value, nCycles);
+	else
 		return mem[address];
 }
 
 BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
 {
 	return 0;
-}
-
-BYTE __stdcall IO_CFFx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
-{
-	if (address == 0xFF)
-	{
-		// TODO:
-		// Evict ROM from [$C800..$CFFF]
-		// . Also SSC may evict on an access to $CFxx
-	}
-
-	if(IS_APPLE2 || SW_SLOTCXROM)
-		return IO_Null(programcounter, address, write, value, nCycles);
-	else
-		return mem[address];
 }
 
 //===========================================================================
@@ -424,18 +516,25 @@ static void InitIoHandlers()
 
 	//
 
-	for (; i<255; i++)	// C10x..CFEx
+	for (; i<256; i++)	// C10x..CFFx
 	{
 		IORead[i]	= IORead_Cxxx;
 		IOWrite[i]	= IOWrite_Cxxx;
 	}
 
-	IORead[i]	= IO_CFFx;
-	IOWrite[i]	= IO_CFFx;
+	//
+
+	IO_SELECT = 0;
+	IO_SELECT_InternalROM = 0;
+	g_eExpansionRomType = eExpRomNull;
+	g_uPeripheralRomSlot = 0;
+
+	for (i=0; i<NUM_SLOTS; i++)
+		ExpansionRom[i] = NULL;
 }
 
 // All slots [0..7] must register their handlers
-void RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter)
+void RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter, BYTE* pExpansionRom)
 {
 	_ASSERT(uSlot < NUM_SLOTS);
 	g_bmSlotInit |= 1<<uSlot;
@@ -457,6 +556,7 @@ void RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, io
 	}
 
 	// What about [$C80x..$CFEx]? - Do any cards use this as I/O memory?
+	ExpansionRom[uSlot] = pExpansionRom;
 }
 
 //===========================================================================
@@ -825,9 +925,6 @@ void MemInitialize()
 #endif
 
 	// READ THE APPLE FIRMWARE ROMS INTO THE ROM IMAGE
-	// . 1st 4K: C000..CFFF - Only has cards' f/w at $200(SSC) & $600(Disk][)
-	// . 2st 4K: C000..CFFF - Apple//e's CXROM
-	// . Remaining 12K is Apple ROM at D000..FFFF
 	UINT ROM_SIZE = 0;
 	HRSRC hResInfo = NULL;
 	switch (g_Apple2Type)
@@ -890,7 +987,7 @@ void MemInitialize()
 	//
 
 	const UINT uSlot = 0;
-	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL);
+	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL, NULL);
 
 	PrintLoadRom(pCxRomPeripheral, 1);			// $C100 : Parallel printer f/w
 	sg_SSC.CommInitialize(pCxRomPeripheral, 2);	// $C200 : SSC
@@ -1083,6 +1180,27 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
   if ((lastmemmode != memmode) || modechanging)
   {
     modechanging = 0;
+
+	if ((lastmemmode & MF_SLOTCXROM) != (memmode & MF_SLOTCXROM))
+	{
+		if (SW_SLOTCXROM)
+		{
+			// Disable Internal ROM
+			// . Similar to $CFFF access
+			// . None of the peripheral cards can be driving the bus - so use the null ROM
+			memset(pCxRomPeripheral+0x800, 0, 0x800);
+			memset(mem+0xC800, 0, 0x800);
+			g_eExpansionRomType = eExpRomNull;
+			g_uPeripheralRomSlot = 0;
+		}
+		else
+		{
+			// Enable Internal ROM
+			memcpy(mem+0xC800, pCxRomInternal+0x800, 0x800);
+			g_eExpansionRomType = eExpRomInternal;
+			g_uPeripheralRomSlot = 0;
+		}
+	}
 
     //// IF FAST PAGING IS ACTIVE, WE KEEP MULTIPLE COMPLETE MEMORY IMAGES
     //// AND WRITE TABLES, AND SWITCH BETWEEN THEM.  THE FAST PAGING VERSION

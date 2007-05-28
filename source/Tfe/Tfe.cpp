@@ -43,7 +43,7 @@
 typedef unsigned int UINT;
 #include "..\common.h"
 // Define here, so we don't drag in the whole of stdafx.h:
-void RegisterIoHandler(UINT uSlot, iofunction IORead16, iofunction IOWrite16, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter);
+void RegisterIoHandler(UINT uSlot, iofunction IORead16, iofunction IOWrite16, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter, BYTE* pExpansionRom);
 
 /**/
 /** #define TFE_DEBUG_DUMP 1 **/
@@ -453,7 +453,7 @@ void tfe_reset(void)
     }
 
 	const UINT uSlot = 3;
-	RegisterIoHandler(uSlot, TfeIo, TfeIo, NULL, NULL, NULL);
+	RegisterIoHandler(uSlot, TfeIo, TfeIo, NULL, NULL, NULL, NULL);
 }
 
 #ifdef DOS_TFE

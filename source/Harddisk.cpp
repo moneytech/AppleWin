@@ -239,7 +239,7 @@ void HD_SetEnabled(bool bEnabled)
 	else
 		memset(lpMemC000 + g_uSlot*256, 0, HDDRVR_SIZE);
 
-	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL);
+	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, NULL);
 }
 
 LPCTSTR HD_GetFullName (int nDrive)
