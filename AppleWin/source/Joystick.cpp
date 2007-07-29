@@ -61,7 +61,7 @@ static const joyinforec joyinfo[5] = {{DEVICE_NONE,MODE_NONE},
                            {DEVICE_JOYSTICK,MODE_STANDARD},
                            {DEVICE_KEYBOARD,MODE_STANDARD},
                            {DEVICE_KEYBOARD,MODE_CENTERING},
-                           {DEVICE_MOUSE,MODE_STANDARD}};
+                           {DEVICE_MOUSE,MODE_STANDARD}};	// TODO-TC: Disable if mouse i/f is active
 
 // Key pad [1..9]; Key pad 0,Key pad '.'; Left ALT,Right ALT
 enum JOYKEY {	JK_DOWNLEFT=0,
@@ -461,7 +461,7 @@ BYTE __stdcall JoyResetPosition (WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
 //===========================================================================
 
 // Called when mouse is being used as a joystick && mouse button changes
-void JoySetButton (int number, BOOL down)
+void JoySetButton (eBUTTON number, eBUTTONSTATE down)
 {
   if (number > 1)	// Sanity check on mouse button #
     return;
@@ -473,7 +473,7 @@ void JoySetButton (int number, BOOL down)
   // If it is 2nd joystick that is being emulated with mouse, then re-map button #
   if(joyinfo[joytype[1]].device == DEVICE_MOUSE)
   {
-	number = 1;	// 2nd joystick controls Apple button #1
+	number = BUTTON1;	// 2nd joystick controls Apple button #1
   }
 
   setbutton[number] = down;

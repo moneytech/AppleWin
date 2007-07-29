@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 #include "..\resource\resource.h"
 
 #define ENABLE_MENU 0
@@ -667,24 +668,35 @@ LRESULT CALLBACK FrameWndProc (
       break;
 
     case WM_LBUTTONDOWN:
-      if (buttondown == -1) {
+      if (buttondown == -1)
+	  {
         int x = LOWORD(lparam);
         int y = HIWORD(lparam);
         if ((x >= buttonx) &&
             (y >= buttony) &&
-            (y <= buttony+BUTTONS*BUTTONCY)) {
+            (y <= buttony+BUTTONS*BUTTONCY))
+		{
           buttonactive = buttondown = (y-buttony-1)/BUTTONCY;
           DrawButton((HDC)0,buttonactive);
           SetCapture(window);
         }
         else if (usingcursor)
+		{
           if (wparam & (MK_CONTROL | MK_SHIFT))
+		  {
             SetUsingCursor(0);
+		  }
           else
-            JoySetButton(0,1);
-        else if ((x < buttonx) && JoyUsingMouse() &&
-                 ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING)))
+		  {
+            JoySetButton(BUTTON0, BUTTON_DOWN);
+			sg_Mouse.SetButton(BUTTON0, BUTTON_DOWN);
+		  }
+		}
+        else if ( ((x < buttonx) && JoyUsingMouse() && ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))) ||
+				  (sg_Mouse.Active()) )	// TODO-TC
+		{
           SetUsingCursor(1);
+		}
 		DebuggerMouseClick( x, y );
       }
       RelayEvent(WM_LBUTTONDOWN,wparam,lparam);
@@ -704,7 +716,10 @@ LRESULT CALLBACK FrameWndProc (
         buttonactive = -1;
       }
       else if (usingcursor)
-        JoySetButton(0,0);
+	  {
+        JoySetButton(BUTTON0, BUTTON_UP);
+		sg_Mouse.SetButton(BUTTON0, BUTTON_UP);
+	  }
       RelayEvent(WM_LBUTTONUP,wparam,lparam);
       break;
 
@@ -732,8 +747,8 @@ LRESULT CALLBACK FrameWndProc (
       }
       else if (usingcursor) {
         DrawCrosshairs(x,y);
-        JoySetPosition(x-viewportx-2,VIEWPORTCX-4,
-                       y-viewporty-2,VIEWPORTCY-4);
+        JoySetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
+        sg_Mouse.SetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
       }
       RelayEvent(WM_MOUSEMOVE,wparam,lparam);
       break;
@@ -832,7 +847,8 @@ LRESULT CALLBACK FrameWndProc (
 		}
 		if (usingcursor)
 		{
-			JoySetButton(1,(message == WM_RBUTTONDOWN));
+			JoySetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
+			sg_Mouse.SetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
 		}
 		RelayEvent(message,wparam,lparam);
 		break;

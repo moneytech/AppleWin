@@ -64,6 +64,7 @@ void    VideoRefreshScreen ();
 void    VideoReinitialize ();
 void    VideoResetState ();
 WORD    VideoGetScannerAddress(bool* pbVblBar_OUT = NULL);
+bool    VideoGetVbl();
 void    VideoUpdateVbl (DWORD dwCyclesThisFrame);
 void    VideoUpdateFlash();
 bool    VideoGetSW80COL();

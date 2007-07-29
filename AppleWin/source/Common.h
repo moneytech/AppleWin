@@ -95,7 +95,7 @@ typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE
 
 typedef struct _IMAGE__ { int unused; } *HIMAGE;
 
-enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC};
+enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC, IS_MOUSE};
 
 //
 
@@ -115,3 +115,6 @@ enum eApple2Type {
 //					A2TYPE_APPLE2C=APPLE2C_MASK,	// Placeholder
 					A2TYPE_MAX
 				};
+
+enum eBUTTON {BUTTON0=0, BUTTON1};
+enum eBUTTONSTATE {BUTTON_UP=0, BUTTON_DOWN};

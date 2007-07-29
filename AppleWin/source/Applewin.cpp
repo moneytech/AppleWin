@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 
 char VERSIONSTRING[] = "xx.yy.zz.ww";
 
@@ -64,7 +65,10 @@ DWORD       g_dwCyclesThisFrame = 0;
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
 
-CSuperSerialCard sg_SSC;
+CSuperSerialCard	sg_SSC;
+CMouseInterface		sg_Mouse;
+
+UINT		g_Slot4 = CT_MouseInterface;	// CT_Mockingboard or CT_MouseInterface
 
 //===========================================================================
 

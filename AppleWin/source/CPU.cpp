@@ -86,6 +86,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma	 hdrstop
+#include "MouseInterface.h"
 
 #define	 AF_SIGN       0x80
 #define	 AF_OVERFLOW   0x40
@@ -227,6 +228,10 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 		 else                                                \
 		     addr = *(LPWORD)(mem+base);
 #define REL	 addr = (signed char)*(mem+regs.pc++);
+
+// Optimiation note:
+// . Opcodes that generate zero-page addresses can't be accessing $C000..$CFFF
+//   so they could be paired with special READZP/WRITEZP macros (instead of READ/WRITE)
 #define ZPG	 addr = *(mem+regs.pc++);
 #define ZPGX	 addr = ((*(mem+regs.pc++))+regs.x) & 0xFF;
 #define ZPGY	 addr = ((*(mem+regs.pc++))+regs.y) & 0xFF;
@@ -814,8 +819,29 @@ static inline void DoIrqProfiling(DWORD uCycles)
 
 //===========================================================================
 
+static __forceinline int Fetch(BYTE& iOpcode, DWORD uExecutedCycles)
+{
+		g_uInternalExecutedCycles = uExecutedCycles;
+
+//		iOpcode = *(mem+regs.pc);
+		iOpcode = ((regs.pc & 0xF000) == 0xC000)
+		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)	// Fetch opcode from I/O memory, but params are still from mem[]
+			: *(mem+regs.pc);
+
+		if (CheckDebugBreak( iOpcode ))
+			return 0;
+
+		regs.pc++;
+		return 1;
+}
+
+//===========================================================================
+
 static DWORD Cpu65C02 (DWORD uTotalCycles)
 {
+	// Optimisation:
+	// . Copy the global /regs/ vars to stack-based local vars
+	//   (Oliver Schmidt says this gives a performance gain, see email - The real deal: "1.10.5")
 	WORD addr;
 	BOOL flagc; // must always be 0 or 1, no other values allowed
 	BOOL flagn; // must always be 0 or 0x80.
@@ -828,22 +854,28 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 	DWORD uExecutedCycles = 0;
 	BOOL bSlowerOnPagecross;		// Set if opcode writes to memory (eg. ASL, STA)
 	WORD base;
-	bool bBreakOnInvalid = false;  
+	bool bBreakOnInvalid = false;
 
 	do
 	{
-		g_uInternalExecutedCycles = uExecutedCycles;
-		USHORT uExtraCycles = 0;
+//		g_uInternalExecutedCycles = uExecutedCycles;
+//		UINT uExtraCycles = 0;
+//
+////		BYTE iOpcode = *(mem+regs.pc);
+//		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
+//		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)	// Fetch opcode from I/O memory, but params are still from mem[]
+//			: *(mem+regs.pc);
+//
+//		if (CheckDebugBreak( iOpcode ))
+//			break;
+//
+//		regs.pc++;
 
-//		BYTE iOpcode = *(mem+regs.pc);
-		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
-		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)	// Fetch opcode from I/O memory, but params are still from mem[]
-			: *(mem+regs.pc);
+		UINT uExtraCycles = 0;
+		BYTE iOpcode;
 
-		if (CheckDebugBreak( iOpcode ))
+		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
-
-		regs.pc++;
 
 		switch (iOpcode)
 		{
@@ -1132,6 +1164,8 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 			CYC(7)
 		}
 
+		sg_Mouse.SetVBlank(VideoGetVbl());	// TODO-TC: Optimise this!
+
 		if (bBreakOnInvalid)
 			break;
 
@@ -1161,18 +1195,24 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 	do
 	{
-		g_uInternalExecutedCycles = uExecutedCycles;
-		USHORT uExtraCycles = 0;
+//		g_uInternalExecutedCycles = uExecutedCycles;
+//		UINT uExtraCycles = 0;
+//
+////		BYTE iOpcode = *(mem+regs.pc);
+//		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
+//		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)
+//			: *(mem+regs.pc);
+//
+//		if (CheckDebugBreak( iOpcode ))
+//			break;
+//
+//		regs.pc++;
 
-//		BYTE iOpcode = *(mem+regs.pc);
-		BYTE iOpcode = ((regs.pc & 0xF000) == 0xC000)
-		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)
-			: *(mem+regs.pc);
+		UINT uExtraCycles = 0;
+		BYTE iOpcode;
 
-		if (CheckDebugBreak( iOpcode ))
+		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
-
-		regs.pc++;
 
 		switch (iOpcode)
 		{	
@@ -1460,6 +1500,8 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 			regs.pc = * (WORD*) (mem+0xFFFE);
 			CYC(7)
 		}
+
+		sg_Mouse.SetVBlank(VideoGetVbl());	// TODO-TC: Optimise this!
 
 		if (bBreakOnInvalid)
 			break;
