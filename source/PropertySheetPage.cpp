@@ -734,7 +734,18 @@ static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
 	TCHAR szFilename[MAX_PATH];
 	
-	strcpy(szFilename, Snapshot_GetFilename());
+	// Attempt to use drive1's image name as the name for the .aws file
+	LPCTSTR pDiskName0 = DiskGetName(0);
+	if (pDiskName0 && pDiskName0[0])
+	{
+		strcpy(szFilename, pDiskName0);
+		strcpy(&szFilename[strlen(pDiskName0)], ".aws");
+		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
+	}
+	else
+	{
+		strcpy(szFilename, Snapshot_GetFilename());
+	}
 	
 	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,szDirectory,MAX_PATH);
 	

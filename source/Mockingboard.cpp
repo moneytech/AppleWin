@@ -1307,8 +1307,11 @@ void MB_Initialize()
 
 	//
 
-	const UINT uSlot4 = 4;
-	RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+	if (g_Slot4 == CT_Mockingboard)
+	{
+		const UINT uSlot4 = 4;
+		RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+	}
 
 	const UINT uSlot5 = 5;
 	RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);

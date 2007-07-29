@@ -2270,3 +2270,39 @@ WORD VideoGetScannerAddress(bool* pbVblBar_OUT)
 }
 
 //===========================================================================
+
+// Derived from VideoGetScannerAddress()
+bool VideoGetVbl()
+{
+    // get video scanner position
+    //
+    int nCycles = CpuGetCyclesThisFrame();
+
+    // calculate video parameters according to display standard
+    //
+    int nScanLines  = bVideoScannerNTSC ? kNTSCScanLines : kPALScanLines;
+
+    // calculate vertical scanning state
+    //
+    int nVLine  = nCycles / kHClocks; // which vertical scanning line
+    int nVState = kVLine0State + nVLine; // V state bits
+    if ((nVLine >= kVPresetLine)) // check for previous vertical state preset
+    {
+        nVState -= nScanLines; // compensate for preset
+    }
+    int v_3 = (nVState >> 6) & 1;
+    int v_4 = (nVState >> 7) & 1;
+
+    // update VBL' state
+    //
+	if (v_4 & v_3) // VBL?
+	{
+		return false; // Y: VBL' is false
+	}
+	else
+	{
+		return true; // N: VBL' is true
+	}
+}
+
+//===========================================================================

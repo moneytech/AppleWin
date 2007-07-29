@@ -26,6 +26,7 @@ bool    MemGet80Store();
 bool	MemCheckSLOTCXROM();
 LPBYTE  MemGetAuxPtr (WORD);
 LPBYTE  MemGetMainPtr (WORD);
+LPBYTE  MemGetCxRomPeripheral();
 void	MemPreInitialize ();
 void    MemInitialize ();
 BYTE    MemReadFloatingBus();

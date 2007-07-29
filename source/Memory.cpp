@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 #include "..\resource\resource.h"
 
 #define  MF_80STORE    0x00000001
@@ -865,6 +866,13 @@ LPBYTE MemGetMainPtr (WORD offset)
 
 //===========================================================================
 
+LPBYTE MemGetCxRomPeripheral()
+{
+	return pCxRomPeripheral;
+}
+
+//===========================================================================
+
 void MemPreInitialize ()
 {
 	// Init the I/O handlers
@@ -989,10 +997,12 @@ void MemInitialize()
 	const UINT uSlot = 0;
 	RegisterIoHandler(uSlot, MemSetPaging, MemSetPaging, NULL, NULL, NULL, NULL);
 
-	PrintLoadRom(pCxRomPeripheral, 1);			// $C100 : Parallel printer f/w
-	sg_SSC.CommInitialize(pCxRomPeripheral, 2);	// $C200 : SSC
-	DiskLoadRom(pCxRomPeripheral, 6);			// $C600 : Disk][ f/w
-	HD_Load_Rom(pCxRomPeripheral, 7);			// $C700 : HDD f/w
+	PrintLoadRom(pCxRomPeripheral, 1);				// $C100 : Parallel printer f/w
+	sg_SSC.CommInitialize(pCxRomPeripheral, 2);		// $C200 : SSC
+	if (g_Slot4 == CT_MouseInterface)
+		sg_Mouse.Initialize(pCxRomPeripheral, 4);	// $C400 : Mouse f/w
+	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w
+	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
 
 	MemReset();
 }
