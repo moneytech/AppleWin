@@ -91,6 +91,8 @@ void    SetFullScreenMode ();
 void    SetNormalMode ();
 void    SetUsingCursor (BOOL);
 
+bool	g_bScrollLock_FullSpeed = false;
+
 //===========================================================================
 void CreateGdiObjects () {
   ZeroMemory(buttonbitmap,BUTTONS*sizeof(HBITMAP));
@@ -610,7 +612,9 @@ LRESULT CALLBACK FrameWndProc (
 			SoundCore_SetFade(FADE_IN);
 		}
 		else if (wparam == VK_CAPITAL)
+		{
 			KeybToggleCapsLock();
+		}
 		else if (wparam == VK_PAUSE)
 		{
 			SetUsingCursor(0);
@@ -632,6 +636,10 @@ LRESULT CALLBACK FrameWndProc (
 			if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
 				VideoRedrawScreen();
 			g_bResetTiming = true;
+		}
+		else if ((wparam == VK_SCROLL) && g_uScrollLockToggle)
+		{
+			g_bScrollLock_FullSpeed = !g_bScrollLock_FullSpeed;
 		}
 		else if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) || (g_nAppMode == MODE_STEPPING))
 		{
@@ -655,17 +663,20 @@ LRESULT CALLBACK FrameWndProc (
 		break;
 
     case WM_KEYUP:
-      if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == (int)wparam-VK_F1)) {
-        buttondown = -1;
-        if (fullscreen)
-          EraseButton(wparam-VK_F1);
-        else
-          DrawButton((HDC)0,wparam-VK_F1);
-        ProcessButtonClick(wparam-VK_F1);
-      }
-      else
-        JoyProcessKey((int)wparam,((lparam & 0x01000000) != 0),0,0);
-      break;
+		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == (int)wparam-VK_F1))
+		{
+			buttondown = -1;
+			if (fullscreen)
+				EraseButton(wparam-VK_F1);
+			else
+				DrawButton((HDC)0,wparam-VK_F1);
+			ProcessButtonClick(wparam-VK_F1);
+		}
+		else
+		{
+			JoyProcessKey((int)wparam,((lparam & 0x01000000) != 0),0,0);
+		}
+		break;
 
     case WM_LBUTTONDOWN:
       if (buttondown == -1)

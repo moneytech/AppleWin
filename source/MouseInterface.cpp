@@ -1,3 +1,6 @@
+// Based on Apple in PC's mousecard.cpp
+// - Permission given by Kyle Kim to reuse in AppleWin
+
 #include "stdafx.h"
 #pragma  hdrstop
 #include "..\resource\resource.h"
@@ -220,7 +223,7 @@ void CMouseInterface::On6821_B(BYTE byData)
 
 void CMouseInterface::OnCommand()
 {
-	char szDbg[256];
+	//char szDbg[256];
 	switch( m_byBuff[0] & 0xF0 )
 	{
 	case MOUSE_SET:
@@ -244,7 +247,7 @@ void CMouseInterface::OnCommand()
 		m_byBuff[4] = ( m_nY >> 8 ) & 0xFF;
 		m_byBuff[5] = m_byState;			// button 0/1 interrupt status
 		m_byState &= ~0x20;
-		sprintf(szDbg, "[MOUSE-READ] IRQ=0x%02X X=(0x%02X-0x%02X) Y=(0x%02X-0x%02X) \n", m_byBuff[5], m_byBuff[1], m_byBuff[2], m_byBuff[3], m_byBuff[4]); OutputDebugString(szDbg);
+		//sprintf(szDbg, "[MOUSE-READ] IRQ=0x%02X X=(0x%02X-0x%02X) Y=(0x%02X-0x%02X) \n", m_byBuff[5], m_byBuff[1], m_byBuff[2], m_byBuff[3], m_byBuff[4]); OutputDebugString(szDbg);
 		break;
 	case MOUSE_SERV:
 		m_nDataLen = 2;

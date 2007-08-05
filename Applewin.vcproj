@@ -690,6 +690,10 @@
 			>
 		</File>
 		<File
+			RelativePath=".\resource\MouseInterface.rom"
+			>
+		</File>
+		<File
 			RelativePath=".\resource\resource.h"
 			>
 		</File>

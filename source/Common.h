@@ -80,6 +80,7 @@ enum AppMode_e
 #define  REGVALUE_HDD_IMAGE2         "Harddisk Image 2"
 #define  REGVALUE_PDL_XTRIM          "PDL X-Trim"
 #define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
+#define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR TEXT("Starting Directory")
