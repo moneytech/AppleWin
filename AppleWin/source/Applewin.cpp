@@ -99,8 +99,12 @@ void ContinueExecution()
 
 	//
 
+	bool bScrollLock_FullSpeed = g_uScrollLockToggle
+									? g_bScrollLock_FullSpeed
+									: (GetKeyState(VK_SCROLL) < 0);
+
 	g_bFullSpeed = ( (g_dwSpeed == SPEED_MAX) || 
-					 (GetKeyState(VK_SCROLL) < 0) ||
+					 bScrollLock_FullSpeed ||
 					 (DiskIsSpinning() && enhancedisk && !Spkr_IsActive() && !MB_IsActive()) );
 
 	if(g_bFullSpeed)
@@ -202,7 +206,7 @@ void ContinueExecution()
 				pageflipping--;
 		}
 
-		MB_EndOfFrame();
+		MB_EndOfVideoFrame();
 	}
 
 	//
@@ -419,6 +423,9 @@ void LoadConfiguration ()
       JoySetTrim((short)dwTmp, true);
   if(LOAD(TEXT(REGVALUE_PDL_YTRIM), &dwTmp))
       JoySetTrim((short)dwTmp, false);
+
+  if(LOAD(TEXT(REGVALUE_SCROLLLOCK_TOGGLE), &dwTmp))
+	  g_uScrollLockToggle = dwTmp;
 
   //
 

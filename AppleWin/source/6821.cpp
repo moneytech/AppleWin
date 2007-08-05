@@ -1,3 +1,24 @@
+// Based on MAME's 6821pia.c
+// - by Kyle Kim (Apple in PC)
+
+// 
+// From mame.txt (http://www.mame.net/readme.html)
+// 
+// VI. Reuse of Source Code
+// --------------------------
+//    This chapter might not apply to specific portions of MAME (e.g. CPU
+//    emulators) which bear different copyright notices.
+//    The source code cannot be used in a commercial product without the written
+//    authorization of the authors. Use in non-commercial products is allowed, and
+//    indeed encouraged.  If you use portions of the MAME source code in your
+//    program, however, you must make the full source code freely available as
+//    well.
+//    Usage of the _information_ contained in the source code is free for any use.
+//    However, given the amount of time and energy it took to collect this
+//    information, if you find new information we would appreciate if you made it
+//    freely available as well.
+// 
+
 #include "stdafx.h"
 #include "6821.h"
 

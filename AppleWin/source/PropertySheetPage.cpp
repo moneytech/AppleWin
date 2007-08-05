@@ -101,6 +101,8 @@ enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_NUM_SHEETS};
 
 UINT g_nLastPage = PG_CONFIG;
 
+UINT g_uScrollLockToggle = 0;
+
 //===========================================================================
 
 static void FillComboBox (HWND window, int controlid, LPCTSTR choices, int currentchoice)
@@ -444,6 +446,7 @@ static void InputDlg_OK(HWND window, BOOL afterclose)
 	SAVE(TEXT("Joystick 1 Emulation"),joytype[1]);
 	SAVE(TEXT(REGVALUE_PDL_XTRIM),JoyGetTrim(true));
 	SAVE(TEXT(REGVALUE_PDL_YTRIM),JoyGetTrim(false));
+	SAVE(TEXT(REGVALUE_SCROLLLOCK_TOGGLE),g_uScrollLockToggle);
 //	SAVE(TEXT(REGVALUE_KEYB_BUFFER_ENABLE),KeybGetBufferMode() ? 1 : 0);
 
 	//
@@ -527,11 +530,14 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 				InitJoystickChoices(window, JN_JOYSTICK0, IDC_JOYSTICK0);	// Re-init joy0 list
 			}
 			break;
-//		case IDC_KEYB_BUFFER_ENABLE:
-//			break;
+		case IDC_SCROLLLOCK_TOGGLE:
+			g_uScrollLockToggle = IsDlgButtonChecked(window, IDC_SCROLLLOCK_TOGGLE) ? 1 : 0;
+			break;
 		case IDC_PASTE_FROM_CLIPBOARD:
 			ClipboardInitiatePaste();
 			break;
+//		case IDC_KEYB_BUFFER_ENABLE:
+//			break;
       }
       break;
 
@@ -548,6 +554,7 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 	  SendDlgItemMessage(window, IDC_SPIN_XTRIM, UDM_SETPOS, 0, MAKELONG(JoyGetTrim(true),0));
 	  SendDlgItemMessage(window, IDC_SPIN_YTRIM, UDM_SETPOS, 0, MAKELONG(JoyGetTrim(false),0));
 
+      CheckDlgButton(window, IDC_SCROLLLOCK_TOGGLE, g_uScrollLockToggle ? BST_CHECKED : BST_UNCHECKED);
 //	  CheckDlgButton(window, IDC_KEYB_BUFFER_ENABLE, KeybGetBufferMode() ? BST_CHECKED : BST_UNCHECKED);
 	}
   }

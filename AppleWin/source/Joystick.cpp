@@ -365,7 +365,7 @@ BOOL JoyProcessKey (int virtkey, BOOL extended, BOOL down, BOOL autorep)
 
 //===========================================================================
 
-BYTE __stdcall JoyReadButton (WORD, WORD address, BYTE, BYTE, ULONG)
+BYTE __stdcall JoyReadButton (WORD, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
 {
   address &= 0xFF;
 
@@ -397,7 +397,7 @@ BYTE __stdcall JoyReadButton (WORD, WORD address, BYTE, BYTE, ULONG)
       break;
 
   }
-  return MemReadFloatingBus(pressed);
+  return MemReadFloatingBus(pressed, nCyclesLeft);
 }
 
 //===========================================================================
@@ -433,7 +433,7 @@ BYTE __stdcall JoyReadPosition (WORD programcounter, WORD address, BYTE, BYTE, U
 
 	BOOL nPdlCntrActive = g_nCumulativeCycles <= (g_nJoyCntrResetCycle + (unsigned __int64) ((double)nPdlPos * PDL_CNTR_INTERVAL));
 
-	return MemReadFloatingBus(nPdlCntrActive);
+	return MemReadFloatingBus(nPdlCntrActive, nCyclesLeft);
 }
 
 //===========================================================================
@@ -455,7 +455,7 @@ BYTE __stdcall JoyResetPosition (WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
 	if(joyinfo[joytype[1]].device == DEVICE_JOYSTICK)
 		CheckJoystick1();
 
-	return MemReadFloatingBus();
+	return MemReadFloatingBus(nCyclesLeft);
 }
 
 //===========================================================================

@@ -492,7 +492,7 @@ BYTE __stdcall SpkrToggle (WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
 
   }
 
-  return MemReadFloatingBus();
+  return MemReadFloatingBus(nCyclesLeft);
 }
 
 //=============================================================================

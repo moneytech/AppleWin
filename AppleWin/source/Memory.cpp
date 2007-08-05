@@ -363,15 +363,15 @@ static UINT	g_uPeripheralRomSlot = 0;
 
 //=============================================================================
 
-BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
 	if (!write)
-		return MemReadFloatingBus();
+		return MemReadFloatingBus(nCyclesLeft);
 	else
 		return 0;
 }
 
-BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
 	// Apple//e ROM:
 	// . PC=FA6F: LDA $C058 (SETAN0)
@@ -388,7 +388,7 @@ BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYT
 //   - Reset when 6502 accesses $CFFF
 // . Enable2 = I/O STROBE' (6502 accesses [$C800..$CFFF])
 
-BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
 	if (address == 0xCFFF)
 	{
@@ -484,12 +484,12 @@ BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE v
 	}
 
 	if ((g_eExpansionRomType == eExpRomNull) && (address >= 0xC800))
-		return IO_Null(programcounter, address, write, value, nCycles);
+		return IO_Null(programcounter, address, write, value, nCyclesLeft);
 	else
 		return mem[address];
 }
 
-BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles)
+BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
 	return 0;
 }
@@ -1079,16 +1079,16 @@ BYTE MemReturnRandomData (BYTE highbit)
 
 //===========================================================================
 
-BYTE MemReadFloatingBus()
+BYTE MemReadFloatingBus(const ULONG uExecutedCycles)
 {
-  return*(LPBYTE)(mem + VideoGetScannerAddress());
+  return*(LPBYTE)(mem + VideoGetScannerAddress(NULL, uExecutedCycles));
 }
 
 //===========================================================================
 
-BYTE MemReadFloatingBus(BYTE const highbit)
+BYTE MemReadFloatingBus(const BYTE highbit, const ULONG uExecutedCycles)
 {
-  BYTE r = *(LPBYTE)(mem + VideoGetScannerAddress());
+  BYTE r = *(LPBYTE)(mem + VideoGetScannerAddress(NULL, uExecutedCycles));
   return (r & ~0x80) | ((highbit) ? 0x80 : 0);
 }
 
@@ -1113,7 +1113,7 @@ BYTE MemReadFloatingBus(BYTE const highbit)
 //}
 
 //===========================================================================
-BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE value, ULONG)
+BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
   address &= 0xFF;
   DWORD lastmemmode = memmode;
@@ -1176,13 +1176,13 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
   if ((address >= 4) && (address <= 5) &&
       ((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0028D)) {
     modechanging = 1;
-    return write ? 0 : MemReadFloatingBus(1);
+    return write ? 0 : MemReadFloatingBus(1, nCyclesLeft);
   }
   if ((address >= 0x80) && (address <= 0x8F) && (programcounter < 0xC000) &&
       (((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0048D) ||
        ((*(LPDWORD)(mem+programcounter) & 0x00FFFEFF) == 0x00C0028D))) {
     modechanging = 1;
-    return write ? 0 : MemReadFloatingBus(1);
+    return write ? 0 : MemReadFloatingBus(1, nCyclesLeft);
   }
 
   // IF THE MEMORY PAGING MODE HAS CHANGED, UPDATE OUR MEMORY IMAGES AND
@@ -1226,9 +1226,9 @@ BYTE __stdcall MemSetPaging (WORD programcounter, WORD address, BYTE write, BYTE
   }
 
   if ((address <= 1) || ((address >= 0x54) && (address <= 0x57)))
-    return VideoSetMode(programcounter,address,write,value,0);
+    return VideoSetMode(programcounter,address,write,value,nCyclesLeft);
 
-  return write ? 0 : MemReadFloatingBus();
+  return write ? 0 : MemReadFloatingBus(nCyclesLeft);
 }
 
 //===========================================================================
