@@ -68,7 +68,7 @@ bool		g_bDisableDirectSound = false;
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
 
-UINT		g_Slot4 = CT_MouseInterface;	// CT_Mockingboard or CT_MouseInterface
+UINT		g_Slot4 = CT_Mockingboard;	// CT_Mockingboard or CT_MouseInterface
 
 //===========================================================================
 
@@ -398,6 +398,10 @@ void LoadConfiguration ()
 
   DWORD dwTmp;
 
+  if(LOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
+	  g_uMouseInSlot4 = dwTmp;
+  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
+
   if(LOAD(TEXT(REGVALUE_SPKR_VOLUME), &dwTmp))
       SpkrSetVolume(dwTmp, PSP_GetVolumeMax());
 
@@ -717,7 +721,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 		// ENTER THE MAIN MESSAGE LOOP
 		EnterMessageLoop();
+
 		MB_Reset();
+		sg_Mouse.Uninitialize();	// Maybe restarting due to switching slot-4 card from mouse to MB
 	}
 	while (restart);
 	

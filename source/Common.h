@@ -81,6 +81,7 @@ enum AppMode_e
 #define  REGVALUE_PDL_XTRIM          "PDL X-Trim"
 #define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
 #define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
+#define  REGVALUE_MOUSE_IN_SLOT4     "Mouse in slot 4"
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR TEXT("Starting Directory")

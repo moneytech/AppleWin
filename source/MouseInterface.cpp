@@ -82,6 +82,7 @@ CMouseInterface::CMouseInterface() :
 
 	Reset();
 	memset( m_byBuff, 0, sizeof( m_byBuff ) );
+	m_bActive = false;
 }
 
 CMouseInterface::~CMouseInterface()
@@ -125,6 +126,7 @@ void CMouseInterface::Initialize(LPBYTE pCxRomPeripheral, UINT uSlot)
 
 	SetSlotRom();
 	RegisterIoHandler(uSlot, &CMouseInterface::IORead, &CMouseInterface::IOWrite, NULL, NULL, this, NULL);
+	m_bActive = true;
 }
 
 void CMouseInterface::SetSlotRom()

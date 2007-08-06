@@ -39,6 +39,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 
 #define  BUTTONTIME       5000
 
@@ -61,7 +62,7 @@ static const joyinforec joyinfo[5] = {{DEVICE_NONE,MODE_NONE},
                            {DEVICE_JOYSTICK,MODE_STANDARD},
                            {DEVICE_KEYBOARD,MODE_STANDARD},
                            {DEVICE_KEYBOARD,MODE_CENTERING},
-                           {DEVICE_MOUSE,MODE_STANDARD}};	// TODO-TC: Disable if mouse i/f is active
+                           {DEVICE_MOUSE,MODE_STANDARD}};
 
 // Key pad [1..9]; Key pad 0,Key pad '.'; Left ALT,Right ALT
 enum JOYKEY {	JK_DOWNLEFT=0,
@@ -507,6 +508,15 @@ BOOL JoySetEmulationType (HWND window, DWORD newtype, int nJoystickNumber)
   else if ((joyinfo[newtype].device == DEVICE_MOUSE) &&
            (joyinfo[joytype[nJoystickNumber]].device != DEVICE_MOUSE))
   {
+	if (sg_Mouse.Active())
+	{
+	  MessageBox(window,
+				 TEXT("Mouse interface card is enabled - unable to use mouse for joystick emulation."),
+				 TEXT("Configuration"),
+				 MB_ICONEXCLAMATION | MB_SETFOREGROUND);
+	  return 0;
+	}
+
     MessageBox(window,
                TEXT("To begin emulating a joystick with your mouse, move ")
                TEXT("the mouse cursor over the emulated screen of a running ")

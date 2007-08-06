@@ -102,6 +102,7 @@ enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_NUM_SHEETS};
 UINT g_nLastPage = PG_CONFIG;
 
 UINT g_uScrollLockToggle = 0;
+UINT g_uMouseInSlot4 = 0;
 
 //===========================================================================
 
@@ -226,15 +227,17 @@ static void ConfigDlg_OK(HWND window, BOOL afterclose)
 	if (NewApple2Type != g_Apple2Type)
 	{
 		if (MessageBox(window,
-			TEXT(
-			"You have changed the emulated computer "
-			"type.  This change will not take effect "
-			"until the next time you restart the "
-			"emulator.\n\n"
-			"Would you like to restart the emulator now?"),
-			TEXT("Configuration"),
-			MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+						TEXT(
+						"You have changed the emulated computer "
+						"type.  This change will not take effect "
+						"until the next time you restart the "
+						"emulator.\n\n"
+						"Would you like to restart the emulator now?"),
+						TEXT("Configuration"),
+						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+		{
 			afterclose = WM_USER_RESTART;
+		}
 	}
 
 	if (videotype != newvidtype)
@@ -259,6 +262,7 @@ static void ConfigDlg_OK(HWND window, BOOL afterclose)
 	SAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	SAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
 	SAVE(TEXT("Video Emulation")   ,videotype);
+	SAVE(TEXT(REGVALUE_MOUSE_IN_SLOT4),g_uMouseInSlot4);
 
 	//
 
@@ -334,6 +338,31 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
           VideoChooseColor();
           break;
 
+		case IDC_MOUSE_IN_SLOT4:
+			UINT uNewState = IsDlgButtonChecked(window, IDC_MOUSE_IN_SLOT4) ? 1 : 0;
+			LPCSTR pMsg = uNewState ?
+							TEXT("The emulator needs to restart as the slot configuration has changed.\n")
+							TEXT("Also Mockingboard/Phasor cards won't be available in slot 4.\n\n")
+							TEXT("Would you like to restart the emulator now?")
+							:
+							TEXT("The emulator needs to restart as the slot configuration has changed.\n")
+							TEXT("(Mockingboard/Phasor cards will now be available in slot 4.)\n\n")
+							TEXT("Would you like to restart the emulator now?");
+			if (MessageBox(window,
+							pMsg,
+							TEXT("Configuration"),
+							MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			{
+				g_uMouseInSlot4 = uNewState;
+				afterclose = WM_USER_RESTART;
+				PropSheet_PressButton(GetParent(window), PSBTN_OK);
+			}
+			else
+			{
+			  CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
+			}
+			break;
+
 #if 0
         case IDC_RECALIBRATE:
           RegSaveValue(TEXT(""),TEXT("RunningOnOS"),0,0);
@@ -385,6 +414,8 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
         SetFocus(GetDlgItem(window, custom ? IDC_SLIDER_CPU_SPEED : IDC_AUTHENTIC_SPEED));
         EnableTrackbar(window, custom);
       }
+
+      CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
 
       afterclose = 0;
       break;
@@ -681,6 +712,11 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 		  nID = IDC_SOUNDCARD_DISABLE;
 
 	  CheckRadioButton(window, IDC_MB_ENABLE, IDC_SOUNDCARD_DISABLE, nID);
+
+	  if (g_uMouseInSlot4)
+	  {
+		EnableWindow(GetDlgItem(window, IDC_PHASOR_ENABLE), FALSE);
+	  }
 
       afterclose = 0;
 	}

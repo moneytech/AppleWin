@@ -699,12 +699,14 @@ LRESULT CALLBACK FrameWndProc (
 		  }
           else
 		  {
-            JoySetButton(BUTTON0, BUTTON_DOWN);
-			sg_Mouse.SetButton(BUTTON0, BUTTON_DOWN);
+			if (sg_Mouse.Active())
+				sg_Mouse.SetButton(BUTTON0, BUTTON_DOWN);
+			else
+		        JoySetButton(BUTTON0, BUTTON_DOWN);
 		  }
 		}
         else if ( ((x < buttonx) && JoyUsingMouse() && ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))) ||
-				  (sg_Mouse.Active()) )	// TODO-TC
+				  (sg_Mouse.Active()) )
 		{
           SetUsingCursor(1);
 		}
@@ -728,8 +730,10 @@ LRESULT CALLBACK FrameWndProc (
       }
       else if (usingcursor)
 	  {
-        JoySetButton(BUTTON0, BUTTON_UP);
-		sg_Mouse.SetButton(BUTTON0, BUTTON_UP);
+		if (sg_Mouse.Active())
+			sg_Mouse.SetButton(BUTTON0, BUTTON_UP);
+		else
+		    JoySetButton(BUTTON0, BUTTON_UP);
 	  }
       RelayEvent(WM_LBUTTONUP,wparam,lparam);
       break;
@@ -756,10 +760,13 @@ LRESULT CALLBACK FrameWndProc (
         if (buttonover != -1)
           DrawButton((HDC)0,buttonover);
       }
-      else if (usingcursor) {
+      else if (usingcursor)
+	  {
         DrawCrosshairs(x,y);
-        JoySetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
-        sg_Mouse.SetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
+		if (sg_Mouse.Active())
+	        sg_Mouse.SetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
+		else
+		    JoySetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
       }
       RelayEvent(WM_MOUSEMOVE,wparam,lparam);
       break;
@@ -858,8 +865,10 @@ LRESULT CALLBACK FrameWndProc (
 		}
 		if (usingcursor)
 		{
-			JoySetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
-			sg_Mouse.SetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
+			if (sg_Mouse.Active())
+				sg_Mouse.SetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
+			else
+				JoySetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
 		}
 		RelayEvent(message,wparam,lparam);
 		break;
