@@ -13,13 +13,14 @@ public:
 	virtual ~CMouseInterface();
 
 	void Initialize(LPBYTE pCxRomPeripheral, UINT uSlot);
+	void Uninitialize(){ m_bActive = false; }
 	void SetSlotRom();
 	static BYTE __stdcall IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
 	static BYTE __stdcall IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
 
 	void SetPosition(int xvalue, int xrange, int yvalue, int yrange);
 	void SetButton(eBUTTON Button, eBUTTONSTATE State);
-	bool Active() { return true; }	// TODO-TC
+	bool Active() { return m_bActive; }
 	void SetVBlank(bool bVBL);
 
 protected:
@@ -72,6 +73,7 @@ protected:
 
 	//
 
+	bool	m_bActive;
 	LPBYTE	m_pSlotRom;
 	UINT	m_uSlot;
 };
