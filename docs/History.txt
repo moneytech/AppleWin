@@ -17,6 +17,14 @@ Restrictions/bugs:
 - SSI263 emulation is very basic: there is no attempt to emulate rate, inflection or filters.
 - During Mockingboard playback, Speaker emulation isn't precise
 
+1.14.1.2 PR - 21 Feb 2008
+----------------------------
+. Support for Правец 82 (Pravets 82). Caps Lock serves as Lat/Cyr lock. Due to the lack of a genuine rom, Apple2e.rom is used. There might be some misplaced symbols of the charset.
+. Some partial support for Pravets 8A/C. Caps Lock serves as Lat/Cyr lock, and F10 serves as Caps Lock.
+Extended Basic and Miniassembler work, but there are still problems with the 8 bit charset (Caps lock is available, even when MODE 0 is set).
+Some keys have to be remapped, because currently they are not available (i.e. Э).
+Shift must not allow switching from cyrillic to latin, but only from lowercase to uppercase.
+
 1.14.1.2 - 2 Dec 2007 (beta)
 ----------------------------
 . Change: Removed crosshairs in mouse-mode

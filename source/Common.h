@@ -52,6 +52,7 @@ enum AppMode_e
 #define  BTN_FULLSCR       5
 #define  BTN_DEBUG         6
 #define  BTN_SETUP         7
+#define  BTN_P8CAPS        9
 
 //#define	MAXIMAGES          16
 
@@ -60,6 +61,8 @@ enum AppMode_e
 #define	TITLE_APPLE_2_PLUS		TEXT("Apple ][+ Emulator")
 #define	TITLE_APPLE_2E			TEXT("Apple //e Emulator")
 #define	TITLE_APPLE_2E_ENHANCED	TEXT("Enhanced Apple //e Emulator")
+#define	TITLE_PRAVETS_82	TEXT("Pravets 82 Emulator")
+#define	TITLE_PRAVETS_8C	TEXT("Pravets 8C Emulator")
 
 #define TITLE_PAUSED       TEXT(" Paused ")
 #define TITLE_STEPPING     TEXT("Stepping")
@@ -83,6 +86,8 @@ enum AppMode_e
 #define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
 #define  REGVALUE_MOUSE_IN_SLOT4     "Mouse in slot 4"
 #define  REGVALUE_THE_FREEZES_F8_ROM "The Freeze's F8 Rom"
+#define  REGVALUE_CLONETYPE          "Clone Type"
+#define  REGVALUE_CIDERPRESSLOC TEXT("CyderPress Location")
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR TEXT("Starting Directory")
@@ -91,6 +96,7 @@ enum AppMode_e
 #define WM_USER_RESTART		WM_USER+2
 #define WM_USER_SAVESTATE	WM_USER+3
 #define WM_USER_LOADSTATE	WM_USER+4
+
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 
@@ -116,8 +122,12 @@ enum eApple2Type {
 					A2TYPE_APPLE2E=APPLE2E_MASK,
 					A2TYPE_APPLE2EEHANCED,
 //					A2TYPE_APPLE2C=APPLE2C_MASK,	// Placeholder
+					A2TYPE_PRAVETS82,
+					A2TYPE_CLONE = A2TYPE_PRAVETS82,
+					A2TYPE_PRAVETS8C,
 					A2TYPE_MAX
 				};
 
 enum eBUTTON {BUTTON0=0, BUTTON1};
+
 enum eBUTTONSTATE {BUTTON_UP=0, BUTTON_DOWN};

@@ -19,7 +19,7 @@ void    FrameRefreshStatus (int);
 void    FrameRegisterClass ();
 void    FrameReleaseDC ();
 void    FrameReleaseVideoDC ();
-
+extern  string PathFilename[2];
 LRESULT CALLBACK FrameWndProc (
 	HWND   window,
 	UINT   message,

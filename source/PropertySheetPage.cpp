@@ -4,8 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
-
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,8 +23,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Property Sheet Pages
  *
- * Author: Copyright (c) 2002-2006, Tom Charlesworth
- *                                  Spiro Trikaliotis <Spiro.Trikaliotis@gmx.de>
+ * Author: Tom Charlesworth
+ *         Spiro Trikaliotis <Spiro.Trikaliotis@gmx.de>
  */
 
 #include "StdAfx.h"
@@ -38,7 +37,8 @@ TCHAR   computerchoices[] =
 				TEXT("Apple ][ (Original Model)\0")
 				TEXT("Apple ][+\0")
 				TEXT("Apple //e\0")
-				TEXT("Enhanced Apple //e\0");
+				TEXT("Enhanced Apple //e\0")
+				TEXT("Clone\0");
 
 TCHAR* szJoyChoice0 = TEXT("Disabled\0");
 TCHAR* szJoyChoice1 = TEXT("PC Joystick #1\0");
@@ -97,13 +97,32 @@ TCHAR   discchoices[]     =  TEXT("Authentic Speed\0")
 const UINT VOLUME_MIN = 0;
 const UINT VOLUME_MAX = 59;
 
-enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_NUM_SHEETS};
+enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_ADVANCED, PG_NUM_SHEETS};
 
 UINT g_nLastPage = PG_CONFIG;
 
-UINT g_uTheFreezesF8Rom = 0;
 UINT g_uScrollLockToggle = 0;
 UINT g_uMouseInSlot4 = 0;
+
+//
+
+UINT g_uTheFreezesF8Rom = 0;
+
+#define UNDEFINED ((UINT)-1)
+static UINT g_bEnableFreezeDlgButton = UNDEFINED;
+
+//
+
+enum {
+	CLONETYPE_PRAVETS82=0,
+	CLONETYPE_PRAVETS8A,
+	CLONETYPE_NUM
+};
+DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
+
+static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")		// Bulgarian
+									TEXT("Pravets 8C\0");	// Bulgarian
+
 
 //===========================================================================
 
@@ -206,7 +225,7 @@ static void InitJoystickChoices(HWND window, int nJoyNum, int nIdcValue)
 
 //===========================================================================
 
-static eApple2Type GetApple2Type(DWORD NewCompType)
+static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 {
 	switch (NewCompType)
 	{
@@ -214,20 +233,32 @@ static eApple2Type GetApple2Type(DWORD NewCompType)
 		case 1:		return A2TYPE_APPLE2PLUS;
 		case 2:		return A2TYPE_APPLE2E;
 		case 3:		return A2TYPE_APPLE2EEHANCED;
+		case 4:		
+			switch (NewCloneType)
+			{
+			case 0: return A2TYPE_PRAVETS82; break;
+			case 1: return A2TYPE_PRAVETS8C; break;
+			}			
 		default:	return A2TYPE_APPLE2EEHANCED;
 	}
 }
 
 static void ConfigDlg_OK(HWND window, UINT afterclose)
 {
+	HWND hwConfigTab = window;
 	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
-	eApple2Type NewApple2Type = GetApple2Type(NewCompType);
+	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window ,IDC_CLONETYPE,CB_GETCURSEL,0,0);
+	//DWORD NewCloneType = g_uCloneType;
+	//eApple2Type NewApple2Type = GetApple2Type(NewCompType, g_uCloneType);
+	eApple2Type NewApple2Type = GetApple2Type(NewCompType, NewCloneType);
 
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
+	//afterclose = RestartOnNewComputerType(NewApple2Type, window, afterclose);
+	
 	if (NewApple2Type != g_Apple2Type)
-	{
+	{		
 		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
 			MessageBox(window,
 						TEXT(
@@ -246,6 +277,7 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 		}
 	}
 
+
 	if (videotype != newvidtype)
 	{
 		videotype = newvidtype;
@@ -263,7 +295,14 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 
 	SetCurrentCLK6502();
 	
-	SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type);
+	if (NewApple2Type > A2TYPE_CLONE ) 
+	{
+		NewCloneType = NewApple2Type - A2TYPE_CLONE;		
+	}
+	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8C))
+		SAVE(TEXT(REGVALUE_APPLE2_TYPE),A2TYPE_CLONE );
+	else
+		SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
 	SAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
 	SAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	SAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
@@ -297,7 +336,12 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
       switch (((LPPSHNOTIFY)lparam)->hdr.code)
 	  {
         case PSN_KILLACTIVE:
-			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
+			// About to stop being active page
+			{
+				DWORD NewCompType = (DWORD) SendDlgItemMessage(window, IDC_COMPUTER, CB_GETCURSEL, 0, 0);
+				g_bEnableFreezeDlgButton = GetApple2Type(NewCompType,0)<=A2TYPE_APPLE2PLUS ? TRUE : FALSE;
+				SetWindowLong(window, DWL_MSGRESULT, FALSE);		// Changes are valid
+			}
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
@@ -344,34 +388,6 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
           VideoChooseColor();
           break;
 
-		case IDC_COMPUTER:
-		{
-          DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
-          EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), GetApple2Type(NewCompType)<=A2TYPE_APPLE2PLUS ? TRUE : FALSE);
-		}
-        break;
-
-		case IDC_THE_FREEZES_F8_ROM_FW:
-			{
-				UINT uNewState = IsDlgButtonChecked(window, IDC_THE_FREEZES_F8_ROM_FW) ? 1 : 0;
-				LPCSTR pMsg = 	TEXT("The emulator needs to restart as the ROM configuration has changed.\n")
-								TEXT("Would you like to restart the emulator now?");
-				if (MessageBox(window,
-								pMsg,
-								TEXT("Configuration"),
-								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
-				{
-					g_uTheFreezesF8Rom = uNewState;
-					afterclose = WM_USER_RESTART;
-					PropSheet_PressButton(GetParent(window), PSBTN_OK);
-				}
-				else
-				{
-				  CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
-				}
-			}
-			break;
-
 #if 0
         case IDC_RECALIBRATE:
           RegSaveValue(TEXT(""),TEXT("RunningOnOS"),0,0);
@@ -404,15 +420,23 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_APPLE2PLUS:		iApple2String = 1; break;
 		case A2TYPE_APPLE2E:		iApple2String = 2; break;
 		case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
+		case A2TYPE_PRAVETS82:	    iApple2String = 4; break;
+		case A2TYPE_PRAVETS8C:	    iApple2String = 5; break;
 	  }
 
-      FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
-      FillComboBox(window,IDC_VIDEOTYPE,videochoices,videotype);
-      FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
-      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
-      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
-      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
-      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPOS,1,g_dwSpeed);
+	  HWND hwConfigTab = window;
+	  if ((iApple2String == 4) || (iApple2String == 5))
+		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,4);
+	  else
+		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,iApple2String);
+	  //FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+	  FillComboBox(hwConfigTab, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+      FillComboBox(hwConfigTab,IDC_VIDEOTYPE,videochoices,videotype);
+      FillComboBox(hwConfigTab,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
+      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
+      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
+      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
+      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETPOS,1,g_dwSpeed);
       {
         BOOL custom = 1;
         if (g_dwSpeed == SPEED_NORMAL) {
@@ -423,10 +447,6 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
         SetFocus(GetDlgItem(window, custom ? IDC_SLIDER_CPU_SPEED : IDC_AUTHENTIC_SPEED));
         EnableTrackbar(window, custom);
       }
-
-	  g_uTheFreezesF8Rom = IS_APPLE2 ? g_uTheFreezesF8Rom : false;
-	  EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), IS_APPLE2 ? TRUE : FALSE);
-      CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
 
       afterclose = 0;
       break;
@@ -874,7 +894,7 @@ static BOOL CALLBACK SaveStateDlgProc (HWND   window,
                              WPARAM wparam,
                              LPARAM lparam)
 {
-  static UINT afterclose = 0;
+   static UINT afterclose = 0;
 
   switch (message)
   {
@@ -1020,7 +1040,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 	}
 	break;
 
-    case WM_COMMAND:
+    case WM_COMMAND: //Handles the DISK tab
       switch (LOWORD(wparam))
 	  {
 		case IDC_DISK1:
@@ -1048,6 +1068,13 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		case IDC_HDD_ENABLE:
 			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
 			break;
+			case IDC_CIDERPRESS_BROWSE :
+			{
+			string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+			RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
+			SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
+			}
+			break;
       }
       break;
 
@@ -1063,6 +1090,10 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
 		SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
 
+		TCHAR PathToCiderPress[MAX_PATH] = "";
+		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
+		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
+		
 		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
 		EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
@@ -1073,6 +1104,136 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
   return 0;
 }
+
+//===========================================================================
+static void AdvancedDlg_OK(HWND window, UINT afterclose)
+{
+	g_uCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
+
+	SAVE(TEXT(REGVALUE_CLONETYPE), g_uCloneType);
+	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+
+	//
+
+	if (afterclose)
+		PostMessage(g_hFrameWindow,afterclose,0,0);
+}
+
+/*static void AdvancedDlg_OK(HWND window, UINT afterclose)
+{
+	HWND hwAdvancedTab = window; 
+	//DWORD NewCompType = (DWORD) SendDlgItemMessage(hwConfigTab ,IDC_COMPUTER,CB_GETCURSEL,0,0);
+	//DWORD NewCloneType = g_uCloneType;
+	//eApple2Type NewApple2Type = GetApple2Type(NewCompType, g_uCloneType);
+	//DWORD NewApple2Type = 0;
+	//LOAD(TEXT(REGVALUE_APPLE2_TYPE),&NewApple2Type );	
+	g_uCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
+	
+	SAVE(TEXT(REGVALUE_CLONETYPE), g_uCloneType);
+	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+
+	//
+//	afterclose = RestartOnNewComputerType(NewApple2Type, window, afterclose);
+
+	//if (afterclose)
+		//PostMessage(g_hFrameWindow,afterclose,0,0);
+}
+*/
+
+static void AdvancedDlg_CANCEL(HWND window)
+{
+}
+
+//---------------------------------------------------------------------------
+
+static void InitFreezeDlgButton(HWND window)
+{
+	if (g_bEnableFreezeDlgButton == UNDEFINED)
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), IS_APPLE2 ? TRUE : FALSE);
+	else
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), g_bEnableFreezeDlgButton ? TRUE : FALSE);
+
+	CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
+}
+
+static BOOL CALLBACK AdvancedDlgProc (HWND   window,
+                             UINT   message,
+                             WPARAM wparam,
+                             LPARAM lparam)
+{
+  static UINT afterclose = 0;
+
+  switch (message)
+  {
+	case WM_NOTIFY:
+	{
+	  // Property Sheet notifications
+
+      switch (((LPPSHNOTIFY)lparam)->hdr.code)
+	  {
+        case PSN_SETACTIVE:
+			// About to become the active page
+			InitFreezeDlgButton(window);
+			break;
+        case PSN_KILLACTIVE:
+			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
+			break;
+        case PSN_APPLY:
+			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
+			AdvancedDlg_OK(window, afterclose);
+			break;
+		case PSN_QUERYCANCEL:
+			// Can use this to ask user to confirm cancel
+			break;
+		case PSN_RESET:
+			SoundDlg_CANCEL(window);
+			break;
+	  }
+	}
+	break;
+
+    case WM_COMMAND:
+      switch (LOWORD(wparam))
+	  {
+		case IDC_THE_FREEZES_F8_ROM_FW:
+			{
+				UINT uNewState = IsDlgButtonChecked(window, IDC_THE_FREEZES_F8_ROM_FW) ? 1 : 0;
+				LPCSTR pMsg = 	TEXT("The emulator needs to restart as the ROM configuration has changed.\n")
+								TEXT("Would you like to restart the emulator now?");
+				if (MessageBox(window,
+								pMsg,
+								TEXT("Configuration"),
+								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+				{
+					g_uTheFreezesF8Rom = uNewState;
+					afterclose = WM_USER_RESTART;
+					PropSheet_PressButton(GetParent(window), PSBTN_OK);
+				}
+				else
+				{
+				  CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
+				}
+			}
+			break;
+      }
+      break;
+
+    case WM_INITDIALOG:
+	{
+      g_nLastPage = PG_ADVANCED;
+
+      FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+
+	  InitFreezeDlgButton(window);
+
+      afterclose = 0;
+	}
+  }
+
+  return 0;
+}
+
+//===========================================================================
 
 static BOOL get_tfename(int number, char **ppname, char **ppdescription)
 {
@@ -1314,6 +1475,7 @@ void ui_tfe_settings_dialog(HWND hwnd)
 
 //===========================================================================
 
+//Setup
 void PSP_Init()
 {
 	PROPSHEETPAGE PropSheetPages[PG_NUM_SHEETS];
@@ -1348,6 +1510,12 @@ void PSP_Init()
 	PropSheetPages[PG_DISK].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_DISK);
 	PropSheetPages[PG_DISK].pfnDlgProc = (DLGPROC)DiskDlgProc;
 
+	PropSheetPages[PG_ADVANCED].dwSize = sizeof(PROPSHEETPAGE);
+	PropSheetPages[PG_ADVANCED].dwFlags = PSP_DEFAULT;
+	PropSheetPages[PG_ADVANCED].hInstance = g_hInstance;
+	PropSheetPages[PG_ADVANCED].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_ADVANCED);
+	PropSheetPages[PG_ADVANCED].pfnDlgProc = (DLGPROC)AdvancedDlgProc;
+
 	PROPSHEETHEADER PropSheetHeader;
 
 	PropSheetHeader.dwSize = sizeof(PROPSHEETHEADER);
@@ -1358,6 +1526,7 @@ void PSP_Init()
 	PropSheetHeader.nStartPage = g_nLastPage;
 	PropSheetHeader.ppsp = PropSheetPages;
 
+	g_bEnableFreezeDlgButton = UNDEFINED;
 	int i = PropertySheet(&PropSheetHeader);	// Result: 0=Cancel, 1=OK
 }
 
@@ -1381,3 +1550,83 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 		return false;	// Cancelled
 	}
 }
+
+
+UINT RestartOnNewComputerType(DWORD NewApple2Type, HWND window, UINT afterclose)
+{
+	if (NewApple2Type != g_Apple2Type)
+	{		
+		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
+			MessageBox(window,
+						TEXT(
+						"You have changed the emulated computer "
+						"type.  This change will not take effect "
+						"until the next time you restart the "
+						"emulator.\n\n"
+						"Would you like to restart the emulator now?"),
+						TEXT("Configuration"),
+						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+		{
+			//afterclose = WM_USER_RESTART;
+			return WM_USER_RESTART;
+
+			if (NewApple2Type > A2TYPE_APPLE2PLUS)
+				g_uTheFreezesF8Rom = false;
+		}
+	}
+}
+
+string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
+{
+	TCHAR szDirectory[MAX_PATH] = TEXT("");
+	TCHAR szCPFilename[MAX_PATH];
+	//string PathName = "";
+	
+
+	// Attempt to use drive1's image name as the name for the .aws file
+	/*LPCTSTR pDiskName0 = DiskGetName(0);
+	if (pDiskName0 && pDiskName0[0])
+	{
+		strcpy(szCPFilename, pDiskName0);
+		strcpy(&szCPFilename[strlen(pDiskName0)], ".exe");
+		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
+	}
+	else
+	{*/
+		//strcpy(szCPFilename, Snapshot_GetFilename());
+	strcpy(szCPFilename, "");
+	//}
+				
+	//
+
+	
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn,sizeof(OPENFILENAME));
+	
+	ofn.lStructSize     = sizeof(OPENFILENAME);
+	ofn.hwndOwner       = hWindow;
+	ofn.hInstance       = g_hInstance;
+	ofn.lpstrFilter     =	TEXT("Applications (*.exe)\0*.exe\0")
+							TEXT("All Files\0*.*\0");
+	ofn.lpstrFile       = szCPFilename;
+	ofn.nMaxFile        = MAX_PATH;
+	ofn.lpstrInitialDir = szDirectory;
+	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+	ofn.lpstrTitle      = pszTitle;
+	
+	//int nRes = bSave ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
+	int nRes = GetOpenFileName(&ofn);
+	if(nRes)
+	{
+		strcpy(g_szNewFilename, &szCPFilename[ofn.nFileOffset]);
+
+		szCPFilename[ofn.nFileOffset] = 0;
+		if (_tcsicmp(szDirectory, szCPFilename))
+			strcpy(g_szNewDirectory, szCPFilename);
+	}
+
+	string PathName = szCPFilename;
+	PathName.append (g_szNewFilename);	
+	return PathName;
+}
+

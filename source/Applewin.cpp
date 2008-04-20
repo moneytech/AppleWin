@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -43,6 +43,11 @@ DWORD     cyclenum          = 0;			// Used by SpkrToggle() for non-wave sound
 DWORD     emulmsec          = 0;
 static DWORD emulmsec_frac  = 0;
 bool      g_bFullSpeed      = false;
+
+//Pravets 8A/C variables
+bool P8CAPS_ON = false;
+bool P8Shift = false;
+//=================================================
 
 // Win32
 HINSTANCE g_hInstance          = (HINSTANCE)0;
@@ -359,18 +364,36 @@ void GetProgramDirectory () {
 }
 
 //===========================================================================
+//Reams configuration from the registry entries
 void LoadConfiguration ()
 {
   DWORD dwComputerType;
+  //DWORD dwCloneType;
 
   if (LOAD(TEXT(REGVALUE_APPLE2_TYPE),&dwComputerType))
   {
-	  if (dwComputerType >= A2TYPE_MAX)
+	//LOAD(TEXT(REGVALUE_CLONETYPE),&dwCloneType);
+	LOAD(TEXT(REGVALUE_CLONETYPE),&g_uCloneType);
+	if (dwComputerType >= A2TYPE_MAX)
 		dwComputerType = A2TYPE_APPLE2EEHANCED;
-	  g_Apple2Type = (eApple2Type) dwComputerType;
-  }
+	if (dwComputerType == A2TYPE_CLONE)
+	  {
+		switch (g_uCloneType )
+		{
+		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
+		case 1:	g_Apple2Type = A2TYPE_PRAVETS8C; break;
+		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; 
+		}
+	  }	
+	else
+	{
+		g_Apple2Type = (eApple2Type) dwComputerType;
+	}
+  
+}
   else
   {
+	  LOAD(TEXT(REGVALUE_CLONETYPE), &g_uCloneType);
 	  LOAD(TEXT("Computer Emulation"),&dwComputerType);
 	  switch (dwComputerType)
 	  {
@@ -378,9 +401,28 @@ void LoadConfiguration ()
 	  case 0:	g_Apple2Type = A2TYPE_APPLE2;
 	  case 1:	g_Apple2Type = A2TYPE_APPLE2PLUS;
 	  case 2:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
+	  /* case 3:	
+		  {
+		  if (g_uCloneType = 0) g_Apple2Type = A2TYPE_PRAVETS82;
+		  if (g_uCloneType = 1) g_Apple2Type = A2TYPE_PRAVETS8C;
+		  }
+	*/
+	  //case 3:	g_Apple2Type = A2TYPE_PRAVETS82;
+	  //case 4:	g_Apple2Type = A2TYPE_PRAVETS8C;
 	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
 	  }
   }
+
+	switch (g_Apple2Type) //Sets the character set for the Apple model/clone
+	{
+	case A2TYPE_APPLE2:			charsettype  = 0; break; 
+	case A2TYPE_APPLE2PLUS:		charsettype  = 0; break; 
+	case A2TYPE_APPLE2E:		charsettype  = 0; break; 
+	case A2TYPE_APPLE2EEHANCED:	charsettype  = 0; break; 
+	case A2TYPE_PRAVETS82:	    charsettype  = 1; break; 
+	case A2TYPE_PRAVETS8C:	    charsettype  = 2; break; 
+	}
+
 
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);

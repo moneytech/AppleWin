@@ -50,6 +50,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 // Public _________________________________________________________________________________________
 
 	BOOL      enhancedisk     = 1;
+	string DiskPathFilename[];
 
 // Private ________________________________________________________________________________________
 
@@ -372,6 +373,7 @@ LPCTSTR DiskGetFullName (int drive) {
 }
 
 
+
 //===========================================================================
 void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 {
@@ -388,6 +390,7 @@ void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 LPCTSTR DiskGetName (int drive) {
   return g_aFloppyDisk[drive].imagename;
 }
+
 
 //===========================================================================
 
@@ -559,6 +562,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
     int error = DiskInsert(drive,filename,ofn.Flags & OFN_READONLY,1);
     if (!error)
 	{
+	DiskPathFilename[drive] = filename; 
       filename[ofn.nFileOffset] = 0;
       if (_tcsicmp(directory,filename))
         RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,filename);
