@@ -430,7 +430,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 			case A2TYPE_APPLE2PLUS:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2E:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2EEHANCED:	DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
-			case A2TYPE_PRAVETS82:		DrawBitmapRect(dc,x+7,y+19,&rect,latbitmap[bCaps != 0]); break; 
+			case A2TYPE_PRAVETS82:		DrawBitmapRect(dc,x+15,y+19,&rect,latbitmap[bCaps != 0]); break; 
 			case A2TYPE_PRAVETS8C:		DrawBitmapRect(dc,x+2,y+19,&rect,latbitmap[bCaps != 0]); break; 
 			}
 			if (g_Apple2Type == A2TYPE_PRAVETS8C) //Toggles Pravets 8A/C Caps lock LED

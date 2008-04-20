@@ -48,6 +48,11 @@ TCHAR* szJoyChoice4 = TEXT("Keyboard (centering)\0");
 TCHAR* szJoyChoice5 = TEXT("Mouse\0");
 
 const int g_nMaxJoyChoiceLen = 40;
+bool ConfigRun = false;
+//eApple2Type NewApple2Type = 0;
+DWORD NewApple2Type = 0;
+DWORD NewCloneType = 0;
+DWORD NewApple2Combo = 0;
 
 enum JOY0CHOICE {J0C_DISABLED=0, J0C_JOYSTICK1, J0C_KEYBD_STANDARD, J0C_KEYBD_CENTERING, J0C_MOUSE, J0C_MAX};
 TCHAR* pszJoy0Choices[J0C_MAX] = {	szJoyChoice0,
@@ -245,17 +250,19 @@ static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 
 static void ConfigDlg_OK(HWND window, UINT afterclose)
 {
-	HWND hwConfigTab = window;
 	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
-	DWORD NewCloneType = LOAD(TEXT(REGVALUE_CLONETYPE),&NewCloneType);	
-	eApple2Type NewApple2Type = GetApple2Type(NewCompType, NewCloneType);
+	DWORD OldApple2Type = g_Apple2Type;//LOAD(TEXT(REGVALUE_APPLE2_TYPE),&OldApple2Type);
+	eApple2Type NewApple2Type = GetApple2Type(NewCompType, 0 );
 
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
-	//afterclose = RestartOnNewComputerType(NewApple2Type, window, afterclose);
-	
-	if (NewApple2Type != g_Apple2Type)
+	if (OldApple2Type > A2TYPE_CLONE)
+	{
+		OldApple2Type = A2TYPE_CLONE;
+	}
+
+	if (NewApple2Type != OldApple2Type)
 	{		
 		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
 			MessageBox(window,
@@ -274,7 +281,6 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 				g_uTheFreezesF8Rom = false;
 		}
 	}
-
 
 	if (videotype != newvidtype)
 	{
@@ -344,6 +350,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
 			ConfigDlg_OK(window, afterclose);
+			ConfigRun = true;
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
@@ -1104,40 +1111,47 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 //===========================================================================
 static void AdvancedDlg_OK(HWND window, UINT afterclose)
 {
-	//Reads previous clone type from registry
-	LOAD(TEXT(REGVALUE_APPLE2_TYPE),&g_uCloneType);	
-	//Reads new clone type from the combo box
 	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
-	//Writes new clone type to registry
 	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
 	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
+	if (g_Apple2Type >= A2TYPE_CLONE ) 	{
+	if (NewApple2Clone != g_Apple2Type)
+		{		
+		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
+			MessageBox(window,
+						TEXT(
+						"You have changed the emulated computer "
+						"type. This change will not take effect\n"
+						"until the next time you restart the "
+						"emulator.\n\n"
+						"Would you like to restart the emulator now?"),
+						TEXT("Configuration"),
+						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			{
+			afterclose = WM_USER_RESTART;	
+			}
+		}
+	}else
+	{
+			MessageBox(window,
+						TEXT(
+						"You have changed the emulated clone type "
+						"but in order for the changes to take effect\n"
+						"you shall set the emulated computer type "
+						"to Clone from the Configuration tab.\n\n"),
+						TEXT("Clone type changed"),
+						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;  }
+		
+	if (NewApple2Type > A2TYPE_APPLE2PLUS)
+				g_uTheFreezesF8Rom = false;
+
 
 	//
 
 	if (afterclose)
 		PostMessage(g_hFrameWindow,afterclose,0,0);
 }
-
-/*static void AdvancedDlg_OK(HWND window, UINT afterclose)
-{
-	HWND hwAdvancedTab = window; 
-	//DWORD NewCompType = (DWORD) SendDlgItemMessage(hwConfigTab ,IDC_COMPUTER,CB_GETCURSEL,0,0);
-	//DWORD NewCloneType = g_uCloneType;
-	//eApple2Type NewApple2Type = GetApple2Type(NewCompType, g_uCloneType);
-	//DWORD NewApple2Type = 0;
-	//LOAD(TEXT(REGVALUE_APPLE2_TYPE),&NewApple2Type );	
-	g_uCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
-	
-	SAVE(TEXT(REGVALUE_CLONETYPE), g_uCloneType);
-	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
-
-	//
-//	afterclose = RestartOnNewComputerType(NewApple2Type, window, afterclose);
-
-	//if (afterclose)
-		//PostMessage(g_hFrameWindow,afterclose,0,0);
-}
-*/
 
 static void AdvancedDlg_CANCEL(HWND window)
 {
@@ -1179,8 +1193,12 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
+			if (ConfigRun == false)
+			{
+				ConfigDlg_OK(window, afterclose);
+				ConfigRun = false;
+			}
 			AdvancedDlg_OK(window, afterclose);
-			ConfigDlg_OK(window, afterclose);
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
@@ -1526,8 +1544,10 @@ void PSP_Init()
 	PropSheetHeader.nStartPage = g_nLastPage;
 	PropSheetHeader.ppsp = PropSheetPages;
 
+	DWORD g_Apple2Type = 0;
 	g_bEnableFreezeDlgButton = UNDEFINED;
 	int i = PropertySheet(&PropSheetHeader);	// Result: 0=Cancel, 1=OK
+
 }
 
 DWORD PSP_GetVolumeMax()
@@ -1551,30 +1571,6 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 	}
 }
 
-
-UINT RestartOnNewComputerType(DWORD NewApple2Type, HWND window, UINT afterclose)
-{
-	if (NewApple2Type != g_Apple2Type)
-	{		
-		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
-			MessageBox(window,
-						TEXT(
-						"You have changed the emulated computer "
-						"type.  This change will not take effect "
-						"until the next time you restart the "
-						"emulator.\n\n"
-						"Would you like to restart the emulator now?"),
-						TEXT("Configuration"),
-						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
-		{
-			//afterclose = WM_USER_RESTART;
-			return WM_USER_RESTART;
-
-			if (NewApple2Type > A2TYPE_APPLE2PLUS)
-				g_uTheFreezesF8Rom = false;
-		}
-	}
-}
 
 string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 {
