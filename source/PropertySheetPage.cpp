@@ -247,9 +247,7 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 {
 	HWND hwConfigTab = window;
 	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
-	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window ,IDC_CLONETYPE,CB_GETCURSEL,0,0);
-	//DWORD NewCloneType = g_uCloneType;
-	//eApple2Type NewApple2Type = GetApple2Type(NewCompType, g_uCloneType);
+	DWORD NewCloneType = LOAD(TEXT(REGVALUE_CLONETYPE),&NewCloneType);	
 	eApple2Type NewApple2Type = GetApple2Type(NewCompType, NewCloneType);
 
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
@@ -429,8 +427,6 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,4);
 	  else
 		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,iApple2String);
-	  //FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
-	  FillComboBox(hwConfigTab, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
       FillComboBox(hwConfigTab,IDC_VIDEOTYPE,videochoices,videotype);
       FillComboBox(hwConfigTab,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
       SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
@@ -1108,9 +1104,12 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 //===========================================================================
 static void AdvancedDlg_OK(HWND window, UINT afterclose)
 {
-	g_uCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
-
-	SAVE(TEXT(REGVALUE_CLONETYPE), g_uCloneType);
+	//Reads previous clone type from registry
+	LOAD(TEXT(REGVALUE_APPLE2_TYPE),&g_uCloneType);	
+	//Reads new clone type from the combo box
+	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
+	//Writes new clone type to registry
+	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
 	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
 
 	//
@@ -1181,6 +1180,7 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
 			AdvancedDlg_OK(window, afterclose);
+			ConfigDlg_OK(window, afterclose);
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
@@ -1580,25 +1580,7 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 {
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
 	TCHAR szCPFilename[MAX_PATH];
-	//string PathName = "";
-	
-
-	// Attempt to use drive1's image name as the name for the .aws file
-	/*LPCTSTR pDiskName0 = DiskGetName(0);
-	if (pDiskName0 && pDiskName0[0])
-	{
-		strcpy(szCPFilename, pDiskName0);
-		strcpy(&szCPFilename[strlen(pDiskName0)], ".exe");
-		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
-	}
-	else
-	{*/
-		//strcpy(szCPFilename, Snapshot_GetFilename());
 	strcpy(szCPFilename, "");
-	//}
-				
-	//
-
 	
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn,sizeof(OPENFILENAME));
@@ -1613,8 +1595,7 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 	ofn.lpstrInitialDir = szDirectory;
 	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
 	ofn.lpstrTitle      = pszTitle;
-	
-	//int nRes = bSave ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
+		
 	int nRes = GetOpenFileName(&ofn);
 	if(nRes)
 	{

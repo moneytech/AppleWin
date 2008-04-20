@@ -26,6 +26,7 @@ Extended Basic and Miniassembler work, but there are still problems with the 8 b
 Some keys have to be remapped, because currently they are not available (i.e. Ý). There is still the problem that there is not enough space for this key on the keyboard.
 . Added Send to CiderPress function via the popup menu of the drive buttons.
 . There is a significant bug in clone emulation- still AppleWin does not know when to restart when the clone is changes, so the user has to do this manually.
+It can also cause fake "changed emulater computer" messages.
 
 1.14.1.2 - 2 Dec 2007 (beta)
 ----------------------------
