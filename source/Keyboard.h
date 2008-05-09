@@ -14,7 +14,7 @@ BYTE    KeybGetKeycode ();
 DWORD   KeybGetNumQueries ();
 void    KeybQueueKeypress (int,BOOL);
 void    KeybToggleCapsLock ();
-void    KeybToggleP8CCapsLock ();
+void    KeybToggleP8ACapsLock ();
 DWORD   KeybGetSnapshot(SS_IO_Keyboard* pSS);
 DWORD   KeybSetSnapshot(SS_IO_Keyboard* pSS);
 

@@ -126,7 +126,7 @@ enum {
 DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
 
 static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")		// Bulgarian
-									TEXT("Pravets 8C\0");	// Bulgarian
+									TEXT("Pravets 8A\0");	// Bulgarian
 
 
 //===========================================================================
@@ -242,7 +242,7 @@ static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 			switch (NewCloneType)
 			{
 			case 0: return A2TYPE_PRAVETS82; break;
-			case 1: return A2TYPE_PRAVETS8C; break;
+			case 1: return A2TYPE_PRAVETS8A; break;
 			}			
 		default:	return A2TYPE_APPLE2EEHANCED;
 	}
@@ -303,7 +303,7 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	{
 		NewCloneType = NewApple2Type - A2TYPE_CLONE;		
 	}
-	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8C))
+	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8A))
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),A2TYPE_CLONE );
 	else
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
@@ -426,7 +426,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_APPLE2E:		iApple2String = 2; break;
 		case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
 		case A2TYPE_PRAVETS82:	    iApple2String = 4; break;
-		case A2TYPE_PRAVETS8C:	    iApple2String = 5; break;
+		case A2TYPE_PRAVETS8A:	    iApple2String = 5; break;
 	  }
 
 	  HWND hwConfigTab = window;

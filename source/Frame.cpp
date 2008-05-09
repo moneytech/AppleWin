@@ -121,7 +121,7 @@ switch (g_Apple2Type)
 			case A2TYPE_APPLE2E:		buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
 			case A2TYPE_APPLE2EEHANCED:	buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
 			case A2TYPE_PRAVETS82:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
-			case A2TYPE_PRAVETS8C:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
+			case A2TYPE_PRAVETS8A:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
 			}
 
   buttonbitmap[BTN_DRIVE1 ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DRIVE1_BUTTON"));
@@ -140,7 +140,7 @@ switch (g_Apple2Type)
   latbitmap[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("LATON_BITMAP"));
   charsetbitmap[0] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_APPLE_BITMAP"));
   charsetbitmap[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_82_BITMAP"));
-  charsetbitmap[2] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_8C_BITMAP"));
+  charsetbitmap[2] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_8A_BITMAP"));
   //===========================
   diskbitmap[ DISK_STATUS_OFF  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKOFF_BITMAP"));
   diskbitmap[ DISK_STATUS_READ ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKREAD_BITMAP"));
@@ -431,16 +431,16 @@ void DrawStatusArea (HDC passdc, int drawflags)
 			case A2TYPE_APPLE2E:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2EEHANCED:	DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_PRAVETS82:		DrawBitmapRect(dc,x+15,y+19,&rect,latbitmap[bCaps != 0]); break; 
-			case A2TYPE_PRAVETS8C:		DrawBitmapRect(dc,x+2,y+19,&rect,latbitmap[bCaps != 0]); break; 
+			case A2TYPE_PRAVETS8A:		DrawBitmapRect(dc,x+2,y+19,&rect,latbitmap[bCaps != 0]); break; 
 			}
-			if (g_Apple2Type == A2TYPE_PRAVETS8C) //Toggles Pravets 8A/C Caps lock LED
+			if (g_Apple2Type == A2TYPE_PRAVETS8A) //Toggles Pravets 8A/C Caps lock LED
 			{
 				RECT rect = {0,0,22,8};
 				DrawBitmapRect(dc,x+23,y+19,&rect,capsbitmapP8[P8CAPS_ON != 0]);
 			}
 
 
-/*				if (g_Apple2Type == A2TYPE_PRAVETS8C)
+/*				if (g_Apple2Type == A2TYPE_PRAVETS8A)
 					DrawBitmapRect(dc,x+7,y+19,&rect,cyrbitmap[bCaps != 0]);
 				else
 					DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]);
@@ -458,7 +458,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 			case A2TYPE_APPLE2E:		_tcscpy(title, TITLE_APPLE_2E); break; 
 			case A2TYPE_APPLE2EEHANCED:	_tcscpy(title, TITLE_APPLE_2E_ENHANCED); break; 
 			case A2TYPE_PRAVETS82:		_tcscpy(title, TITLE_PRAVETS_82); break; 
-			case A2TYPE_PRAVETS8C:		_tcscpy(title, TITLE_PRAVETS_8C); break; 
+			case A2TYPE_PRAVETS8A:		_tcscpy(title, TITLE_PRAVETS_8A); break; 
 			}
 
 			switch (g_nAppMode)
@@ -739,9 +739,9 @@ LRESULT CALLBACK FrameWndProc (
 
 		if (wparam == VK_F10)
 		{
-			if ((g_Apple2Type == A2TYPE_PRAVETS8C) && (GetKeyState(VK_CONTROL) >= 0))
+			if ((g_Apple2Type == A2TYPE_PRAVETS8A) && (GetKeyState(VK_CONTROL) >= 0))
 			{
-				KeybToggleP8CCapsLock ();//Toggles P8 Capslock
+				KeybToggleP8ACapsLock ();//Toggles P8 Capslock
 			}
 			else 
 			{
@@ -1366,7 +1366,7 @@ void FrameCreateWindow ()
 	case A2TYPE_APPLE2E:		g_pAppTitle = TITLE_APPLE_2E; break; 
 	case A2TYPE_APPLE2EEHANCED:	g_pAppTitle = TITLE_APPLE_2E_ENHANCED; break; 
 	case A2TYPE_PRAVETS82:	    g_pAppTitle = TITLE_PRAVETS_82; break; 
-	case A2TYPE_PRAVETS8C:	    g_pAppTitle = TITLE_PRAVETS_8C; break; 
+	case A2TYPE_PRAVETS8A:	    g_pAppTitle = TITLE_PRAVETS_8A; break; 
 	}
 
 

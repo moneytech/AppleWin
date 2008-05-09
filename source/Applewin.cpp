@@ -381,7 +381,7 @@ void LoadConfiguration ()
 		switch (g_uCloneType )
 		{
 		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
-		case 1:	g_Apple2Type = A2TYPE_PRAVETS8C; break;
+		case 1:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
 		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; 
 		}
 	  }	
@@ -404,11 +404,11 @@ void LoadConfiguration ()
 	  /* case 3:	
 		  {
 		  if (g_uCloneType = 0) g_Apple2Type = A2TYPE_PRAVETS82;
-		  if (g_uCloneType = 1) g_Apple2Type = A2TYPE_PRAVETS8C;
+		  if (g_uCloneType = 1) g_Apple2Type = A2TYPE_PRAVETS8A;
 		  }
 	*/
 	  //case 3:	g_Apple2Type = A2TYPE_PRAVETS82;
-	  //case 4:	g_Apple2Type = A2TYPE_PRAVETS8C;
+	  //case 4:	g_Apple2Type = A2TYPE_PRAVETS8A;
 	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
 	  }
   }
@@ -420,7 +420,7 @@ void LoadConfiguration ()
 	case A2TYPE_APPLE2E:		charsettype  = 0; break; 
 	case A2TYPE_APPLE2EEHANCED:	charsettype  = 0; break; 
 	case A2TYPE_PRAVETS82:	    charsettype  = 1; break; 
-	case A2TYPE_PRAVETS8C:	    charsettype  = 2; break; 
+	case A2TYPE_PRAVETS8A:	    charsettype  = 2; break; 
 	}
 
 

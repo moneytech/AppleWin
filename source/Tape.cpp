@@ -48,7 +48,7 @@ BYTE __stdcall TapeRead (WORD, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
 
 	static byte CurrentKestroke = 0;
 	CurrentKestroke = KeybGetKeycode();
-	if (g_Apple2Type == A2TYPE_PRAVETS8C ) 
+	if (g_Apple2Type == A2TYPE_PRAVETS8A ) 
 	{
 		C060=  MemReadFloatingBus(nCyclesLeft); //IO_Null(pc, addr, bWrite, d, nCyclesLeft);			
 		if (CapsLockAllowed) //8bit keyboard mode			
@@ -78,7 +78,7 @@ because tape is not written in $C060
 */
 BYTE __stdcall TapeWrite(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
-	if (g_Apple2Type == A2TYPE_PRAVETS8C) 				
+	if (g_Apple2Type == A2TYPE_PRAVETS8A) 				
 	{
 	if (value & 1) 
 		CapsLockAllowed = true;

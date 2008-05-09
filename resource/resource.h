@@ -92,7 +92,6 @@
 #define ID_DISKMENU_WRITEPROTECTION_OFF 40006
 #define ID_DISKMENU_SENDTO_CIDERPRESS	40007
 
-
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

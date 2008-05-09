@@ -196,7 +196,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			if ((g_bCapsLock == false) && (key >= 'A') && (key <='Z'))
 			{
 			P8Shift = true;
-			if (g_Apple2Type == A2TYPE_PRAVETS8C) 
+			if (g_Apple2Type == A2TYPE_PRAVETS8A) 
 				keycode = key + 32;
 			}
 			
@@ -211,7 +211,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 				}
 
 			//Remap some keys for Pravets8A/C, which has a different charset for Pravtes82/M, whose keys MUST NOT be remapped.
-			if (g_Apple2Type == A2TYPE_PRAVETS8C) //&& (g_bCapsLock == false))
+			if (g_Apple2Type == A2TYPE_PRAVETS8A) //&& (g_bCapsLock == false))
 				if (g_bCapsLock == false) //i.e. cyrillic letters
 			    {
 				if (key == '[') keycode = '{';
@@ -247,7 +247,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 		}
 		else
 		{
-			if (g_Apple2Type == A2TYPE_PRAVETS8C)
+			if (g_Apple2Type == A2TYPE_PRAVETS8A)
 			{
 			}
 			else
@@ -474,9 +474,9 @@ void KeybToggleCapsLock ()
 }
 
 //===========================================================================
-void KeybToggleP8CCapsLock ()
+void KeybToggleP8ACapsLock ()
 {
-	if (g_Apple2Type == A2TYPE_PRAVETS8C)
+	if (g_Apple2Type == A2TYPE_PRAVETS8A)
 		P8CAPS_ON = !P8CAPS_ON;
 		FrameRefreshStatus(DRAW_LEDS);
 		// g_bP8CapsLock= g_bP8CapsLock?false:true; //The same as the upper, but slower

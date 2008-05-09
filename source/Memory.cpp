@@ -274,7 +274,7 @@ static BYTE __stdcall IOWrite_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULON
 	switch (addr & 0xf)
 	{
 	case 0x0:	
-		if (g_Apple2Type == A2TYPE_PRAVETS8C )
+		if (g_Apple2Type == A2TYPE_PRAVETS8A )
 			return TapeWrite (pc, addr, bWrite, d, nCyclesLeft);			
 		else
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft); //Apple2 value
@@ -902,7 +902,7 @@ void MemInitialize()
 	const UINT Apple2RomSize = 12*1024;
 	const UINT Apple2eRomSize = Apple2RomSize+CxRomSize;
 	//const UINT Pravets82RomSize = 12*1024;
-	//const UINT Pravets8CRomSize = Pravets82RomSize+CxRomSize;
+	//const UINT Pravets8ARomSize = Pravets82RomSize+CxRomSize;
 
 	// ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
 	memaux   = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
@@ -959,7 +959,7 @@ void MemInitialize()
 	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	case A2TYPE_PRAVETS82:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_82_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break; 
-	case A2TYPE_PRAVETS8C:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_8C_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break; 
+	case A2TYPE_PRAVETS8A:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_8C_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break; 
 	}
 
 	if(hResInfo == NULL)
@@ -972,7 +972,7 @@ void MemInitialize()
 		case A2TYPE_APPLE2E:		_tcscpy(sRomFileName, TEXT("APPLE2E.ROM")); break;
 		case A2TYPE_APPLE2EEHANCED:	_tcscpy(sRomFileName, TEXT("APPLE2E_ENHANCED.ROM")); break;
 		case A2TYPE_PRAVETS82:	    _tcscpy(sRomFileName, TEXT("PRAVETS82.ROM")); break;  //Rom to be changed. Currently an Apple 2E Rom is used, because of the lack of a genuine Pravets82 one.
-		case A2TYPE_PRAVETS8C:	    _tcscpy(sRomFileName, TEXT("PRAVETS8C.ROM")); break;
+		case A2TYPE_PRAVETS8A:	    _tcscpy(sRomFileName, TEXT("PRAVETS8C.ROM")); break;
 		}
 
 		TCHAR sText[ MAX_PATH ];
@@ -1115,7 +1115,7 @@ void MemReset ()
 void MemResetPaging ()
 {
   ResetPaging(0);
-  	if (g_Apple2Type == A2TYPE_PRAVETS8C)
+  	if (g_Apple2Type == A2TYPE_PRAVETS8A)
 	{
 		P8CAPS_ON = false; 
 		TapeWrite (0, 0, 0, 0 ,0);
