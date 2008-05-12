@@ -423,10 +423,10 @@ void DrawStatusArea (HDC passdc, int drawflags)
 
 			if (!IS_APPLE2)
 			{
-				RECT rect = {0,0,22,8};
+				RECT rect = {0,0,31,8};
 			switch (g_Apple2Type)
 			{
-			case A2TYPE_APPLE2:			DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
+			case A2TYPE_APPLE2:			DrawBitmapRect(dc,x+7,y+9,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2PLUS:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2E:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
 			case A2TYPE_APPLE2EEHANCED:	DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
@@ -736,7 +736,6 @@ LRESULT CALLBACK FrameWndProc (
 		else if (g_nAppMode == MODE_DEBUG)
 			DebuggerProcessKey(wparam);
 
-
 		if (wparam == VK_F10)
 		{
 			if ((g_Apple2Type == A2TYPE_PRAVETS8A) && (GetKeyState(VK_CONTROL) >= 0))
@@ -746,10 +745,10 @@ LRESULT CALLBACK FrameWndProc (
 			else 
 			{
 				SetUsingCursor(0);
-			    return 0;
+			    //return 0;
 			}
-
 		}
+		return 0;
 		break;
 
     case WM_KEYUP:
