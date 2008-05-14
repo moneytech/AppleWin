@@ -1157,7 +1157,8 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	//This is the default installation path of CiderPress. It shall not be left blank, otherwise  an explorer window will be open.
 	TCHAR PathToCiderPress[MAX_PATH] = "C:\\Program Files\\faddenSoft\\CiderPress\\CiderPress.exe";
 	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
-	
+	//TODO: A directory is open if an empty path to CiderPress is set. This has to be fixed.
+
 	string filename1= "\"";
 	filename1.append (DiskPathFilename[iDrive]);
 	filename1.append ("\"");
