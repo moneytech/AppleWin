@@ -244,6 +244,7 @@ static void RemoveDisk (int iDrive)
 
 	memset( pFloppy->imagename, 0, MAX_DISK_IMAGE_NAME+1 );
 	memset( pFloppy->fullname , 0, MAX_DISK_FULL_NAME +1 );
+	DiskPathFilename[iDrive] = "";
 }
 
 //===========================================================================
@@ -420,8 +421,11 @@ int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL crea
                         &fptr->imagehandle,
                         &fptr->writeprotected,
                         createifnecessary);
-  if (error == IMAGE_ERROR_NONE)
-    GetImageTitle(imagefilename,fptr);
+    if (error == IMAGE_ERROR_NONE)
+	{
+	GetImageTitle(imagefilename,fptr);
+	DiskPathFilename[drive]= imagefilename;
+	}
   return error;
 }
 

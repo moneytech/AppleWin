@@ -745,7 +745,6 @@ LRESULT CALLBACK FrameWndProc (
 			else 
 			{
 				SetUsingCursor(0);
-			    //return 0;
 			}
 		}
 		return 0;
@@ -1158,9 +1157,12 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	//This is the default installation path of CiderPress. It shall not be left blank, otherwise  an explorer window will be open.
 	TCHAR PathToCiderPress[MAX_PATH] = "C:\\Program Files\\faddenSoft\\CiderPress\\CiderPress.exe";
 	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
+	
 	string filename1= "\"";
 	filename1.append (DiskPathFilename[iDrive]);
 	filename1.append ("\"");
+	string sFileNameEmpty = "\"";
+	sFileNameEmpty.append ("\"");
 		
 	//  Load the menu template containing the shortcut menu from the 
 	//  application's resources. 
@@ -1204,21 +1206,37 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	else
 	if (iCommand == ID_DISKMENU_SENDTO_CIDERPRESS)
 	{
-		//if (filename1 == EmptyPath))
-		//if(!filename1.compare("\"\""))
-		if(!filename1.compare("\"\"") == false)
+		//if(!filename1.compare("\"\"") == false) //It does not work this way!!!
+		if(!filename1.compare(sFileNameEmpty) )		
 		{
-			HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , "C:\\", SW_SHOWNORMAL);
-		
+			int MB_Result = 0;
+			MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
+			if (MB_Result == 6) //6= Yes
+			{
+				HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
+				//HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , "C:\\", SW_SHOWNORMAL);
+				if((int)nResult == ERROR_FILE_NOT_FOUND )
+				{
+				MessageBox( NULL,
+				"CiderPress not found!\n"
+				"Please install CiderPress in case it is not otherwise\n"
+				"set the path to to from Configuration/Disk."
+				, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+			    }
+			}
+		}
+		else
+		{
+			HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , NULL, SW_SHOWNORMAL);
 		if((int)nResult == ERROR_FILE_NOT_FOUND )
 		{
         MessageBox( NULL,
             "CiderPress not found!\n"
-            "Please install CiderPress in case it is not and\n"
-            "set the path to from Configuration/Disk."
+            "Please install CiderPress in case it is not otherwise\n"
+            "set the path to it from Configuration/Disk."
             , "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
 		}
-	}
+		}
 	}
 
 	// Destroy the menu. 
