@@ -31,6 +31,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "MouseInterface.h"
 #include "..\resource\resource.h"
 #include "process.h"
+#include <sys/stat.h>
 
 #define ENABLE_MENU 0
 
@@ -101,6 +102,7 @@ void    ResetMachineState ();
 void    SetFullScreenMode ();
 void    SetNormalMode ();
 void    SetUsingCursor (BOOL);
+bool FileExists(string strFilename);
 
 bool	g_bScrollLock_FullSpeed = false;
 
@@ -1207,42 +1209,48 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	else
 	if (iCommand == ID_DISKMENU_SENDTO_CIDERPRESS)
 	{
-		//if(!filename1.compare("\"\"") == false) //It does not work this way!!!
+		//if(!filename1.compare("\"\"") == false) //Do not use this, for some reason it does not work!!!
 		if(!filename1.compare(sFileNameEmpty) )		
 		{
 			int MB_Result = 0;
 			MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
 			if (MB_Result == 6) //6= Yes
 			{
-				HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
-				//HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , "C:\\", SW_SHOWNORMAL);
-				if((int)nResult == ERROR_FILE_NOT_FOUND )
+				if (FileExists (PathToCiderPress ))
 				{
-				MessageBox( NULL,
+					HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
+				}
+				else					
+					{
+					MessageBox( NULL,
 				"CiderPress not found!\n"
-				"Please install CiderPress in case it is not otherwise\n"
-				"set the path to to from Configuration/Disk."
-				, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
-			    }
+				"Please install CiderPress in case it is not \n"
+				"or set the path to it from Configuration/Disk otherwise."
+					, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+					}
+				}
 			}
-		}
 		else
 		{
+			if (FileExists (PathToCiderPress ))
+			{
 			HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , NULL, SW_SHOWNORMAL);
-		if((int)nResult == ERROR_FILE_NOT_FOUND )
-		{
-        MessageBox( NULL,
-            "CiderPress not found!\n"
-            "Please install CiderPress in case it is not otherwise\n"
-            "set the path to it from Configuration/Disk."
-            , "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+			}
+			else
+			{
+			MessageBox( NULL,
+				"CiderPress not found!\n"
+				"Please install CiderPress in case it is not \n"
+				"or set the path to it from Configuration/Disk otherwise."
+				, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+			}
 		}
-		}
-	}
+
 
 	// Destroy the menu. 
 	DestroyMenu(hmenu); 
-} 
+	}
+}
 
 
 //===========================================================================
@@ -1509,4 +1517,18 @@ void FrameReleaseVideoDC () {
     // BUT THIS SEEMS TO BE WORKING
     surface->Unlock(NULL);
   }
+}
+bool FileExists(string strFilename) 
+{ 
+  struct stat stFileInfo; 
+  bool blnReturn; 
+  int intStat; 
+  intStat = stat(strFilename.c_str(),&stFileInfo); 
+  if(intStat == 0) { 
+     blnReturn = true; 
+  } else { 
+     blnReturn = false; 
+  } 
+   
+  return(blnReturn); 
 }

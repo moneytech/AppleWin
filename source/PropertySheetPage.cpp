@@ -1577,7 +1577,9 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
 	TCHAR szCPFilename[MAX_PATH];
 	strcpy(szCPFilename, "");
-	
+	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename ,MAX_PATH);
+	string PathName = szCPFilename;
+
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn,sizeof(OPENFILENAME));
 	
@@ -1593,17 +1595,22 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 	ofn.lpstrTitle      = pszTitle;
 		
 	int nRes = GetOpenFileName(&ofn);
-	if(nRes)
+	if(nRes) //Okay is pressed
 	{
 		strcpy(g_szNewFilename, &szCPFilename[ofn.nFileOffset]);
 
 		szCPFilename[ofn.nFileOffset] = 0;
 		if (_tcsicmp(szDirectory, szCPFilename))
 			strcpy(g_szNewDirectory, szCPFilename);
+			PathName = szCPFilename;
+			PathName.append (g_szNewFilename);	
 	}
-
-	string PathName = szCPFilename;
-	PathName.append (g_szNewFilename);	
+	
+	else //Cancel is pressed.
+	{
+		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename,MAX_PATH);
+		PathName = szCPFilename;
+	}
 	return PathName;
 }
 

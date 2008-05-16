@@ -11,7 +11,6 @@ extern HWND       g_hFrameWindow;
 extern HDC        g_hFrameDC;
 
 extern BOOL       fullscreen;
-
 void    FrameCreateWindow ();
 HDC     FrameGetDC ();
 HDC     FrameGetVideoDC (LPBYTE *,LONG *);
