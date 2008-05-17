@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -382,6 +382,8 @@ void LoadConfiguration ()
 	  }
   }
 
+  LOAD(TEXT(REGVALUE_CLONETYPE), &g_uCloneType);
+
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
   LOAD(TEXT("Sound Emulation")   ,&soundtype);
@@ -436,6 +438,8 @@ void LoadConfiguration ()
 
   if(LOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
 	  g_uMouseInSlot4 = dwTmp;
+  if(LOAD(TEXT(REGVALUE_MOUSE_CROSSHAIR), &dwTmp))
+	  g_uMouseShowCrosshair = dwTmp;
   g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
 
   //
@@ -673,7 +677,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	//-----
 
 	// Initialize COM - so we can use CoCreateInstance
-	// . NB. DSInit() & DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
+	// . NB. DSInit() & DIMouse::DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	bool bSysClkOK = SysClk_InitTimer();
 

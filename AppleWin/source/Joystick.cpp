@@ -508,7 +508,7 @@ BOOL JoySetEmulationType (HWND window, DWORD newtype, int nJoystickNumber)
   else if ((joyinfo[newtype].device == DEVICE_MOUSE) &&
            (joyinfo[joytype[nJoystickNumber]].device != DEVICE_MOUSE))
   {
-	if (sg_Mouse.Active())
+	if (sg_Mouse.IsActive())
 	{
 	  MessageBox(window,
 				 TEXT("Mouse interface card is enabled - unable to use mouse for joystick emulation."),
