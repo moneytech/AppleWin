@@ -16,7 +16,6 @@
 #define IDC_SLIDER_CPU_SPEED            111
 #define IDD_PROPPAGE_SOUND              112
 #define IDC_DISKTYPE                    113
-#define IDD_PROPPAGE_SAVESTATE          114
 #define IDC_JOYSTICK1                   115
 #define IDD_PROPPAGE_DISK               116
 #define IDC_BENCHMARK                   117

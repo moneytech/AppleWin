@@ -422,7 +422,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 
 			if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
 				_tcscat(title,TEXT(" (custom rom)"));
-			else if (g_uTheFreezesF8Rom)
+			else if (g_uTheFreezesF8Rom && IS_APPLE2)
 				_tcscat(title,TEXT(" (The Freeze's non-autostart F8 rom)"));
 
 			switch (g_nAppMode)
