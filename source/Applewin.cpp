@@ -364,7 +364,7 @@ void GetProgramDirectory () {
 }
 
 //===========================================================================
-//Reams configuration from the registry entries
+//Reads configuration from the registry entries
 void LoadConfiguration ()
 {
   DWORD dwComputerType;
@@ -374,15 +374,16 @@ void LoadConfiguration ()
   {
 	//LOAD(TEXT(REGVALUE_CLONETYPE),&dwCloneType);
 	LOAD(TEXT(REGVALUE_CLONETYPE),&g_uCloneType);
-	if (dwComputerType >= A2TYPE_MAX)
+	if ((dwComputerType >= A2TYPE_MAX) || (dwComputerType >= A2TYPE_UNDEFINED && dwComputerType < A2TYPE_CLONE))
 		dwComputerType = A2TYPE_APPLE2EEHANCED;
+
 	if (dwComputerType == A2TYPE_CLONE)
 	  {
-		switch (g_uCloneType )
+		switch (g_uCloneType)
 		{
 		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
 		case 1:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
-		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; 
+		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; break;
 		}
 	  }	
 	else

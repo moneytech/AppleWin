@@ -125,7 +125,7 @@ enum {
 };
 DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
 
-static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")		// Bulgarian
+static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")	// Bulgarian
 									TEXT("Pravets 8A\0");	// Bulgarian
 
 
@@ -238,7 +238,7 @@ static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 		case 1:		return A2TYPE_APPLE2PLUS;
 		case 2:		return A2TYPE_APPLE2E;
 		case 3:		return A2TYPE_APPLE2EEHANCED;
-		case 4:		
+		case 4:		// Clone
 			switch (NewCloneType)
 			{
 			case 0: return A2TYPE_PRAVETS82; break;
@@ -263,7 +263,7 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	}
 
 	if (NewApple2Type != OldApple2Type)
-	{		
+	{
 		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
 			MessageBox(window,
 						TEXT(
@@ -1602,10 +1602,10 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 		szCPFilename[ofn.nFileOffset] = 0;
 		if (_tcsicmp(szDirectory, szCPFilename))
 			strcpy(g_szNewDirectory, szCPFilename);
-			PathName = szCPFilename;
-			PathName.append (g_szNewFilename);	
+
+		PathName = szCPFilename;
+		PathName.append (g_szNewFilename);	
 	}
-	
 	else //Cancel is pressed.
 	{
 		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename,MAX_PATH);
