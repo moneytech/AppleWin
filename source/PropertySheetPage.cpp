@@ -257,10 +257,11 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
-	if (OldApple2Type > A2TYPE_CLONE)
+	if (OldApple2Type > A2TYPE_CLONE + APPLE2E_MASK)
 	{
-		OldApple2Type = A2TYPE_CLONE;
+		OldApple2Type = A2TYPE_CLONE + APPLE2E_MASK;
 	}
+	
 
 	if (NewApple2Type != OldApple2Type)
 	{
@@ -1115,9 +1116,10 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
 	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
 	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
-	if (g_Apple2Type >= A2TYPE_CLONE ) 	{
+	if (g_Apple2Type >= A2TYPE_CLONE ) 	
+	{
 	if (NewApple2Clone != g_Apple2Type)
-		{		
+			{		
 		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
 			MessageBox(window,
 						TEXT(
@@ -1131,9 +1133,12 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 			{
 			afterclose = WM_USER_RESTART;	
 			}
-		}
-	}else
+	}
+	}
+	
+		else
 	{
+		if (NewApple2Clone != (g_uCloneType+A2TYPE_CLONE+APPLE2E_MASK))
 			MessageBox(window,
 						TEXT(
 						"You have changed the emulated clone type "
@@ -1141,11 +1146,10 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 						"you shall set the emulated computer type "
 						"to Clone from the Configuration tab.\n\n"),
 						TEXT("Clone type changed"),
-						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;  }
-		
+						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;  
+	}
 	if (NewApple2Type > A2TYPE_APPLE2PLUS)
 				g_uTheFreezesF8Rom = false;
-
 
 	//
 
