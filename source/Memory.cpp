@@ -103,15 +103,13 @@ void UpdatePaging(BOOL initialize, BOOL updatewriteonly);
 
 static BYTE __stdcall IORead_C00x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
-	//return KeybReadData(pc, addr, bWrite , d, nCyclesLeft);
-	return KeybReadData(pc, addr, bWrite , d, nCyclesLeft); //Reads cell $C000
+	return KeybReadData(pc, addr, bWrite, d, nCyclesLeft);
 }
 
 static BYTE __stdcall IOWrite_C00x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	if ((addr & 0xf) <= 0xB)
-//		return MemSetPaging(pc, addr, bWrite , d, nCyclesLeft);
- return MemSetPaging(pc, addr, bWrite , d, nCyclesLeft);
+		return MemSetPaging(pc, addr, bWrite, d, nCyclesLeft);
 	else
 		return VideoSetMode(pc, addr, bWrite, d, nCyclesLeft);
 }
@@ -384,7 +382,6 @@ BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value
 	else
 		return 0;
 }
-
 
 BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
@@ -1034,7 +1031,7 @@ void MemInitialize()
 		}
 	}
 
-	if (g_uTheFreezesF8Rom)
+	if (g_uTheFreezesF8Rom && IS_APPLE2)
 	{
 		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_FREEZES_F8_ROM), "ROM");
 

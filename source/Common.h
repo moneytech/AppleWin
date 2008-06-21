@@ -54,15 +54,13 @@ enum AppMode_e
 #define  BTN_SETUP         7
 #define  BTN_P8CAPS        9
 
-//#define	MAXIMAGES          16
-
 // TODO: Move to StringTable.h
 #define	TITLE_APPLE_2			TEXT("Apple ][ Emulator")
 #define	TITLE_APPLE_2_PLUS		TEXT("Apple ][+ Emulator")
 #define	TITLE_APPLE_2E			TEXT("Apple //e Emulator")
 #define	TITLE_APPLE_2E_ENHANCED	TEXT("Enhanced Apple //e Emulator")
-#define	TITLE_PRAVETS_82	TEXT("Pravets 82 Emulator")
-#define	TITLE_PRAVETS_8A	TEXT("Pravets 8A Emulator")
+#define	TITLE_PRAVETS_82        TEXT("Pravets 82 Emulator")
+#define	TITLE_PRAVETS_8A        TEXT("Pravets 8A Emulator")
 
 #define TITLE_PAUSED       TEXT(" Paused ")
 #define TITLE_STEPPING     TEXT("Stepping")
@@ -75,7 +73,6 @@ enum AppMode_e
 #define  REGVALUE_SPKR_VOLUME        "Speaker Volume"
 #define  REGVALUE_MB_VOLUME          "Mockingboard Volume"
 #define  REGVALUE_SOUNDCARD_TYPE     "Soundcard Type"
-//#define  REGVALUE_KEYB_BUFFER_ENABLE "Keyboard Buffer Enable"
 #define  REGVALUE_SAVESTATE_FILENAME "Save State Filename"
 #define  REGVALUE_SAVE_STATE_ON_EXIT "Save State On Exit"
 #define  REGVALUE_HDD_ENABLED        "Harddisk Enable"
@@ -85,12 +82,14 @@ enum AppMode_e
 #define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
 #define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
 #define  REGVALUE_MOUSE_IN_SLOT4     "Mouse in slot 4"
+#define  REGVALUE_MOUSE_CROSSHAIR    "Mouse crosshair"
+#define  REGVALUE_MOUSE_RESTRICT_TO_WINDOW "Mouse restrict to window"
 #define  REGVALUE_THE_FREEZES_F8_ROM "The Freeze's F8 Rom"
 #define  REGVALUE_CLONETYPE          "Clone Type"
-#define  REGVALUE_CIDERPRESSLOC TEXT("CyderPress Location")
+#define  REGVALUE_CIDERPRESSLOC      "CiderPress Location"
 
 // Preferences 
-#define REGVALUE_PREF_START_DIR TEXT("Starting Directory")
+#define REGVALUE_PREF_START_DIR      "Starting Directory"
 
 #define WM_USER_BENCHMARK	WM_USER+1
 #define WM_USER_RESTART		WM_USER+2
@@ -110,7 +109,7 @@ enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC, IS_MOUSE};
 
 #define APPLE2E_MASK	0x10
 #define APPLE2C_MASK	0x20
-#define APPLECLONE_MASK	0x100 //DEC256
+#define APPLECLONE_MASK	0x100
 
 #define IS_APPLE2		((g_Apple2Type & (APPLE2E_MASK|APPLE2C_MASK)) == 0)
 #define IS_APPLE2E		(g_Apple2Type & APPLE2E_MASK)

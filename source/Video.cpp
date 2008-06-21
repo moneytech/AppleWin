@@ -947,7 +947,7 @@ void DrawMonoTextSource (HDC hDstDC)
 		default           : hBrush = CreateSolidBrush(monochrome); break;
 	}
 
-	SelectObject(hSrcDC,hCharBitmap[charsettype]);
+	SelectObject(hSrcDC,hCharBitmap[g_nCharsetType]);
 	SelectObject(hDstDC,hBrush);
 
 	// TODO: Update with APPLE_FONT_Y_ values
@@ -969,7 +969,7 @@ void DrawTextSource (HDC dc)
 	hCharBitmap[0] = LoadBitmap(g_hInstance,TEXT("CHARSET40"));
 	hCharBitmap[1] = LoadBitmap(g_hInstance,TEXT("CHARSET82"));
 	hCharBitmap[2] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));
-	SelectObject(memdc,hCharBitmap[charsettype]);
+	SelectObject(memdc,hCharBitmap[g_nCharsetType]);
 
 	BitBlt(
 		dc                // hdcDest

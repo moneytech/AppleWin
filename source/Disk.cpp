@@ -411,22 +411,28 @@ void DiskInitialize ()
 }
 
 //===========================================================================
-int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL createifnecessary) {
-  Disk_t * fptr = &g_aFloppyDisk[drive];
-  if (fptr->imagehandle)
-    RemoveDisk(drive);
-  ZeroMemory(fptr,sizeof(Disk_t ));
-  fptr->writeprotected = writeprotected;
-  int error = ImageOpen(imagefilename,
-                        &fptr->imagehandle,
-                        &fptr->writeprotected,
-                        createifnecessary);
-    if (error == IMAGE_ERROR_NONE)
+
+int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL createifnecessary)
+{
+	Disk_t * fptr = &g_aFloppyDisk[drive];
+	if (fptr->imagehandle)
+		RemoveDisk(drive);
+
+	ZeroMemory(fptr,sizeof(Disk_t ));
+	fptr->writeprotected = writeprotected;
+
+	int error = ImageOpen(imagefilename,
+		&fptr->imagehandle,
+		&fptr->writeprotected,
+		createifnecessary);
+
+	if (error == IMAGE_ERROR_NONE)
 	{
-	GetImageTitle(imagefilename,fptr);
-	DiskPathFilename[drive]= imagefilename;
+		GetImageTitle(imagefilename,fptr);
+		DiskPathFilename[drive]= imagefilename;
 	}
-  return error;
+
+	return error;
 }
 
 //===========================================================================
@@ -566,7 +572,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
     int error = DiskInsert(drive,filename,ofn.Flags & OFN_READONLY,1);
     if (!error)
 	{
-	DiskPathFilename[drive] = filename; 
+      DiskPathFilename[drive] = filename; 
       filename[ofn.nFileOffset] = 0;
       if (_tcsicmp(directory,filename))
         RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,filename);

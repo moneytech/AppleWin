@@ -18,7 +18,10 @@ void    FrameRefreshStatus (int);
 void    FrameRegisterClass ();
 void    FrameReleaseDC ();
 void    FrameReleaseVideoDC ();
+void	FrameSetCursorPosByMousePos();
+
 extern  string PathFilename[2];
+
 LRESULT CALLBACK FrameWndProc (
 	HWND   window,
 	UINT   message,
@@ -26,3 +29,4 @@ LRESULT CALLBACK FrameWndProc (
 	LPARAM lparam );
 
 extern bool g_bScrollLock_FullSpeed;
+extern int g_nCharsetType;

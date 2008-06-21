@@ -10,6 +10,8 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle);
 
 extern UINT g_uScrollLockToggle;
 extern UINT g_uMouseInSlot4;
+extern UINT g_uMouseShowCrosshair;
+extern UINT g_uMouseRestrictToWindow;
 extern UINT g_uTheFreezesF8Rom;
 extern DWORD g_uCloneType;
 extern HWND hwConfigTab;

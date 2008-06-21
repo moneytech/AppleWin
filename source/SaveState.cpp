@@ -30,7 +30,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 
 #define DEFAULT_SNAPSHOT_NAME "SaveState.aws"
-#define DEFAULT_CIDERPRESS_NAME "C:\Program Files\faddenSoft\CiderPress\CiderPress.exe"
 
 bool g_bSaveStateOnExit = false;
 

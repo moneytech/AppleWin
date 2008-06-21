@@ -368,11 +368,9 @@ void GetProgramDirectory () {
 void LoadConfiguration ()
 {
   DWORD dwComputerType;
-  //DWORD dwCloneType;
 
   if (LOAD(TEXT(REGVALUE_APPLE2_TYPE),&dwComputerType))
   {
-	//LOAD(TEXT(REGVALUE_CLONETYPE),&dwCloneType);
 	LOAD(TEXT(REGVALUE_CLONETYPE),&g_uCloneType);
 	if ((dwComputerType >= A2TYPE_MAX) || (dwComputerType >= A2TYPE_UNDEFINED && dwComputerType < A2TYPE_CLONE))
 		dwComputerType = A2TYPE_APPLE2EEHANCED;
@@ -390,38 +388,28 @@ void LoadConfiguration ()
 	{
 		g_Apple2Type = (eApple2Type) dwComputerType;
 	}
-  
-}
-  else
+  }
+  else	// Support older AppleWin registry entries
   {
-	  LOAD(TEXT(REGVALUE_CLONETYPE), &g_uCloneType);
 	  LOAD(TEXT("Computer Emulation"),&dwComputerType);
 	  switch (dwComputerType)
 	  {
-      // NB. No A2TYPE_APPLE2E
+      // NB. No A2TYPE_APPLE2E (this is correct)
 	  case 0:	g_Apple2Type = A2TYPE_APPLE2;
 	  case 1:	g_Apple2Type = A2TYPE_APPLE2PLUS;
 	  case 2:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
-	  /* case 3:	
-		  {
-		  if (g_uCloneType = 0) g_Apple2Type = A2TYPE_PRAVETS82;
-		  if (g_uCloneType = 1) g_Apple2Type = A2TYPE_PRAVETS8A;
-		  }
-	*/
-	  //case 3:	g_Apple2Type = A2TYPE_PRAVETS82;
-	  //case 4:	g_Apple2Type = A2TYPE_PRAVETS8A;
 	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
 	  }
   }
 
 	switch (g_Apple2Type) //Sets the character set for the Apple model/clone
 	{
-	case A2TYPE_APPLE2:			charsettype  = 0; break; 
-	case A2TYPE_APPLE2PLUS:		charsettype  = 0; break; 
-	case A2TYPE_APPLE2E:		charsettype  = 0; break; 
-	case A2TYPE_APPLE2EEHANCED:	charsettype  = 0; break; 
-	case A2TYPE_PRAVETS82:	    charsettype  = 1; break; 
-	case A2TYPE_PRAVETS8A:	    charsettype  = 2; break; 
+	case A2TYPE_APPLE2:			g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2PLUS:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2E:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2EEHANCED:	g_nCharsetType  = 0; break; 
+	case A2TYPE_PRAVETS82:	    g_nCharsetType  = 1; break; 
+	case A2TYPE_PRAVETS8A:	    g_nCharsetType  = 2; break; 
 	}
 
 
@@ -479,6 +467,10 @@ void LoadConfiguration ()
 
   if(LOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
 	  g_uMouseInSlot4 = dwTmp;
+  if(LOAD(TEXT(REGVALUE_MOUSE_CROSSHAIR), &dwTmp))
+	  g_uMouseShowCrosshair = dwTmp;
+  if(LOAD(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW), &dwTmp))
+	  g_uMouseRestrictToWindow = dwTmp;
   g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
 
   //
@@ -716,7 +708,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	//-----
 
 	// Initialize COM - so we can use CoCreateInstance
-	// . NB. DSInit() & DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
+	// . NB. DSInit() & DIMouse::DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	bool bSysClkOK = SysClk_InitTimer();
 

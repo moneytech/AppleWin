@@ -44,7 +44,6 @@ extern HBITMAP g_hLogoBitmap;
 extern BOOL       graphicsmode;
 extern COLORREF   monochrome;
 extern DWORD      videotype;
-extern int charsettype;
 
 // Prototypes _______________________________________________________
 

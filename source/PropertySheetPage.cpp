@@ -102,12 +102,14 @@ TCHAR   discchoices[]     =  TEXT("Authentic Speed\0")
 const UINT VOLUME_MIN = 0;
 const UINT VOLUME_MAX = 59;
 
-enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_ADVANCED, PG_NUM_SHEETS};
+enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_DISK, PG_ADVANCED, PG_NUM_SHEETS};
 
 UINT g_nLastPage = PG_CONFIG;
 
 UINT g_uScrollLockToggle = 0;
 UINT g_uMouseInSlot4 = 0;
+UINT g_uMouseShowCrosshair = 0;
+UINT g_uMouseRestrictToWindow = 0;
 
 //
 
@@ -257,10 +259,8 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
-	if (OldApple2Type > A2TYPE_CLONE + APPLE2E_MASK)
-	{
-		OldApple2Type = A2TYPE_CLONE + APPLE2E_MASK;
-	}
+	if (OldApple2Type > (APPLECLONE_MASK|APPLE2E_MASK))
+		OldApple2Type = (APPLECLONE_MASK|APPLE2E_MASK);
 	
 
 	if (NewApple2Type != OldApple2Type)
@@ -277,9 +277,6 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
 		{
 			afterclose = WM_USER_RESTART;
-
-			if (NewApple2Type > A2TYPE_APPLE2PLUS)
-				g_uTheFreezesF8Rom = false;
 		}
 	}
 
@@ -300,19 +297,18 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 
 	SetCurrentCLK6502();
 	
-	if (NewApple2Type > A2TYPE_CLONE ) 
-	{
+	if (NewApple2Type > A2TYPE_CLONE) 
 		NewCloneType = NewApple2Type - A2TYPE_CLONE;		
-	}
+
 	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8A))
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),A2TYPE_CLONE );
 	else
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
+
 	SAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
 	SAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	SAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
 	SAVE(TEXT("Video Emulation")   ,videotype);
-	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);
 
 	//
 
@@ -430,20 +426,22 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_PRAVETS8A:	    iApple2String = 5; break;
 	  }
 
-	  HWND hwConfigTab = window;
 	  if ((iApple2String == 4) || (iApple2String == 5))
-		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,4);
+		FillComboBox(window,IDC_COMPUTER,computerchoices,4);
 	  else
-		FillComboBox(hwConfigTab,IDC_COMPUTER,computerchoices,iApple2String);
-      FillComboBox(hwConfigTab,IDC_VIDEOTYPE,videochoices,videotype);
-      FillComboBox(hwConfigTab,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
-      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
-      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
-      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
-      SendDlgItemMessage(hwConfigTab,IDC_SLIDER_CPU_SPEED,TBM_SETPOS,1,g_dwSpeed);
+		FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
+
+      FillComboBox(window,IDC_VIDEOTYPE,videochoices,videotype);
+      FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
+      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
+      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
+      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
+      SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPOS,1,g_dwSpeed);
+
       {
         BOOL custom = 1;
-        if (g_dwSpeed == SPEED_NORMAL) {
+        if (g_dwSpeed == SPEED_NORMAL)
+		{
           custom = 0;
           RegLoadValue(TEXT("Configuration"),TEXT("Custom Speed"),1,(DWORD *)&custom);
         }
@@ -486,18 +484,16 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 
 static void InputDlg_OK(HWND window, UINT afterclose)
 {
-	DWORD newjoytype0   = (DWORD)SendDlgItemMessage(window,IDC_JOYSTICK0,CB_GETCURSEL,0,0);
-	DWORD newjoytype1   = (DWORD)SendDlgItemMessage(window,IDC_JOYSTICK1,CB_GETCURSEL,0,0);
+	UINT uNewJoyType0 = SendDlgItemMessage(window,IDC_JOYSTICK0,CB_GETCURSEL,0,0);
+	UINT uNewJoyType1 = SendDlgItemMessage(window,IDC_JOYSTICK1,CB_GETCURSEL,0,0);
 
-//	bool bNewKeybBufferEnable = IsDlgButtonChecked(window, IDC_KEYB_BUFFER_ENABLE) ? true : false;
-
-	if (!JoySetEmulationType(window,g_nJoy0ChoiceTranlationTbl[newjoytype0],JN_JOYSTICK0))
+	if (!JoySetEmulationType(window, g_nJoy0ChoiceTranlationTbl[uNewJoyType0], JN_JOYSTICK0))
 	{
 		afterclose = 0;
 		return;
 	}
 	
-	if (!JoySetEmulationType(window,g_nJoy1ChoiceTranlationTbl[newjoytype1],JN_JOYSTICK1))
+	if (!JoySetEmulationType(window, g_nJoy1ChoiceTranlationTbl[uNewJoyType1], JN_JOYSTICK1))
 	{
 		afterclose = 0;
 		return;
@@ -506,7 +502,8 @@ static void InputDlg_OK(HWND window, UINT afterclose)
 	JoySetTrim((short)SendDlgItemMessage(window, IDC_SPIN_XTRIM, UDM_GETPOS, 0, 0), true);
 	JoySetTrim((short)SendDlgItemMessage(window, IDC_SPIN_YTRIM, UDM_GETPOS, 0, 0), false);
 
-//	KeybSetBufferMode(bNewKeybBufferEnable);
+	g_uMouseShowCrosshair = IsDlgButtonChecked(window, IDC_MOUSE_CROSSHAIR) ? 1 : 0;
+	g_uMouseRestrictToWindow = IsDlgButtonChecked(window, IDC_MOUSE_RESTRICT_TO_WINDOW) ? 1 : 0;
 
 	SAVE(TEXT("Joystick 0 Emulation"),joytype[0]);
 	SAVE(TEXT("Joystick 1 Emulation"),joytype[1]);
@@ -514,7 +511,8 @@ static void InputDlg_OK(HWND window, UINT afterclose)
 	SAVE(TEXT(REGVALUE_PDL_YTRIM),JoyGetTrim(false));
 	SAVE(TEXT(REGVALUE_SCROLLLOCK_TOGGLE),g_uScrollLockToggle);
 	SAVE(TEXT(REGVALUE_MOUSE_IN_SLOT4),g_uMouseInSlot4);
-//	SAVE(TEXT(REGVALUE_KEYB_BUFFER_ENABLE),KeybGetBufferMode() ? 1 : 0);
+	SAVE(TEXT(REGVALUE_MOUSE_CROSSHAIR),g_uMouseShowCrosshair);
+	SAVE(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW),g_uMouseRestrictToWindow);
 
 	//
 
@@ -607,12 +605,14 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 			{
 				UINT uNewState = IsDlgButtonChecked(window, IDC_MOUSE_IN_SLOT4) ? 1 : 0;
 				LPCSTR pMsg = uNewState ?
-								TEXT("The emulator needs to restart as the slot configuration has changed.\n")
-								TEXT("Also Mockingboard/Phasor cards won't be available in slot 4.\n\n")
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n\n")
+								TEXT("Also Mockingboard/Phasor cards won't be available in slot 4\n")
+								TEXT("and the mouse can't be used for joystick emulation.\n\n")
 								TEXT("Would you like to restart the emulator now?")
 								:
-								TEXT("The emulator needs to restart as the slot configuration has changed.\n")
-								TEXT("(Mockingboard/Phasor cards will now be available in slot 4.)\n\n")
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n\n")
+								TEXT("(Mockingboard/Phasor cards will now be available in slot 4\n")
+								TEXT("and the mouse can be used for joystick emulation)\n\n")
 								TEXT("Would you like to restart the emulator now?");
 				if (MessageBox(window,
 								pMsg,
@@ -620,6 +620,14 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
 				{
 					g_uMouseInSlot4 = uNewState;
+
+					if (uNewState)
+					{
+						JoyDisableUsingMouse();
+						InitJoystickChoices(window, JN_JOYSTICK0, IDC_JOYSTICK0);
+						InitJoystickChoices(window, JN_JOYSTICK1, IDC_JOYSTICK1);
+					}
+
 					afterclose = WM_USER_RESTART;
 					PropSheet_PressButton(GetParent(window), PSBTN_OK);
 				}
@@ -633,9 +641,6 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 		case IDC_PASTE_FROM_CLIPBOARD:
 			ClipboardInitiatePaste();
 			break;
-
-//		case IDC_KEYB_BUFFER_ENABLE:
-//			break;
       }
       break;
 
@@ -654,7 +659,13 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 
       CheckDlgButton(window, IDC_SCROLLLOCK_TOGGLE, g_uScrollLockToggle ? BST_CHECKED : BST_UNCHECKED);
       CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
-//	  CheckDlgButton(window, IDC_KEYB_BUFFER_ENABLE, KeybGetBufferMode() ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_MOUSE_CROSSHAIR, g_uMouseShowCrosshair ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_MOUSE_RESTRICT_TO_WINDOW, g_uMouseRestrictToWindow ? BST_CHECKED : BST_UNCHECKED);
+	  EnableWindow(GetDlgItem(window, IDC_MOUSE_CROSSHAIR), g_uMouseInSlot4 ? TRUE : FALSE);
+	  EnableWindow(GetDlgItem(window, IDC_MOUSE_RESTRICT_TO_WINDOW), g_uMouseInSlot4 ? TRUE : FALSE);
+
+	  afterclose = 0;
+	  break;
 	}
   }
 
@@ -787,175 +798,7 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 	  }
 
       afterclose = 0;
-	}
-  }
-
-  return 0;
-}
-
-//===========================================================================
-
-static char g_szNewDirectory[MAX_PATH];
-static char g_szNewFilename[MAX_PATH];
-
-static void SaveStateUpdate()
-{
-	Snapshot_SetFilename(g_szNewFilename);
-
-	RegSaveString(TEXT("Configuration"),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
-
-	if(g_szNewDirectory[0])
-		RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szNewDirectory);
-}
-
-static void SaveStateDlg_OK(HWND window, UINT afterclose)
-{
-	char szFilename[MAX_PATH];
-
-	memset(szFilename, 0, sizeof(szFilename));
-	* ((USHORT*) szFilename) = sizeof(szFilename);
-
-	UINT nLineLength = SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_LINELENGTH,0,0);
-
-	SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_GETLINE,0,(LPARAM)szFilename);
-
-	nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
-	szFilename[nLineLength] = 0x00;
-
-	SaveStateUpdate();
-
-	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
-
-	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
-
-	//
-
-	if (afterclose)
-		PostMessage(g_hFrameWindow,afterclose,0,0);
-}
-
-static void SaveStateDlg_CANCEL(HWND window)
-{
-}
-
-//---------------------------------------------------------------------------
-
-static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
-{
-	TCHAR szDirectory[MAX_PATH] = TEXT("");
-	TCHAR szFilename[MAX_PATH];
-	
-	// Attempt to use drive1's image name as the name for the .aws file
-	LPCTSTR pDiskName0 = DiskGetName(0);
-	if (pDiskName0 && pDiskName0[0])
-	{
-		strcpy(szFilename, pDiskName0);
-		strcpy(&szFilename[strlen(pDiskName0)], ".aws");
-		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
-	}
-	else
-	{
-		strcpy(szFilename, Snapshot_GetFilename());
-	}
-	
-	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,szDirectory,MAX_PATH);
-	
-	
-	//
-	
-	OPENFILENAME ofn;
-	ZeroMemory(&ofn,sizeof(OPENFILENAME));
-	
-	ofn.lStructSize     = sizeof(OPENFILENAME);
-	ofn.hwndOwner       = hWindow;
-	ofn.hInstance       = g_hInstance;
-	ofn.lpstrFilter     =	TEXT("Save State files (*.aws)\0*.aws\0")
-							TEXT("All Files\0*.*\0");
-	ofn.lpstrFile       = szFilename;
-	ofn.nMaxFile        = MAX_PATH;
-	ofn.lpstrInitialDir = szDirectory;
-	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
-	ofn.lpstrTitle      = pszTitle;
-	
-	int nRes = bSave ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
-
-	if(nRes)
-	{
-		strcpy(g_szNewFilename, &szFilename[ofn.nFileOffset]);
-
-		szFilename[ofn.nFileOffset] = 0;
-		if (_tcsicmp(szDirectory, szFilename))
-			strcpy(g_szNewDirectory, szFilename);
-	}
-
-	return nRes;
-}
-
-//---------------------------------------------------------------------------
-
-static BOOL CALLBACK SaveStateDlgProc (HWND   window,
-                             UINT   message,
-                             WPARAM wparam,
-                             LPARAM lparam)
-{
-   static UINT afterclose = 0;
-
-  switch (message)
-  {
-	case WM_NOTIFY:
-	{
-	  // Property Sheet notifications
-
-      switch (((LPPSHNOTIFY)lparam)->hdr.code)
-	  {
-        case PSN_KILLACTIVE:
-			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
-			break;
-        case PSN_APPLY:
-			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-			SaveStateDlg_OK(window, afterclose);
-			break;
-		case PSN_QUERYCANCEL:
-			// Can use this to ask user to confirm cancel
-			break;
-		case PSN_RESET:
-			SaveStateDlg_CANCEL(window);
-			break;
-	  }
-	}
-	break;
-
-    case WM_COMMAND:
-      switch (LOWORD(wparam))
-	  {
-		case IDC_SAVESTATE_FILENAME:
-			break;
-		case IDC_SAVESTATE_BROWSE:
-			if(SaveStateSelectImage(window, TEXT("Select Save State file"), true))
-				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szNewFilename);
-			break;
-		case IDC_SAVESTATE_ON_EXIT:
-			break;
-		case IDC_SAVESTATE:
-			afterclose = WM_USER_SAVESTATE;
-			break;
-		case IDC_LOADSTATE:
-			afterclose = WM_USER_LOADSTATE;
-			break;
-      }
-      break;
-
-    case WM_INITDIALOG:
-	{
-      g_nLastPage = PG_SAVESTATE;
-
-	  SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
-
-	  CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
-
-	  g_szNewDirectory[0] = 0x00;
-
-      afterclose = 0;
+	  break;
 	}
   }
 
@@ -1044,17 +887,19 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 	}
 	break;
 
-    case WM_COMMAND: //Handles the DISK tab
+    case WM_COMMAND:
       switch (LOWORD(wparam))
 	  {
 		case IDC_DISK1:
 			DiskSelect(0);
 			SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
 			break;
+
 		case IDC_DISK2:
 			DiskSelect(1);
 			SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
 			break;
+
 		case IDC_HDD1:
 			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
 			{
@@ -1062,6 +907,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 				SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
 			}
 			break;
+
 		case IDC_HDD2:
 			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
 			{
@@ -1069,14 +915,16 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 				SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
 			}
 			break;
+
 		case IDC_HDD_ENABLE:
 			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
 			break;
-			case IDC_CIDERPRESS_BROWSE :
+
+		case IDC_CIDERPRESS_BROWSE:
 			{
-			string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
-			RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
-			SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
+				string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+				RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
+				SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
 			}
 			break;
       }
@@ -1094,15 +942,20 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
 		SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
 
+		//
+
 		TCHAR PathToCiderPress[MAX_PATH] = "";
 		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
 		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
+
+		//
 		
 		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
 		EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
 
 		afterclose = 0;
+		break;
 	}
   }
 
@@ -1110,36 +963,134 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 }
 
 //===========================================================================
-static void AdvancedDlg_OK(HWND window, UINT afterclose)
+
+static char g_szNewDirectory[MAX_PATH];
+static char g_szNewFilename[MAX_PATH];
+
+static void SaveStateUpdate()
 {
-	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
-	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
-	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
-	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
-	if (g_Apple2Type >= A2TYPE_CLONE ) 	
+	Snapshot_SetFilename(g_szNewFilename);
+
+	RegSaveString(TEXT("Configuration"),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
+
+	if(g_szNewDirectory[0])
+		RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szNewDirectory);
+}
+
+static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
+{
+	TCHAR szDirectory[MAX_PATH] = TEXT("");
+	TCHAR szFilename[MAX_PATH];
+	
+	// Attempt to use drive1's image name as the name for the .aws file
+	LPCTSTR pDiskName0 = DiskGetName(0);
+	if (pDiskName0 && pDiskName0[0])
 	{
-	if (NewApple2Clone != g_Apple2Type)
-			{		
-		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
-			MessageBox(window,
-						TEXT(
-						"You have changed the emulated computer "
-						"type. This change will not take effect\n"
-						"until the next time you restart the "
-						"emulator.\n\n"
-						"Would you like to restart the emulator now?"),
-						TEXT("Configuration"),
-						MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
-			{
-			afterclose = WM_USER_RESTART;	
-			}
+		strcpy(szFilename, pDiskName0);
+		strcpy(&szFilename[strlen(pDiskName0)], ".aws");
+		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
 	}
+	else
+	{
+		strcpy(szFilename, Snapshot_GetFilename());
 	}
 	
-		else
+	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,szDirectory,MAX_PATH);
+	
+	
+	//
+	
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn,sizeof(OPENFILENAME));
+	
+	ofn.lStructSize     = sizeof(OPENFILENAME);
+	ofn.hwndOwner       = hWindow;
+	ofn.hInstance       = g_hInstance;
+	ofn.lpstrFilter     =	TEXT("Save State files (*.aws)\0*.aws\0")
+							TEXT("All Files\0*.*\0");
+	ofn.lpstrFile       = szFilename;
+	ofn.nMaxFile        = MAX_PATH;
+	ofn.lpstrInitialDir = szDirectory;
+	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+	ofn.lpstrTitle      = pszTitle;
+	
+	int nRes = bSave ? GetSaveFileName(&ofn) : GetOpenFileName(&ofn);
+
+	if(nRes)
 	{
-		if (NewApple2Clone != (g_uCloneType+A2TYPE_CLONE+APPLE2E_MASK))
-			MessageBox(window,
+		strcpy(g_szNewFilename, &szFilename[ofn.nFileOffset]);
+
+		szFilename[ofn.nFileOffset] = 0;
+		if (_tcsicmp(szDirectory, szFilename))
+			strcpy(g_szNewDirectory, szFilename);
+	}
+
+	return nRes;
+}
+
+static void InitFreezeDlgButton(HWND window)
+{
+	if (g_bEnableFreezeDlgButton == UNDEFINED)
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), IS_APPLE2 ? TRUE : FALSE);
+	else
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), g_bEnableFreezeDlgButton ? TRUE : FALSE);
+
+	CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
+}
+
+//---------------------------------------------------------------------------
+
+static void AdvancedDlg_OK(HWND window, UINT afterclose)
+{
+	char szFilename[MAX_PATH];
+	memset(szFilename, 0, sizeof(szFilename));
+	* (USHORT*) szFilename = sizeof(szFilename);
+
+	UINT nLineLength = SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_LINELENGTH,0,0);
+
+	SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_GETLINE,0,(LPARAM)szFilename);
+
+	nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
+	szFilename[nLineLength] = 0x00;
+
+	SaveStateUpdate();
+
+	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
+
+	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
+
+	//
+
+	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
+
+	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
+	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+
+	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
+
+	if (g_Apple2Type >= A2TYPE_CLONE) 	
+	{
+		if (NewApple2Clone != g_Apple2Type)
+		{		
+			if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
+				MessageBox(window,
+							TEXT(
+							"You have changed the emulated computer "
+							"type. This change will not take effect\n"
+							"until the next time you restart the "
+							"emulator.\n\n"
+							"Would you like to restart the emulator now?"),
+							TEXT("Configuration"),
+							MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			{
+				afterclose = WM_USER_RESTART;	
+			}
+		}
+	}
+	else
+	{
+		if (NewApple2Clone != (g_uCloneType + APPLECLONE_MASK|APPLE2E_MASK))
+		{MessageBox(window,
 						TEXT(
 						"You have changed the emulated clone type "
 						"but in order for the changes to take effect\n"
@@ -1147,9 +1098,12 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 						"to Clone from the Configuration tab.\n\n"),
 						TEXT("Clone type changed"),
 						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;  
+		g_uCloneType = NewApple2Clone - APPLECLONE_MASK -APPLE2E_MASK;
+		}
 	}
+
 	if (NewApple2Type > A2TYPE_APPLE2PLUS)
-				g_uTheFreezesF8Rom = false;
+		g_uTheFreezesF8Rom = false;
 
 	//
 
@@ -1162,16 +1116,6 @@ static void AdvancedDlg_CANCEL(HWND window)
 }
 
 //---------------------------------------------------------------------------
-
-static void InitFreezeDlgButton(HWND window)
-{
-	if (g_bEnableFreezeDlgButton == UNDEFINED)
-		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), IS_APPLE2 ? TRUE : FALSE);
-	else
-		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), g_bEnableFreezeDlgButton ? TRUE : FALSE);
-
-	CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
-}
 
 static BOOL CALLBACK AdvancedDlgProc (HWND   window,
                              UINT   message,
@@ -1197,11 +1141,6 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-			if (ConfigRun == false)
-			{
-				ConfigDlg_OK(window, afterclose);
-				ConfigRun = false;
-			}
 			AdvancedDlg_OK(window, afterclose);
 			break;
 		case PSN_QUERYCANCEL:
@@ -1217,6 +1156,23 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
     case WM_COMMAND:
       switch (LOWORD(wparam))
 	  {
+		case IDC_SAVESTATE_FILENAME:
+			break;
+		case IDC_SAVESTATE_BROWSE:
+			if(SaveStateSelectImage(window, TEXT("Select Save State file"), true))
+				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szNewFilename);
+			break;
+		case IDC_SAVESTATE_ON_EXIT:
+			break;
+		case IDC_SAVESTATE:
+			afterclose = WM_USER_SAVESTATE;
+			break;
+		case IDC_LOADSTATE:
+			afterclose = WM_USER_LOADSTATE;
+			break;
+
+		//
+
 		case IDC_THE_FREEZES_F8_ROM_FW:
 			{
 				UINT uNewState = IsDlgButtonChecked(window, IDC_THE_FREEZES_F8_ROM_FW) ? 1 : 0;
@@ -1242,13 +1198,19 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 
     case WM_INITDIALOG:
 	{
-      g_nLastPage = PG_ADVANCED;
+		g_nLastPage = PG_ADVANCED;
 
-      FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
 
-	  InitFreezeDlgButton(window);
+		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 
-      afterclose = 0;
+		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+		InitFreezeDlgButton(window);
+
+		g_szNewDirectory[0] = 0x00;
+
+		afterclose = 0;
+		break;
 	}
   }
 
@@ -1520,12 +1482,6 @@ void PSP_Init()
 	PropSheetPages[PG_SOUND].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_SOUND);
 	PropSheetPages[PG_SOUND].pfnDlgProc = (DLGPROC)SoundDlgProc;
 
-	PropSheetPages[PG_SAVESTATE].dwSize = sizeof(PROPSHEETPAGE);
-	PropSheetPages[PG_SAVESTATE].dwFlags = PSP_DEFAULT;
-	PropSheetPages[PG_SAVESTATE].hInstance = g_hInstance;
-	PropSheetPages[PG_SAVESTATE].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_SAVESTATE);
-	PropSheetPages[PG_SAVESTATE].pfnDlgProc = (DLGPROC)SaveStateDlgProc;
-
 	PropSheetPages[PG_DISK].dwSize = sizeof(PROPSHEETPAGE);
 	PropSheetPages[PG_DISK].dwFlags = PSP_DEFAULT;
 	PropSheetPages[PG_DISK].hInstance = g_hInstance;
@@ -1578,6 +1534,10 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 
 string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 {
+
+	static char SaveStatePath[MAX_PATH] = {0}; //This is a really awkward way to prevent mixing CiderPress and SaveStated values (RAPCS), but it seem the quickest. Here is its Line 1.
+	strcpy(SaveStatePath, Snapshot_GetFilename()); //RAPCS, line 2.
+
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
 	TCHAR szCPFilename[MAX_PATH];
 	strcpy(szCPFilename, "");
@@ -1615,6 +1575,7 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename,MAX_PATH);
 		PathName = szCPFilename;
 	}
+	strcpy(g_szNewFilename, SaveStatePath); //RAPCS, line 3 (last).
 	return PathName;
 }
 
