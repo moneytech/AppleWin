@@ -1056,8 +1056,9 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	SaveStateUpdate();
 
 	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
-
 	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
+	g_bDumpToPrinter = IsDlgButtonChecked(window, IDC_DUMPTOPRINTER ) ? true : false;
+	SAVE(TEXT(REGVALUE_DUMP_TO_PRINTER), g_bDumpToPrinter ? 1 : 0);
 
 	//
 
@@ -1203,6 +1204,7 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
 
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter  ? BST_CHECKED : BST_UNCHECKED);
 
 		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
 		InitFreezeDlgButton(window);

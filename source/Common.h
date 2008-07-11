@@ -87,6 +87,7 @@ enum AppMode_e
 #define  REGVALUE_THE_FREEZES_F8_ROM "The Freeze's F8 Rom"
 #define  REGVALUE_CLONETYPE          "Clone Type"
 #define  REGVALUE_CIDERPRESSLOC      "CiderPress Location"
+#define  REGVALUE_DUMP_TO_PRINTER    "Dump to printer"
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR      "Starting Directory"

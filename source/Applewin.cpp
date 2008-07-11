@@ -448,6 +448,9 @@ void LoadConfiguration ()
   if(LOAD(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), &dwTmp))
 	  g_bSaveStateOnExit = dwTmp ? true : false;
 
+  if(LOAD(TEXT(REGVALUE_DUMP_TO_PRINTER), &dwTmp))
+	  g_bDumpToPrinter = dwTmp ? true : false;
+
   if(LOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
 	  HD_SetEnabled(dwTmp ? true : false);
 

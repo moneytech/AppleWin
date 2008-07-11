@@ -33,11 +33,24 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 static DWORD inactivity = 0;
 static FILE* file = NULL;
 DWORD const PRINTDRVR_SIZE = 0x100;
+TCHAR filepath[MAX_PATH * 2];
+#define DEFAULT_PRINT_FILENAME "Printer.txt"
+static char g_szPrintFilename[MAX_PATH] = {0};
+bool g_bDumpToPrinter = false;
 
 //===========================================================================
 
 static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG);
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG);
+
+void Print_SetFilename(char* prtFilename)
+{
+	if(*prtFilename)
+		strcpy(g_szPrintFilename, (const char *) prtFilename);
+	else
+		strcpy(g_szPrintFilename, DEFAULT_PRINT_FILENAME);
+}
+
 
 VOID PrintLoadRom(LPBYTE pCxRomPeripheral, const UINT uSlot)
 {
@@ -70,7 +83,7 @@ static BOOL CheckPrint()
     inactivity = 0;
     if (file == NULL)
     {
-        TCHAR filepath[MAX_PATH * 2];
+        //TCHAR filepath[MAX_PATH * 2];
         _tcsncpy(filepath, g_sProgramDir, MAX_PATH);
         _tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
         file = fopen(filepath, "wb");
@@ -85,8 +98,9 @@ static void ClosePrint()
     {
         fclose(file);
         file = NULL;
+		if (g_bDumpToPrinter) ShellExecute(NULL, "print", filepath, NULL, NULL, 0);
     }
-    inactivity = 0;
+    inactivity = 0;	
 }
 
 //===========================================================================
@@ -102,7 +116,7 @@ void PrintUpdate(DWORD totalcycles)
     {
         return;
     }
-    if ((inactivity += totalcycles) > (10 * 1000 * 1000)) // around 10 seconds
+    if ((inactivity += totalcycles) > (10 * 1000 * 1000)) // around 10 seconds, shall be made adustable
     {
         // inactive, so close the file (next print will overwrite it)
         ClosePrint();
@@ -125,13 +139,58 @@ static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG)
 //===========================================================================
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 {
+	         char Lat8A[]= "abwgdevzijklmnoprstufhc~{}yx`q";
+	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞß";
+	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïðñòóôõö÷øùúüþÿ";
     if (!CheckPrint())
     {
         return 0;
     }
-    char c = value & 0x7F;
+	
+	char c = NULL;
+	if (g_Apple2Type == A2TYPE_PRAVETS8A)  //This is print convertion for Pravets 8A/C. Print convertion for Pravets82/M is still to be done.
+		{
+			if ((value > 90) && (value < 128)) //This range shall be set more precisely
+			{
+			c = value;
+			int loop = 0;
+			while (loop < 31)
+				{
+				if (c== Lat8A[loop]) 
+				c= 0 + Kir8ALowerCase  [loop] ;
+				loop++;
+				} //End loop
+			}//End if (value < 128)
+				else if ((value >64) && (value <91))
+				{
+					c = value + 32;
+			    }
+				else
+				{
+					c = value & 0x7F;
+					int loop = 0;
+					while (loop < 31)
+					{
+					if (c== Lat8A[loop]) c= 0 + Kir8ACapital  [loop];
+					loop++;
+					}
+				}
+	} //End if (g_Apple2Type == A2TYPE_PRAVETS8A)
+		else //Apple II
+		{			
+			char c =  value & 0x7F;
+	}
+
+	fwrite(&c, 1, 1, file); //break;
+			
+	
+
+	/*else
+	{
+	char c = value & 0x7F;
 	fwrite(&c, 1, 1, file);
-    return 0;
+	}*/
+	return 0;
 }
 
 //===========================================================================
