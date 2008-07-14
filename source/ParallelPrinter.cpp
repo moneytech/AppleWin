@@ -139,9 +139,11 @@ static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG)
 //===========================================================================
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 {
-	         char Lat8A[]= "abwgdevzijklmnoprstufhc~{}yx`q";
-	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÜŞß";
-	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïğñòóôõö÷øùúüşÿ";
+	         char Lat8A[]= "abwgdevzijklmnoprstufhc~{}yx`q|]";
+             char Lat82[]= "abwgdevzijklmnoprstufhc^[]yx@q{}~`"; //Character İ is used just to fix } convertion
+			 char Kir82[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÜŞß[]^@";
+	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÜŞßİ";
+	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïğñòóôõö÷øùúüşÿı";
     if (!CheckPrint())
     {
         return 0;
@@ -176,10 +178,21 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 					}
 				}
 	} //End if (g_Apple2Type == A2TYPE_PRAVETS8A)
+		else if (g_Apple2Type == A2TYPE_PRAVETS82)
+		{
+			c =  value & 0x7F;
+			int loop = 0;
+			while (loop < 34)
+			{
+				if (c == Lat82[loop])
+					c= Kir82 [loop];
+				loop++;
+			} //end while
+		}
 		else //Apple II
 		{			
-			char c =  value & 0x7F;
-	}
+			c =  value & 0x7F;
+		}
 
 	fwrite(&c, 1, 1, file); //break;
 			

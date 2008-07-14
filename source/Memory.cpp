@@ -1112,11 +1112,12 @@ void MemReset ()
 void MemResetPaging ()
 {
   ResetPaging(0);
+  PrintReset();
   	if (g_Apple2Type == A2TYPE_PRAVETS8A)
 	{
 		P8CAPS_ON = false; 
 		TapeWrite (0, 0, 0, 0 ,0);
-		FrameRefreshStatus(DRAW_LEDS);
+		FrameRefreshStatus(DRAW_LEDS);		
 	}
 }
 
