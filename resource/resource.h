@@ -16,7 +16,6 @@
 #define IDC_SLIDER_CPU_SPEED            111
 #define IDD_PROPPAGE_SOUND              112
 #define IDC_DISKTYPE                    113
-#define IDD_PROPPAGE_SAVESTATE          114
 #define IDC_JOYSTICK1                   115
 #define IDD_PROPPAGE_DISK               116
 #define IDC_BENCHMARK                   117
@@ -32,13 +31,17 @@
 #define IDR_APPLE2_PLUS_ROM             127
 #define IDR_APPLE2E_ROM                 128
 #define IDR_APPLE2E_ENHANCED_ROM        129
+#define IDR_PRAVETS_82_ROM              149
+#define IDR_PRAVETS_8C_ROM              150
 #define IDC_MB_ENABLE                   130
 #define IDD_TFE_SETTINGS_DIALOG         131
 #define IDR_PRINTDRVR_FW                132
+#define IDD_PROPPAGE_ADVANCED           132
 #define IDR_DISK2_FW                    133
 #define IDR_SSC_FW                      134
 #define IDR_MOCKINGBOARD_D_FW           135
 #define IDR_MOUSEINTERFACE_FW           136
+#define IDR_FREEZES_F8_ROM              137
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -75,12 +78,20 @@
 #define IDC_ETHERNET                    1042
 #define IDC_SCROLLLOCK_TOGGLE           1043
 #define IDC_MOUSE_IN_SLOT4              1044
+#define IDC_THE_FREEZES_F8_ROM_FW       1045
+#define IDC_MOUSE_CROSSHAIR             1046
+#define IDC_CLONETYPE                   1047
+#define IDC_MOUSE_RESTRICT_TO_WINDOW    1048
+#define IDC_CIDERPRESS_BROWSE           1049
+#define IDC_CIDERPRESS_FILENAME         1050
+
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
 #define IDM_ABOUT                       40003
 #define ID_DISKMENU_EJECT               40004
 #define ID_DISKMENU_WRITEPROTECTION_ON  40005
 #define ID_DISKMENU_WRITEPROTECTION_OFF 40006
+#define ID_DISKMENU_SENDTO_CIDERPRESS	40007
 
 // Next default values for new objects
 // 
@@ -89,7 +100,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        137
 #define _APS_NEXT_COMMAND_VALUE         40007
-#define _APS_NEXT_CONTROL_VALUE         1045
+#define _APS_NEXT_CONTROL_VALUE         1047
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

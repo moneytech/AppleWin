@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include <objbase.h>
 #include "MouseInterface.h"
 
 char VERSIONSTRING[] = "xx.yy.zz.ww";
@@ -42,6 +43,11 @@ DWORD     cyclenum          = 0;			// Used by SpkrToggle() for non-wave sound
 DWORD     emulmsec          = 0;
 static DWORD emulmsec_frac  = 0;
 bool      g_bFullSpeed      = false;
+
+//Pravets 8A/C variables
+bool P8CAPS_ON = false;
+bool P8Shift = false;
+//=================================================
 
 // Win32
 HINSTANCE g_hInstance          = (HINSTANCE)0;
@@ -68,7 +74,10 @@ bool		g_bDisableDirectSound = false;
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
 
-UINT		g_Slot4 = CT_Mockingboard;	// CT_Mockingboard or CT_MouseInterface
+UINT		g_Slot4 = CT_Mockingboard;		// CT_Mockingboard or CT_MouseInterface
+
+HANDLE		g_hCustomRomF8 = INVALID_HANDLE_VALUE;	// Cmd-line specified custom ROM at $F800..$FFFF
+static bool	g_bCustomRomF8Failed = false;			// Set if custom ROM file failed
 
 //===========================================================================
 
@@ -355,28 +364,54 @@ void GetProgramDirectory () {
 }
 
 //===========================================================================
+//Reads configuration from the registry entries
 void LoadConfiguration ()
 {
   DWORD dwComputerType;
 
   if (LOAD(TEXT(REGVALUE_APPLE2_TYPE),&dwComputerType))
   {
-	  if (dwComputerType >= A2TYPE_MAX)
+	LOAD(TEXT(REGVALUE_CLONETYPE),&g_uCloneType);
+	if ((dwComputerType >= A2TYPE_MAX) || (dwComputerType >= A2TYPE_UNDEFINED && dwComputerType < A2TYPE_CLONE))
 		dwComputerType = A2TYPE_APPLE2EEHANCED;
-	  g_Apple2Type = (eApple2Type) dwComputerType;
+
+	if (dwComputerType == A2TYPE_CLONE)
+	  {
+		switch (g_uCloneType)
+		{
+		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
+		case 1:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
+		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; break;
+		}
+	  }	
+	else
+	{
+		g_Apple2Type = (eApple2Type) dwComputerType;
+	}
   }
-  else
+  else	// Support older AppleWin registry entries
   {
 	  LOAD(TEXT("Computer Emulation"),&dwComputerType);
 	  switch (dwComputerType)
 	  {
-      // NB. No A2TYPE_APPLE2E
+      // NB. No A2TYPE_APPLE2E (this is correct)
 	  case 0:	g_Apple2Type = A2TYPE_APPLE2;
 	  case 1:	g_Apple2Type = A2TYPE_APPLE2PLUS;
 	  case 2:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
 	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
 	  }
   }
+
+	switch (g_Apple2Type) //Sets the character set for the Apple model/clone
+	{
+	case A2TYPE_APPLE2:			g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2PLUS:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2E:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2EEHANCED:	g_nCharsetType  = 0; break; 
+	case A2TYPE_PRAVETS82:	    g_nCharsetType  = 1; break; 
+	case A2TYPE_PRAVETS8A:	    g_nCharsetType  = 2; break; 
+	}
+
 
   LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
   LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
@@ -398,9 +433,8 @@ void LoadConfiguration ()
 
   DWORD dwTmp;
 
-  if(LOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
-	  g_uMouseInSlot4 = dwTmp;
-  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
+  if(LOAD(TEXT(REGVALUE_THE_FREEZES_F8_ROM), &dwTmp))
+	  g_uTheFreezesF8Rom = dwTmp;
 
   if(LOAD(TEXT(REGVALUE_SPKR_VOLUME), &dwTmp))
       SpkrSetVolume(dwTmp, PSP_GetVolumeMax());
@@ -431,6 +465,14 @@ void LoadConfiguration ()
   if(LOAD(TEXT(REGVALUE_SCROLLLOCK_TOGGLE), &dwTmp))
 	  g_uScrollLockToggle = dwTmp;
 
+  if(LOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
+	  g_uMouseInSlot4 = dwTmp;
+  if(LOAD(TEXT(REGVALUE_MOUSE_CROSSHAIR), &dwTmp))
+	  g_uMouseShowCrosshair = dwTmp;
+  if(LOAD(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW), &dwTmp))
+	  g_uMouseRestrictToWindow = dwTmp;
+  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
+
   //
 
   char szFilename[MAX_PATH] = {0};
@@ -440,12 +482,19 @@ void LoadConfiguration ()
 
   // Current/Starting Dir is the "root" of where the user keeps his disk images
   RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
-  SetCurrentDirectory(g_sCurrentDir);
+  SetCurrentImageDir();
   
   char szUthernetInt[MAX_PATH] = {0};
   RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
   update_tfe_interface(szUthernetInt,NULL);
 
+}
+
+//===========================================================================
+
+void SetCurrentImageDir()
+{
+	SetCurrentDirectory(g_sCurrentDir);
 }
 
 //===========================================================================
@@ -496,6 +545,14 @@ void RegisterExtensions ()
 }
 
 //===========================================================================
+
+LPSTR GetCurrArg(LPSTR lpCmdLine)
+{
+	if(*lpCmdLine == '\"')
+		lpCmdLine++;
+
+	return lpCmdLine;
+}
 
 LPSTR GetNextArg(LPSTR lpCmdLine)
 {
@@ -555,19 +612,15 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 		if(strcmp(lpCmdLine, "-d1") == 0)
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			szImageName_drive1 = lpCmdLine;
-			if(*szImageName_drive1 == '\"')
-				szImageName_drive1++;
 		}
 		else if(strcmp(lpCmdLine, "-d2") == 0)
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			szImageName_drive2 = lpCmdLine;
-			if(*szImageName_drive2 == '\"')
-				szImageName_drive2++;
 		}
 		else if(strcmp(lpCmdLine, "-f") == 0)
 		{
@@ -588,8 +641,8 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 #ifdef RAMWORKS
 		else if(strcmp(lpCmdLine, "-r") == 0)		// RamWorks size [1..127]
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			g_uMaxExPages = atoi(lpCmdLine);
 			if (g_uMaxExPages > 127)
 				g_uMaxExPages = 128;
@@ -597,6 +650,14 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 				g_uMaxExPages = 1;
 		}
 #endif
+		else if(strcmp(lpCmdLine, "-f8rom") == 0)		// Use custom 2K ROM at [$F800..$FFFF]
+		{
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
+			g_hCustomRomF8 = CreateFile(lpCmdLine, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+			if ((g_hCustomRomF8 == INVALID_HANDLE_VALUE) || (GetFileSize(g_hCustomRomF8, NULL) != 0x800))
+				g_bCustomRomF8Failed = true;
+		}
 
 		lpCmdLine = lpNextArg;
 	}
@@ -653,9 +714,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 	//-----
 
-	// Initialize COM
-	// . NB. DSInit() is done when g_hFrameWindow is created (WM_CREATE)
-	CoInitialize( NULL );
+	// Initialize COM - so we can use CoCreateInstance
+	// . NB. DSInit() & DIMouse::DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
+	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	bool bSysClkOK = SysClk_InitTimer();
 
 	// DO ONE-TIME INITIALIZATION
@@ -695,10 +756,18 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		MemInitialize();
 		VideoInitialize();
 		FrameCreateWindow();
+		// Need to test if it's safe to call ResetMachineState(). In the meantime, just call DiskReset():
+		DiskReset();	// Switch from a booting A][+ to a non-autostart A][, so need to turn off floppy motor
 
 		if (!bSysClkOK)
 		{
 			MessageBox(g_hFrameWindow, "DirectX failed to create SystemClock instance", TEXT("AppleWin Error"), MB_OK);
+			PostMessage(g_hFrameWindow, WM_DESTROY, 0, 0);	// Close everything down
+		}
+
+		if (g_bCustomRomF8Failed)
+		{
+			MessageBox(g_hFrameWindow, "Failed to load custom F8 rom (not found or not exactly 2KB)", TEXT("AppleWin Error"), MB_OK);
 			PostMessage(g_hFrameWindow, WM_DESTROY, 0, 0);	// Close everything down
 		}
 
@@ -734,13 +803,16 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	
 	tfe_shutdown();
 	
-	if(g_fh)
+	if	(g_fh)
 	{
 		fprintf(g_fh,"*** Logging ended\n\n");
 		fclose(g_fh);
 	}
 
 	RiffFinishWriteFile();
+
+	if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
+		CloseHandle(g_hCustomRomF8);
 
 	return 0;
 }

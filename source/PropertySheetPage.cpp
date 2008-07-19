@@ -4,8 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
-
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,8 +23,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Property Sheet Pages
  *
- * Author: Copyright (c) 2002-2006, Tom Charlesworth
- *                                  Spiro Trikaliotis <Spiro.Trikaliotis@gmx.de>
+ * Author: Tom Charlesworth
+ *         Spiro Trikaliotis <Spiro.Trikaliotis@gmx.de>
  */
 
 #include "StdAfx.h"
@@ -38,7 +37,8 @@ TCHAR   computerchoices[] =
 				TEXT("Apple ][ (Original Model)\0")
 				TEXT("Apple ][+\0")
 				TEXT("Apple //e\0")
-				TEXT("Enhanced Apple //e\0");
+				TEXT("Enhanced Apple //e\0")
+				TEXT("Clone\0");
 
 TCHAR* szJoyChoice0 = TEXT("Disabled\0");
 TCHAR* szJoyChoice1 = TEXT("PC Joystick #1\0");
@@ -48,6 +48,11 @@ TCHAR* szJoyChoice4 = TEXT("Keyboard (centering)\0");
 TCHAR* szJoyChoice5 = TEXT("Mouse\0");
 
 const int g_nMaxJoyChoiceLen = 40;
+bool ConfigRun = false;
+//eApple2Type NewApple2Type = 0;
+DWORD NewApple2Type = 0;
+DWORD NewCloneType = 0;
+DWORD NewApple2Combo = 0;
 
 enum JOY0CHOICE {J0C_DISABLED=0, J0C_JOYSTICK1, J0C_KEYBD_STANDARD, J0C_KEYBD_CENTERING, J0C_MOUSE, J0C_MAX};
 TCHAR* pszJoy0Choices[J0C_MAX] = {	szJoyChoice0,
@@ -97,12 +102,34 @@ TCHAR   discchoices[]     =  TEXT("Authentic Speed\0")
 const UINT VOLUME_MIN = 0;
 const UINT VOLUME_MAX = 59;
 
-enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_SAVESTATE, PG_DISK, PG_NUM_SHEETS};
+enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_DISK, PG_ADVANCED, PG_NUM_SHEETS};
 
 UINT g_nLastPage = PG_CONFIG;
 
 UINT g_uScrollLockToggle = 0;
 UINT g_uMouseInSlot4 = 0;
+UINT g_uMouseShowCrosshair = 0;
+UINT g_uMouseRestrictToWindow = 0;
+
+//
+
+UINT g_uTheFreezesF8Rom = 0;
+
+#define UNDEFINED ((UINT)-1)
+static UINT g_bEnableFreezeDlgButton = UNDEFINED;
+
+//
+
+enum {
+	CLONETYPE_PRAVETS82=0,
+	CLONETYPE_PRAVETS8A,
+	CLONETYPE_NUM
+};
+DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
+
+static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")	// Bulgarian
+									TEXT("Pravets 8A\0");	// Bulgarian
+
 
 //===========================================================================
 
@@ -205,28 +232,41 @@ static void InitJoystickChoices(HWND window, int nJoyNum, int nIdcValue)
 
 //===========================================================================
 
-static void ConfigDlg_OK(HWND window, BOOL afterclose)
+static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 {
-	eApple2Type NewApple2Type;
-
+	switch (NewCompType)
 	{
-		DWORD newcomptype   = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
-
-		switch (newcomptype)
-		{
-		case 0:	NewApple2Type = A2TYPE_APPLE2; break;
-		case 1:	NewApple2Type = A2TYPE_APPLE2PLUS; break;
-		case 2:	NewApple2Type = A2TYPE_APPLE2E; break;
-		case 3:	NewApple2Type = A2TYPE_APPLE2EEHANCED; break;
-		}
+		case 0:		return A2TYPE_APPLE2;
+		case 1:		return A2TYPE_APPLE2PLUS;
+		case 2:		return A2TYPE_APPLE2E;
+		case 3:		return A2TYPE_APPLE2EEHANCED;
+		case 4:		// Clone
+			switch (NewCloneType)
+			{
+			case 0: return A2TYPE_PRAVETS82; break;
+			case 1: return A2TYPE_PRAVETS8A; break;
+			}			
+		default:	return A2TYPE_APPLE2EEHANCED;
 	}
+}
+
+static void ConfigDlg_OK(HWND window, UINT afterclose)
+{
+	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
+	DWORD OldApple2Type = g_Apple2Type;//LOAD(TEXT(REGVALUE_APPLE2_TYPE),&OldApple2Type);
+	eApple2Type NewApple2Type = GetApple2Type(NewCompType, 0 );
 
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
-	if (NewApple2Type != g_Apple2Type)
+	if (OldApple2Type > (APPLECLONE_MASK|APPLE2E_MASK))
+		OldApple2Type = (APPLECLONE_MASK|APPLE2E_MASK);
+	
+
+	if (NewApple2Type != OldApple2Type)
 	{
-		if (MessageBox(window,
+		if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
+			MessageBox(window,
 						TEXT(
 						"You have changed the emulated computer "
 						"type.  This change will not take effect "
@@ -257,12 +297,18 @@ static void ConfigDlg_OK(HWND window, BOOL afterclose)
 
 	SetCurrentCLK6502();
 	
-	SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type);
+	if (NewApple2Type > A2TYPE_CLONE) 
+		NewCloneType = NewApple2Type - A2TYPE_CLONE;		
+
+	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8A))
+		SAVE(TEXT(REGVALUE_APPLE2_TYPE),A2TYPE_CLONE );
+	else
+		SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
+
 	SAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
 	SAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	SAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
 	SAVE(TEXT("Video Emulation")   ,videotype);
-	SAVE(TEXT(REGVALUE_MOUSE_IN_SLOT4),g_uMouseInSlot4);
 
 	//
 
@@ -280,7 +326,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
                              UINT   message,
                              WPARAM wparam,
                              LPARAM lparam) {
-  static BOOL afterclose = 0;
+  static UINT afterclose = 0;
 
   switch (message)
   {
@@ -291,11 +337,17 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
       switch (((LPPSHNOTIFY)lparam)->hdr.code)
 	  {
         case PSN_KILLACTIVE:
-			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
+			// About to stop being active page
+			{
+				DWORD NewCompType = (DWORD) SendDlgItemMessage(window, IDC_COMPUTER, CB_GETCURSEL, 0, 0);
+				g_bEnableFreezeDlgButton = GetApple2Type(NewCompType,0)<=A2TYPE_APPLE2PLUS ? TRUE : FALSE;
+				SetWindowLong(window, DWL_MSGRESULT, FALSE);		// Changes are valid
+			}
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
 			ConfigDlg_OK(window, afterclose);
+			ConfigRun = true;
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
@@ -327,41 +379,16 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 
         case IDC_BENCHMARK:
           afterclose = WM_USER_BENCHMARK;
-		  		PropSheet_PressButton(GetParent(window), PSBTN_OK);
+		  PropSheet_PressButton(GetParent(window), PSBTN_OK);
           break;
 
-			case IDC_ETHERNET:
-			  ui_tfe_settings_dialog(window);
-			  break;
+		case IDC_ETHERNET:
+		  ui_tfe_settings_dialog(window);
+		  break;
 			  
         case IDC_MONOCOLOR:
           VideoChooseColor();
           break;
-
-		case IDC_MOUSE_IN_SLOT4:
-			UINT uNewState = IsDlgButtonChecked(window, IDC_MOUSE_IN_SLOT4) ? 1 : 0;
-			LPCSTR pMsg = uNewState ?
-							TEXT("The emulator needs to restart as the slot configuration has changed.\n")
-							TEXT("Also Mockingboard/Phasor cards won't be available in slot 4.\n\n")
-							TEXT("Would you like to restart the emulator now?")
-							:
-							TEXT("The emulator needs to restart as the slot configuration has changed.\n")
-							TEXT("(Mockingboard/Phasor cards will now be available in slot 4.)\n\n")
-							TEXT("Would you like to restart the emulator now?");
-			if (MessageBox(window,
-							pMsg,
-							TEXT("Configuration"),
-							MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
-			{
-				g_uMouseInSlot4 = uNewState;
-				afterclose = WM_USER_RESTART;
-				PropSheet_PressButton(GetParent(window), PSBTN_OK);
-			}
-			else
-			{
-			  CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
-			}
-			break;
 
 #if 0
         case IDC_RECALIBRATE:
@@ -395,18 +422,26 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_APPLE2PLUS:		iApple2String = 1; break;
 		case A2TYPE_APPLE2E:		iApple2String = 2; break;
 		case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
+		case A2TYPE_PRAVETS82:	    iApple2String = 4; break;
+		case A2TYPE_PRAVETS8A:	    iApple2String = 5; break;
 	  }
 
-      FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
+	  if ((iApple2String == 4) || (iApple2String == 5))
+		FillComboBox(window,IDC_COMPUTER,computerchoices,4);
+	  else
+		FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
+
       FillComboBox(window,IDC_VIDEOTYPE,videochoices,videotype);
       FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPOS,1,g_dwSpeed);
+
       {
         BOOL custom = 1;
-        if (g_dwSpeed == SPEED_NORMAL) {
+        if (g_dwSpeed == SPEED_NORMAL)
+		{
           custom = 0;
           RegLoadValue(TEXT("Configuration"),TEXT("Custom Speed"),1,(DWORD *)&custom);
         }
@@ -414,8 +449,6 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
         SetFocus(GetDlgItem(window, custom ? IDC_SLIDER_CPU_SPEED : IDC_AUTHENTIC_SPEED));
         EnableTrackbar(window, custom);
       }
-
-      CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
 
       afterclose = 0;
       break;
@@ -449,20 +482,18 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 
 //===========================================================================
 
-static void InputDlg_OK(HWND window, BOOL afterclose)
+static void InputDlg_OK(HWND window, UINT afterclose)
 {
-	DWORD newjoytype0   = (DWORD)SendDlgItemMessage(window,IDC_JOYSTICK0,CB_GETCURSEL,0,0);
-	DWORD newjoytype1   = (DWORD)SendDlgItemMessage(window,IDC_JOYSTICK1,CB_GETCURSEL,0,0);
+	UINT uNewJoyType0 = SendDlgItemMessage(window,IDC_JOYSTICK0,CB_GETCURSEL,0,0);
+	UINT uNewJoyType1 = SendDlgItemMessage(window,IDC_JOYSTICK1,CB_GETCURSEL,0,0);
 
-//	bool bNewKeybBufferEnable = IsDlgButtonChecked(window, IDC_KEYB_BUFFER_ENABLE) ? true : false;
-
-	if (!JoySetEmulationType(window,g_nJoy0ChoiceTranlationTbl[newjoytype0],JN_JOYSTICK0))
+	if (!JoySetEmulationType(window, g_nJoy0ChoiceTranlationTbl[uNewJoyType0], JN_JOYSTICK0))
 	{
 		afterclose = 0;
 		return;
 	}
 	
-	if (!JoySetEmulationType(window,g_nJoy1ChoiceTranlationTbl[newjoytype1],JN_JOYSTICK1))
+	if (!JoySetEmulationType(window, g_nJoy1ChoiceTranlationTbl[uNewJoyType1], JN_JOYSTICK1))
 	{
 		afterclose = 0;
 		return;
@@ -471,14 +502,17 @@ static void InputDlg_OK(HWND window, BOOL afterclose)
 	JoySetTrim((short)SendDlgItemMessage(window, IDC_SPIN_XTRIM, UDM_GETPOS, 0, 0), true);
 	JoySetTrim((short)SendDlgItemMessage(window, IDC_SPIN_YTRIM, UDM_GETPOS, 0, 0), false);
 
-//	KeybSetBufferMode(bNewKeybBufferEnable);
+	g_uMouseShowCrosshair = IsDlgButtonChecked(window, IDC_MOUSE_CROSSHAIR) ? 1 : 0;
+	g_uMouseRestrictToWindow = IsDlgButtonChecked(window, IDC_MOUSE_RESTRICT_TO_WINDOW) ? 1 : 0;
 
 	SAVE(TEXT("Joystick 0 Emulation"),joytype[0]);
 	SAVE(TEXT("Joystick 1 Emulation"),joytype[1]);
 	SAVE(TEXT(REGVALUE_PDL_XTRIM),JoyGetTrim(true));
 	SAVE(TEXT(REGVALUE_PDL_YTRIM),JoyGetTrim(false));
 	SAVE(TEXT(REGVALUE_SCROLLLOCK_TOGGLE),g_uScrollLockToggle);
-//	SAVE(TEXT(REGVALUE_KEYB_BUFFER_ENABLE),KeybGetBufferMode() ? 1 : 0);
+	SAVE(TEXT(REGVALUE_MOUSE_IN_SLOT4),g_uMouseInSlot4);
+	SAVE(TEXT(REGVALUE_MOUSE_CROSSHAIR),g_uMouseShowCrosshair);
+	SAVE(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW),g_uMouseRestrictToWindow);
 
 	//
 
@@ -497,7 +531,7 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
                              WPARAM wparam,
                              LPARAM lparam)
 {
-  static BOOL afterclose = 0;
+  static UINT afterclose = 0;
 
   switch (message)
   {
@@ -553,7 +587,8 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 				InitJoystickChoices(window, JN_JOYSTICK1, IDC_JOYSTICK1);	// Re-init joy1 list
 			}
 			break;
-        case IDC_JOYSTICK1: // joystick1
+
+		case IDC_JOYSTICK1: // joystick1
 		    if(HIWORD(wparam) == CBN_SELCHANGE)
 			{
 				DWORD newjoytype = (DWORD)SendDlgItemMessage(window,IDC_JOYSTICK1,CB_GETCURSEL,0,0);
@@ -561,14 +596,51 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 				InitJoystickChoices(window, JN_JOYSTICK0, IDC_JOYSTICK0);	// Re-init joy0 list
 			}
 			break;
+
 		case IDC_SCROLLLOCK_TOGGLE:
 			g_uScrollLockToggle = IsDlgButtonChecked(window, IDC_SCROLLLOCK_TOGGLE) ? 1 : 0;
 			break;
+
+		case IDC_MOUSE_IN_SLOT4:
+			{
+				UINT uNewState = IsDlgButtonChecked(window, IDC_MOUSE_IN_SLOT4) ? 1 : 0;
+				LPCSTR pMsg = uNewState ?
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n\n")
+								TEXT("Also Mockingboard/Phasor cards won't be available in slot 4\n")
+								TEXT("and the mouse can't be used for joystick emulation.\n\n")
+								TEXT("Would you like to restart the emulator now?")
+								:
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n\n")
+								TEXT("(Mockingboard/Phasor cards will now be available in slot 4\n")
+								TEXT("and the mouse can be used for joystick emulation)\n\n")
+								TEXT("Would you like to restart the emulator now?");
+				if (MessageBox(window,
+								pMsg,
+								TEXT("Configuration"),
+								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+				{
+					g_uMouseInSlot4 = uNewState;
+
+					if (uNewState)
+					{
+						JoyDisableUsingMouse();
+						InitJoystickChoices(window, JN_JOYSTICK0, IDC_JOYSTICK0);
+						InitJoystickChoices(window, JN_JOYSTICK1, IDC_JOYSTICK1);
+					}
+
+					afterclose = WM_USER_RESTART;
+					PropSheet_PressButton(GetParent(window), PSBTN_OK);
+				}
+				else
+				{
+				  CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
+				}
+			}
+			break;
+
 		case IDC_PASTE_FROM_CLIPBOARD:
 			ClipboardInitiatePaste();
 			break;
-//		case IDC_KEYB_BUFFER_ENABLE:
-//			break;
       }
       break;
 
@@ -586,7 +658,14 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 	  SendDlgItemMessage(window, IDC_SPIN_YTRIM, UDM_SETPOS, 0, MAKELONG(JoyGetTrim(false),0));
 
       CheckDlgButton(window, IDC_SCROLLLOCK_TOGGLE, g_uScrollLockToggle ? BST_CHECKED : BST_UNCHECKED);
-//	  CheckDlgButton(window, IDC_KEYB_BUFFER_ENABLE, KeybGetBufferMode() ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_MOUSE_IN_SLOT4, g_uMouseInSlot4 ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_MOUSE_CROSSHAIR, g_uMouseShowCrosshair ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_MOUSE_RESTRICT_TO_WINDOW, g_uMouseRestrictToWindow ? BST_CHECKED : BST_UNCHECKED);
+	  EnableWindow(GetDlgItem(window, IDC_MOUSE_CROSSHAIR), g_uMouseInSlot4 ? TRUE : FALSE);
+	  EnableWindow(GetDlgItem(window, IDC_MOUSE_RESTRICT_TO_WINDOW), g_uMouseInSlot4 ? TRUE : FALSE);
+
+	  afterclose = 0;
+	  break;
 	}
   }
 
@@ -595,7 +674,7 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 
 //===========================================================================
 
-static void SoundDlg_OK(HWND window, BOOL afterclose, UINT uNewSoundcardType)
+static void SoundDlg_OK(HWND window, UINT afterclose, UINT uNewSoundcardType)
 {
 	DWORD newsoundtype  = (DWORD)SendDlgItemMessage(window,IDC_SOUNDTYPE,CB_GETCURSEL,0,0);
 
@@ -636,7 +715,7 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
                              WPARAM wparam,
                              LPARAM lparam)
 {
-  static BOOL afterclose = 0;
+  static UINT afterclose = 0;
   static UINT uNewSoundcardType = SC_UNINIT;
 
   switch (message)
@@ -719,6 +798,7 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 	  }
 
       afterclose = 0;
+	  break;
 	}
   }
 
@@ -727,38 +807,41 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 
 //===========================================================================
 
-static char g_szNewDirectory[MAX_PATH];
-static char g_szNewFilename[MAX_PATH];
-
-static void SaveStateUpdate()
+static void EnableHDD(HWND window, BOOL bEnable)
 {
-	Snapshot_SetFilename(g_szNewFilename);
+	EnableWindow(GetDlgItem(window, IDC_HDD1), bEnable);
+	EnableWindow(GetDlgItem(window, IDC_EDIT_HDD1), bEnable);
 
-	RegSaveString(TEXT("Configuration"),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
-
-	if(g_szNewDirectory[0])
-		RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szNewDirectory);
+	EnableWindow(GetDlgItem(window, IDC_HDD2), bEnable);
+	EnableWindow(GetDlgItem(window, IDC_EDIT_HDD2), bEnable);
 }
 
-static void SaveStateDlg_OK(HWND window, BOOL afterclose)
+//---------------------------------------------------------------------------
+
+static void DiskDlg_OK(HWND window, UINT afterclose)
 {
-	char szFilename[MAX_PATH];
+	BOOL  newdisktype   = (BOOL) SendDlgItemMessage(window,IDC_DISKTYPE,CB_GETCURSEL,0,0);
 
-	memset(szFilename, 0, sizeof(szFilename));
-	* ((USHORT*) szFilename) = sizeof(szFilename);
+	if (newdisktype != enhancedisk)
+	{
+		if (MessageBox(window,
+			TEXT("You have changed the disk speed setting.  ")
+			TEXT("This change will not take effect ")
+			TEXT("until the next time you restart the ")
+			TEXT("emulator.\n\n")
+			TEXT("Would you like to restart the emulator now?"),
+			TEXT("Configuration"),
+			MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			afterclose = WM_USER_RESTART;
+	}
 
-	UINT nLineLength = SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_LINELENGTH,0,0);
+	bool bHDDIsEnabled = IsDlgButtonChecked(window, IDC_HDD_ENABLE) ? true : false;
+	HD_SetEnabled(bHDDIsEnabled);
 
-	SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_GETLINE,0,(LPARAM)szFilename);
-
-	nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
-	szFilename[nLineLength] = 0x00;
-
-	SaveStateUpdate();
-
-	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
-
-	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
+	SAVE(TEXT("Enhance Disk Speed"),newdisktype);
+	SAVE(TEXT(REGVALUE_HDD_ENABLED), bHDDIsEnabled ? 1 : 0);
+	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE1), 1, HD_GetFullName(0));
+	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE2), 1, HD_GetFullName(1));
 
 	//
 
@@ -766,11 +849,137 @@ static void SaveStateDlg_OK(HWND window, BOOL afterclose)
 		PostMessage(g_hFrameWindow,afterclose,0,0);
 }
 
-static void SaveStateDlg_CANCEL(HWND window)
+static void DiskDlg_CANCEL(HWND window)
 {
 }
 
 //---------------------------------------------------------------------------
+
+static BOOL CALLBACK DiskDlgProc (HWND   window,
+                             UINT   message,
+                             WPARAM wparam,
+                             LPARAM lparam)
+{
+  static UINT afterclose = 0;
+
+  switch (message)
+  {
+	case WM_NOTIFY:
+	{
+	  // Property Sheet notifications
+
+      switch (((LPPSHNOTIFY)lparam)->hdr.code)
+	  {
+        case PSN_KILLACTIVE:
+			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
+			break;
+        case PSN_APPLY:
+			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
+			DiskDlg_OK(window, afterclose);
+			break;
+		case PSN_QUERYCANCEL:
+			// Can use this to ask user to confirm cancel
+			break;
+		case PSN_RESET:
+			DiskDlg_CANCEL(window);
+			break;
+	  }
+	}
+	break;
+
+    case WM_COMMAND:
+      switch (LOWORD(wparam))
+	  {
+		case IDC_DISK1:
+			DiskSelect(0);
+			SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
+			break;
+
+		case IDC_DISK2:
+			DiskSelect(1);
+			SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
+			break;
+
+		case IDC_HDD1:
+			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
+			{
+				HD_Select(0);
+				SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
+			}
+			break;
+
+		case IDC_HDD2:
+			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
+			{
+				HD_Select(1);
+				SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
+			}
+			break;
+
+		case IDC_HDD_ENABLE:
+			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
+			break;
+
+		case IDC_CIDERPRESS_BROWSE:
+			{
+				string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+				RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
+				SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
+			}
+			break;
+      }
+      break;
+
+    case WM_INITDIALOG:
+	{
+		g_nLastPage = PG_DISK;
+
+		FillComboBox(window,IDC_DISKTYPE,discchoices,enhancedisk);
+
+		SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
+		SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
+
+		SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
+		SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
+
+		//
+
+		TCHAR PathToCiderPress[MAX_PATH] = "";
+		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
+		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
+
+		//
+		
+		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
+
+		EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
+
+		afterclose = 0;
+		break;
+	}
+  }
+
+  return 0;
+}
+
+//===========================================================================
+
+static bool g_bSSNewFilename = false;
+static char g_szSSNewDirectory[MAX_PATH];
+static char g_szSSNewFilename[MAX_PATH];
+
+static void SaveStateUpdate()
+{
+	if (g_bSSNewFilename)
+	{
+		Snapshot_SetFilename(g_szSSNewFilename);
+
+		RegSaveString(TEXT("Configuration"),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
+
+		if(g_szSSNewDirectory[0])
+			RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);
+	}
+}
 
 static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 {
@@ -813,24 +1022,123 @@ static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 
 	if(nRes)
 	{
-		strcpy(g_szNewFilename, &szFilename[ofn.nFileOffset]);
+		strcpy(g_szSSNewFilename, &szFilename[ofn.nFileOffset]);
+
+		if (bSave)	// Only for saving (allow loading of any file for backwards compatibility)
+		{
+			// Append .aws if it's not there
+			const char szAWS_EXT[] = ".aws";
+			const UINT uStrLenFile = strlen(g_szSSNewFilename);
+			const UINT uStrLenExt  = strlen(szAWS_EXT);
+			if ((uStrLenFile <= uStrLenExt) || (strcmp(&g_szSSNewFilename[uStrLenFile-uStrLenExt], szAWS_EXT) != 0))
+				strcpy(&g_szSSNewFilename[uStrLenFile], szAWS_EXT);
+		}
 
 		szFilename[ofn.nFileOffset] = 0;
 		if (_tcsicmp(szDirectory, szFilename))
-			strcpy(g_szNewDirectory, szFilename);
+			strcpy(g_szSSNewDirectory, szFilename);
 	}
 
+	g_bSSNewFilename = nRes ? true : false;
 	return nRes;
+}
+
+static void InitFreezeDlgButton(HWND window)
+{
+	if (g_bEnableFreezeDlgButton == UNDEFINED)
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), IS_APPLE2 ? TRUE : FALSE);
+	else
+		EnableWindow(GetDlgItem(window, IDC_THE_FREEZES_F8_ROM_FW), g_bEnableFreezeDlgButton ? TRUE : FALSE);
+
+	CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
 }
 
 //---------------------------------------------------------------------------
 
-static BOOL CALLBACK SaveStateDlgProc (HWND   window,
+static void AdvancedDlg_OK(HWND window, UINT afterclose)
+{
+	char szFilename[MAX_PATH];
+	memset(szFilename, 0, sizeof(szFilename));
+	* (USHORT*) szFilename = sizeof(szFilename);
+
+	UINT nLineLength = SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_LINELENGTH,0,0);
+
+	SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_GETLINE,0,(LPARAM)szFilename);
+
+	nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
+	szFilename[nLineLength] = 0x00;
+
+	SaveStateUpdate();
+
+	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
+
+	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
+
+	//
+
+	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
+
+	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
+	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+
+	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
+
+	if (g_Apple2Type >= A2TYPE_CLONE) 	
+	{
+		if (NewApple2Clone != g_Apple2Type)
+		{		
+			if ((afterclose == WM_USER_RESTART) ||	// Eg. Changing 'Freeze ROM' & user has already OK'd the restart for this
+				MessageBox(window,
+							TEXT(
+							"You have changed the emulated computer "
+							"type. This change will not take effect\n"
+							"until the next time you restart the "
+							"emulator.\n\n"
+							"Would you like to restart the emulator now?"),
+							TEXT("Configuration"),
+							MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			{
+				afterclose = WM_USER_RESTART;	
+			}
+		}
+	}
+	else
+	{
+		if (NewApple2Clone != (g_uCloneType + APPLECLONE_MASK|APPLE2E_MASK))
+		{
+			MessageBox(window,
+						TEXT(
+						"You have changed the emulated clone type "
+						"but in order for the changes to take effect\n"
+						"you shall set the emulated computer type "
+						"to Clone from the Configuration tab.\n\n"),
+						TEXT("Clone type changed"),
+						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;
+			g_uCloneType = NewApple2Clone - (APPLECLONE_MASK|APPLE2E_MASK);
+		}
+	}
+
+	if (NewApple2Type > A2TYPE_APPLE2PLUS)
+		g_uTheFreezesF8Rom = false;
+
+	//
+
+	if (afterclose)
+		PostMessage(g_hFrameWindow,afterclose,0,0);
+}
+
+static void AdvancedDlg_CANCEL(HWND window)
+{
+}
+
+//---------------------------------------------------------------------------
+
+static BOOL CALLBACK AdvancedDlgProc (HWND   window,
                              UINT   message,
                              WPARAM wparam,
                              LPARAM lparam)
 {
-  static BOOL afterclose = 0;
+  static UINT afterclose = 0;
 
   switch (message)
   {
@@ -840,18 +1148,22 @@ static BOOL CALLBACK SaveStateDlgProc (HWND   window,
 
       switch (((LPPSHNOTIFY)lparam)->hdr.code)
 	  {
+        case PSN_SETACTIVE:
+			// About to become the active page
+			InitFreezeDlgButton(window);
+			break;
         case PSN_KILLACTIVE:
 			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-			SaveStateDlg_OK(window, afterclose);
+			AdvancedDlg_OK(window, afterclose);
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
 			break;
 		case PSN_RESET:
-			SaveStateDlg_CANCEL(window);
+			SoundDlg_CANCEL(window);
 			break;
 	  }
 	}
@@ -864,7 +1176,7 @@ static BOOL CALLBACK SaveStateDlgProc (HWND   window,
 			break;
 		case IDC_SAVESTATE_BROWSE:
 			if(SaveStateSelectImage(window, TEXT("Select Save State file"), true))
-				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szNewFilename);
+				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szSSNewFilename);
 			break;
 		case IDC_SAVESTATE_ON_EXIT:
 			break;
@@ -874,20 +1186,47 @@ static BOOL CALLBACK SaveStateDlgProc (HWND   window,
 		case IDC_LOADSTATE:
 			afterclose = WM_USER_LOADSTATE;
 			break;
+
+		//
+
+		case IDC_THE_FREEZES_F8_ROM_FW:
+			{
+				UINT uNewState = IsDlgButtonChecked(window, IDC_THE_FREEZES_F8_ROM_FW) ? 1 : 0;
+				LPCSTR pMsg = 	TEXT("The emulator needs to restart as the ROM configuration has changed.\n")
+								TEXT("Would you like to restart the emulator now?");
+				if (MessageBox(window,
+								pMsg,
+								TEXT("Configuration"),
+								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+				{
+					g_uTheFreezesF8Rom = uNewState;
+					afterclose = WM_USER_RESTART;
+					PropSheet_PressButton(GetParent(window), PSBTN_OK);
+				}
+				else
+				{
+				  CheckDlgButton(window, IDC_THE_FREEZES_F8_ROM_FW, g_uTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED);
+				}
+			}
+			break;
       }
       break;
 
     case WM_INITDIALOG:
 	{
-      g_nLastPage = PG_SAVESTATE;
+		g_nLastPage = PG_ADVANCED;
 
-	  SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
+		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
 
-	  CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 
-	  g_szNewDirectory[0] = 0x00;
+		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
+		InitFreezeDlgButton(window);
 
-      afterclose = 0;
+		g_szSSNewDirectory[0] = 0x00;
+
+		afterclose = 0;
+		break;
 	}
   }
 
@@ -895,140 +1234,6 @@ static BOOL CALLBACK SaveStateDlgProc (HWND   window,
 }
 
 //===========================================================================
-
-static void EnableHDD(HWND window, BOOL bEnable)
-{
-	EnableWindow(GetDlgItem(window, IDC_HDD1), bEnable);
-	EnableWindow(GetDlgItem(window, IDC_EDIT_HDD1), bEnable);
-
-	EnableWindow(GetDlgItem(window, IDC_HDD2), bEnable);
-	EnableWindow(GetDlgItem(window, IDC_EDIT_HDD2), bEnable);
-}
-
-//---------------------------------------------------------------------------
-
-static void DiskDlg_OK(HWND window, BOOL afterclose)
-{
-	BOOL  newdisktype   = (BOOL) SendDlgItemMessage(window,IDC_DISKTYPE,CB_GETCURSEL,0,0);
-
-	if (newdisktype != enhancedisk)
-	{
-		if (MessageBox(window,
-			TEXT("You have changed the disk speed setting.  ")
-			TEXT("This change will not take effect ")
-			TEXT("until the next time you restart the ")
-			TEXT("emulator.\n\n")
-			TEXT("Would you like to restart the emulator now?"),
-			TEXT("Configuration"),
-			MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
-			afterclose = WM_USER_RESTART;
-	}
-
-	bool bHDDIsEnabled = IsDlgButtonChecked(window, IDC_HDD_ENABLE) ? true : false;
-	HD_SetEnabled(bHDDIsEnabled);
-
-	SAVE(TEXT("Enhance Disk Speed"),newdisktype);
-	SAVE(TEXT(REGVALUE_HDD_ENABLED), bHDDIsEnabled ? 1 : 0);
-	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE1), 1, HD_GetFullName(0));
-	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE2), 1, HD_GetFullName(1));
-
-	//
-
-	if (afterclose)
-		PostMessage(g_hFrameWindow,afterclose,0,0);
-}
-
-static void DiskDlg_CANCEL(HWND window)
-{
-}
-
-//---------------------------------------------------------------------------
-
-static BOOL CALLBACK DiskDlgProc (HWND   window,
-                             UINT   message,
-                             WPARAM wparam,
-                             LPARAM lparam)
-{
-  static BOOL afterclose = 0;
-
-  switch (message)
-  {
-	case WM_NOTIFY:
-	{
-	  // Property Sheet notifications
-
-      switch (((LPPSHNOTIFY)lparam)->hdr.code)
-	  {
-        case PSN_KILLACTIVE:
-			SetWindowLong(window, DWL_MSGRESULT, FALSE);			// Changes are valid
-			break;
-        case PSN_APPLY:
-			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-			DiskDlg_OK(window, afterclose);
-			break;
-		case PSN_QUERYCANCEL:
-			// Can use this to ask user to confirm cancel
-			break;
-		case PSN_RESET:
-			DiskDlg_CANCEL(window);
-			break;
-	  }
-	}
-	break;
-
-    case WM_COMMAND:
-      switch (LOWORD(wparam))
-	  {
-		case IDC_DISK1:
-			DiskSelect(0);
-			SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
-			break;
-		case IDC_DISK2:
-			DiskSelect(1);
-			SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
-			break;
-		case IDC_HDD1:
-			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
-			{
-				HD_Select(0);
-				SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
-			}
-			break;
-		case IDC_HDD2:
-			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
-			{
-				HD_Select(1);
-				SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
-			}
-			break;
-		case IDC_HDD_ENABLE:
-			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
-			break;
-      }
-      break;
-
-    case WM_INITDIALOG:
-	{
-		g_nLastPage = PG_DISK;
-
-		FillComboBox(window,IDC_DISKTYPE,discchoices,enhancedisk);
-
-		SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
-		SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
-
-		SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
-		SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
-
-		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
-
-		EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
-
-		afterclose = 0;
-	}
-  }
-
-  return 0;
-}
 
 static BOOL get_tfename(int number, char **ppname, char **ppdescription)
 {
@@ -1270,6 +1475,7 @@ void ui_tfe_settings_dialog(HWND hwnd)
 
 //===========================================================================
 
+//Setup
 void PSP_Init()
 {
 	PROPSHEETPAGE PropSheetPages[PG_NUM_SHEETS];
@@ -1292,17 +1498,17 @@ void PSP_Init()
 	PropSheetPages[PG_SOUND].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_SOUND);
 	PropSheetPages[PG_SOUND].pfnDlgProc = (DLGPROC)SoundDlgProc;
 
-	PropSheetPages[PG_SAVESTATE].dwSize = sizeof(PROPSHEETPAGE);
-	PropSheetPages[PG_SAVESTATE].dwFlags = PSP_DEFAULT;
-	PropSheetPages[PG_SAVESTATE].hInstance = g_hInstance;
-	PropSheetPages[PG_SAVESTATE].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_SAVESTATE);
-	PropSheetPages[PG_SAVESTATE].pfnDlgProc = (DLGPROC)SaveStateDlgProc;
-
 	PropSheetPages[PG_DISK].dwSize = sizeof(PROPSHEETPAGE);
 	PropSheetPages[PG_DISK].dwFlags = PSP_DEFAULT;
 	PropSheetPages[PG_DISK].hInstance = g_hInstance;
 	PropSheetPages[PG_DISK].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_DISK);
 	PropSheetPages[PG_DISK].pfnDlgProc = (DLGPROC)DiskDlgProc;
+
+	PropSheetPages[PG_ADVANCED].dwSize = sizeof(PROPSHEETPAGE);
+	PropSheetPages[PG_ADVANCED].dwFlags = PSP_DEFAULT;
+	PropSheetPages[PG_ADVANCED].hInstance = g_hInstance;
+	PropSheetPages[PG_ADVANCED].pszTemplate = MAKEINTRESOURCE(IDD_PROPPAGE_ADVANCED);
+	PropSheetPages[PG_ADVANCED].pfnDlgProc = (DLGPROC)AdvancedDlgProc;
 
 	PROPSHEETHEADER PropSheetHeader;
 
@@ -1314,7 +1520,10 @@ void PSP_Init()
 	PropSheetHeader.nStartPage = g_nLastPage;
 	PropSheetHeader.ppsp = PropSheetPages;
 
+	DWORD g_Apple2Type = 0;
+	g_bEnableFreezeDlgButton = UNDEFINED;
 	int i = PropertySheet(&PropSheetHeader);	// Result: 0=Cancel, 1=OK
+
 }
 
 DWORD PSP_GetVolumeMax()
@@ -1322,9 +1531,10 @@ DWORD PSP_GetVolumeMax()
 	return VOLUME_MAX;
 }
 
+// Called when F11/F12 is pressed
 bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 {
-	g_szNewDirectory[0] = 0x00;
+	g_szSSNewDirectory[0] = 0x00;
 
 	if(SaveStateSelectImage(hWindow, bSave ? TEXT("Select Save State file")
 										   : TEXT("Select Load State file"), bSave))
@@ -1337,3 +1547,42 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 		return false;	// Cancelled
 	}
 }
+
+//===========================================================================
+
+static string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
+{
+	TCHAR szDirectory[MAX_PATH] = TEXT("");
+	TCHAR szCPFilename[MAX_PATH] = TEXT("");
+	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename ,MAX_PATH);
+	string PathName = szCPFilename;
+
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn,sizeof(OPENFILENAME));
+
+	ofn.lStructSize     = sizeof(OPENFILENAME);
+	ofn.hwndOwner       = hWindow;
+	ofn.hInstance       = g_hInstance;
+	ofn.lpstrFilter     =	TEXT("Applications (*.exe)\0*.exe\0")
+							TEXT("All Files\0*.*\0");
+	ofn.lpstrFile       = szCPFilename;
+	ofn.nMaxFile        = MAX_PATH;
+	ofn.lpstrInitialDir = szDirectory;
+	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+	ofn.lpstrTitle      = pszTitle;
+
+	int nRes = GetOpenFileName(&ofn);
+	if(nRes) //Okay is pressed
+	{
+		SetCurrentImageDir();	// Reset, since GetOpenFileName() will've changed curr dir
+		PathName = szCPFilename;
+	}
+	else //Cancel is pressed.
+	{
+		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename, MAX_PATH);
+		PathName = szCPFilename;
+	}
+
+	return PathName;
+}
+

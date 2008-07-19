@@ -1,5 +1,9 @@
 #pragma once
 
+void SetCurrentCLK6502();
+void SetCurrentImageDir();
+
+
 extern char VERSIONSTRING[];	// Contructed in WinMain()
 
 extern TCHAR     *g_pAppTitle;
@@ -11,6 +15,11 @@ extern DWORD      cumulativecycles;
 extern DWORD      cyclenum;
 extern DWORD      emulmsec;
 extern bool       g_bFullSpeed;
+
+//Pravets 8A/C only variables
+extern bool     P8CAPS_ON;
+extern bool		P8Shift; 
+//===========================================
 
 // Win32
 extern HINSTANCE  g_hInstance;
@@ -35,4 +44,4 @@ extern bool       g_bDisableDirectSound;	// Cmd line switch: don't init DS (so n
 
 extern UINT		g_Slot4;	// Mockingboard or Mouse in slot4
 
-void    SetCurrentCLK6502();
+extern HANDLE	g_hCustomRomF8;		// NULL if no custom rom
