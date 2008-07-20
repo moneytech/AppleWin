@@ -1382,6 +1382,9 @@ void ResetMachineState () {
   MB_Reset();
   SpkrReset();
   sg_Mouse.Reset();
+#ifdef SUPPORT_CPM
+  g_ActiveCPU = CPU_6502;
+#endif
 
   SoundCore_SetFade(FADE_NONE);
 }

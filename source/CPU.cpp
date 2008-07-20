@@ -88,6 +88,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma	 hdrstop
 #include "MouseInterface.h"
 
+#ifdef SUPPORT_CPM
+#include "z80\z80cpu.h"
+#include "z80\z80emu.h"
+#include "z80\z80io.h"
+#endif
+
 #define	 AF_SIGN       0x80
 #define	 AF_OVERFLOW   0x40
 #define	 AF_RESERVED   0x20
@@ -823,6 +829,18 @@ static __forceinline void DoIrqProfiling(DWORD uCycles)
 
 //===========================================================================
 
+BYTE CpuRead(USHORT addr, ULONG uExecutedCycles)
+{
+	return READ;
+}
+
+void CpuWrite(USHORT addr, BYTE a, ULONG uExecutedCycles)
+{
+	WRITE(a);
+}
+
+//===========================================================================
+
 static __forceinline int Fetch(BYTE& iOpcode, ULONG uExecutedCycles)
 {
 		//g_uInternalExecutedCycles = uExecutedCycles;
@@ -911,6 +929,15 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		UINT uExtraCycles = 0;
 		BYTE iOpcode;
 
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{			
+			uExtraCycles = InternalZ80Execute(uTotalCycles);
+			uExecutedCycles += uExtraCycles;
+		}
+		else
+#endif
+		{
 		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
 
@@ -1173,7 +1200,7 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_CMOS CYC(6)  break;
 		case 0xFF:   INV NOP	     CYC(2)  break;
 		}
-
+		}
 
 		CheckInterruptSources(uExecutedCycles);
 		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
@@ -1211,6 +1238,15 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		UINT uExtraCycles = 0;
 		BYTE iOpcode;
 
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{	
+			uExtraCycles = InternalZ80Execute(uTotalCycles);
+			uExecutedCycles += uExtraCycles;
+		}
+		else
+#endif
+		{
 		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
 
@@ -1473,6 +1509,7 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_NMOS CYC(6)  break;
 		case 0xFF:   INV ABSX INS	     CYC(7)  break;
 		}
+		}
 
 		CheckInterruptSources(uExecutedCycles);
 		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
@@ -1521,6 +1558,10 @@ void CpuDestroy ()
 //
 void CpuCalcCycles(ULONG nExecutedCycles)
 {
+#ifdef SUPPORT_CPM
+	if (g_ActiveCPU == CPU_Z80)
+		nExecutedCycles = g_nCyclesExecuted + Z80_ICount;
+#endif
 	// Calc # of cycles executed since this func was last called
 	ULONG nCycles = nExecutedCycles - g_nCyclesExecuted;
 	_ASSERT( (LONG)nCycles >= 0 );
@@ -1593,6 +1634,12 @@ void CpuInitialize ()
 	g_bCritSectionValid = true;
 	CpuIrqReset();
 	CpuNmiReset();
+
+#ifdef SUPPORT_CPM
+	// Z80
+	InitTables();
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================
