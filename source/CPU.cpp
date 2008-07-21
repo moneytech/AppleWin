@@ -1517,7 +1517,9 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 		if (bBreakOnInvalid)
 			break;
-
+// KEN::switch to Z80
+		if (g_ActiveCPU == CPU_Z80)
+			break;
 	} while (uExecutedCycles < uTotalCycles);
 
 	EF_TO_AF
@@ -1599,17 +1601,19 @@ DWORD CpuExecute (DWORD uCycles)
 {
 	DWORD uExecutedCycles =	0;
 
-	g_nCyclesSubmitted = uCycles;
-	g_nCyclesExecuted =	0;
-
-	//
+// KEN::add the bits done with each CPU
 
 	MB_StartOfCpuExecute();
 
+	while (uExecutedCycles < uCycles)
+	{
+		g_nCyclesSubmitted = uCycles;
+		g_nCyclesExecuted =	0;
+
 	if (uCycles	== 0)	// Do single step
-		uExecutedCycles	= InternalCpuExecute(0);
+			uExecutedCycles	+= InternalCpuExecute(0);
 	else				// Do multi-opcode emulation
-		uExecutedCycles	= InternalCpuExecute(uCycles);
+			uExecutedCycles	+= InternalCpuExecute(uCycles);
 
 	MB_UpdateCycles(uExecutedCycles);	// Update 6522s (NB. Do this before updating g_nCumulativeCycles below)
 
@@ -1617,6 +1621,7 @@ DWORD CpuExecute (DWORD uCycles)
 
 	UINT nRemainingCycles =	uExecutedCycles	- g_nCyclesExecuted;
 	g_nCumulativeCycles	+= nRemainingCycles;
+	}
 
 	return uExecutedCycles;
 }
