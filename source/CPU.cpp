@@ -1517,9 +1517,11 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 		if (bBreakOnInvalid)
 			break;
+#ifdef SUPPORT_CPM
 // KEN::switch to Z80
 		if (g_ActiveCPU == CPU_Z80)
 			break;
+#endif
 	} while (uExecutedCycles < uTotalCycles);
 
 	EF_TO_AF
@@ -1605,7 +1607,9 @@ DWORD CpuExecute (DWORD uCycles)
 
 	MB_StartOfCpuExecute();
 
+#ifdef SUPPORT_CPM
 	while (uExecutedCycles < uCycles)
+#endif
 	{
 		g_nCyclesSubmitted = uCycles;
 		g_nCyclesExecuted =	0;
