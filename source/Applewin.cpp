@@ -102,16 +102,11 @@ ULONGLONG g_nPerfFreq = 0;
 void ContinueExecution()
 {
 	static BOOL pageflipping    = 0; //?
-#ifdef SUPPORT_CPM
-	//const double fUsecPerSec        = 1.e6;
-	const double fUsecPerSec        = g_ActiveCPU == CPU_Z80 ? 1.e6 / 2.0f : 1.0e6;
-	const UINT nExecutionPeriodUsec = g_ActiveCPU == CPU_Z80 ? 2000 : 1000;		// 1.0ms
-#else
+
 	const double fUsecPerSec        = 1.e6;
+#if 1
 	const UINT nExecutionPeriodUsec = 1000;		// 1.0ms
 //	const UINT nExecutionPeriodUsec = 100;		// 0.1ms
-#endif
-#if 1
 	const double fExecutionPeriodClks = g_fCurrentCLK6502 * ((double)nExecutionPeriodUsec / fUsecPerSec);
 #else
 	const double fExecutionPeriodClks = 1800.0;

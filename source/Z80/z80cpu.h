@@ -9,8 +9,6 @@
 #ifndef EMU_TYPES
 #define EMU_TYPES
 
-extern int    Z80_ICount;
-
 /****************************************************************************/
 /* sizeof(byte)=1, sizeof(word)=2, sizeof(dword)>=4                         */
 /****************************************************************************/
@@ -98,7 +96,7 @@ extern int Z80_IRQ;          /* Current IRQ status. Checked after EI occurs */
 #define Z80_IGNORE_INT  -1   /* Ignore interrupt                            */
 #define Z80_NMI_INT     -2   /* Execute NMI                                 */
 
-DWORD InternalZ80Execute (DWORD totalcycles);
+DWORD InternalZ80Execute (ULONG totalcycles, ULONG uExecutedCycles);
 unsigned Z80_GetPC (void);         /* Get program counter                   */
 void InitTables (void);
 void Z80_GetRegs (Z80_Regs *Regs); /* Get registers                         */

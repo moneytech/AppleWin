@@ -2414,10 +2414,22 @@ void Z80_SetWaitStates (int n)
 ***/
 
 //===========================================================================
-DWORD InternalZ80Execute (/*DWORD*/ ULONG totalcycles)
+
+// NB. Z80_ICount can legitimately go -ve!
+
+static const double uZ80ClockMultiplier = CLK_Z80 / CLK_6502;
+inline static ULONG ConvertZ80TStatesTo6502Cycles(UINT uTStates)
 {
-	DWORD cycles = 0;
-	unsigned opcode;
+	return (uTStates < 0) ? 0 : (ULONG) ((double)uTStates / uZ80ClockMultiplier);
+}
+
+DWORD InternalZ80Execute (ULONG totalcycles, ULONG uExecutedCycles)
+{
+	// Nb. If uExecutedCycles == 0 (single-step) then just execute a single opcode
+
+	totalcycles     = (ULONG) ((double)totalcycles     * uZ80ClockMultiplier);
+	uExecutedCycles = (ULONG) ((double)uExecutedCycles * uZ80ClockMultiplier);
+	int cycles = uExecutedCycles;	// Must be signed int, as cycles can go -ve
 
 	do {
 #ifdef CPUDEBUG              // ...xxx...xxx  
@@ -2433,7 +2445,7 @@ DWORD InternalZ80Execute (/*DWORD*/ ULONG totalcycles)
 		if (Z80_Trace) Z80_Debug(&R);
 #endif
 		++R.R;
-		opcode = M_RDOP(R.PC.D);
+		unsigned int opcode = M_RDOP(R.PC.D);
 		R.PC.W.l++;
 		Z80_ICount = cycles;
 		Z80_ICount += cycles_main[opcode];
@@ -2442,10 +2454,11 @@ DWORD InternalZ80Execute (/*DWORD*/ ULONG totalcycles)
 		if (g_ActiveCPU != CPU_Z80)
 			break;
 	}
-	while (cycles < totalcycles);
+	while (cycles < (int)totalcycles);
   
 	Interrupt (Z80_Interrupt());
-	return cycles;
+
+	return ConvertZ80TStatesTo6502Cycles(cycles - uExecutedCycles);
 }
 
 //
@@ -2475,7 +2488,6 @@ void Z80_Out (byte Port,byte Value)
 unsigned Z80_RDMEM(DWORD Addr)
 {
 	WORD addr;
-	ULONG uExecutedCycles = 0;
 
 	switch (Addr / 0x1000)
 	{
@@ -2491,32 +2503,31 @@ unsigned Z80_RDMEM(DWORD Addr)
 		case 0x9:
 		case 0xA:
 			addr = (WORD)Addr + 0x1000;
-			return CpuRead(addr,uExecutedCycles);	//READ;
+			return CpuRead( addr, ConvertZ80TStatesTo6502Cycles(Z80_ICount) );
 		break;
 
 		case 0xB:
 		case 0xC:
 		case 0xD:
 			addr = (WORD)Addr + 0x2000;
-			return CpuRead(addr,uExecutedCycles);	//READ;
+			return CpuRead( addr, ConvertZ80TStatesTo6502Cycles(Z80_ICount) );
 		break;
 
 		case 0xE:
 			addr = (WORD)Addr - 0x2000;
 		    if ((addr & 0xF000) == 0xC000)
 			{
-				return IORead[(addr>>4) & 0xFF](regs.pc,addr,0,0,uExecutedCycles);
+				return IORead[(addr>>4) & 0xFF]( regs.pc, addr, 0, 0, ConvertZ80TStatesTo6502Cycles(Z80_ICount) );
 			}
 			else
 			{
 				return *(mem+addr);
 			}
-			//return READ;
 		break;
 
 		case 0xF:
 			addr = (WORD)Addr - 0xF000;
-			return CpuRead(addr,uExecutedCycles);	//READ;
+			return CpuRead( addr, ConvertZ80TStatesTo6502Cycles(Z80_ICount) );
 		break;
 	}
 	return 255;
@@ -2529,7 +2540,6 @@ void Z80_WRMEM(DWORD Addr, BYTE Value)
 {
 	unsigned int laddr;
 	WORD addr;
-	ULONG uExecutedCycles = 0;
 
 	laddr = Addr & 0x0FFF;
 	switch (Addr & 0xF000)
@@ -2551,7 +2561,7 @@ void Z80_WRMEM(DWORD Addr, BYTE Value)
 		case 0xE000: addr = laddr+0xC000; break;
 		case 0xF000: addr = laddr+0x0000; break;
 	}
-	CpuWrite(addr,Value,uExecutedCycles);	//WRITE(Value);
+	CpuWrite( addr, Value, ConvertZ80TStatesTo6502Cycles(Z80_ICount) );
 }
 
 /* Called when ED FE occurs. Can be used */

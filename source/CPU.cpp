@@ -931,9 +931,8 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 
 #ifdef SUPPORT_CPM
 		if (g_ActiveCPU == CPU_Z80)
-		{			
-			uExtraCycles = InternalZ80Execute(uTotalCycles);
-			uExecutedCycles += uExtraCycles;
+		{
+			const UINT uZ80Cycles = InternalZ80Execute(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
 		}
 		else
 #endif
@@ -1240,9 +1239,8 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 #ifdef SUPPORT_CPM
 		if (g_ActiveCPU == CPU_Z80)
-		{	
-			uExtraCycles = InternalZ80Execute(uTotalCycles);
-			uExecutedCycles += uExtraCycles;
+		{
+			const UINT uZ80Cycles = InternalZ80Execute(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
 		}
 		else
 #endif
@@ -1517,11 +1515,7 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 		if (bBreakOnInvalid)
 			break;
-#ifdef SUPPORT_CPM
-// KEN::switch to Z80
-		if (g_ActiveCPU == CPU_Z80)
-			break;
-#endif
+
 	} while (uExecutedCycles < uTotalCycles);
 
 	EF_TO_AF
@@ -1562,10 +1556,6 @@ void CpuDestroy ()
 //
 void CpuCalcCycles(ULONG nExecutedCycles)
 {
-#ifdef SUPPORT_CPM
-	if (g_ActiveCPU == CPU_Z80)
-		nExecutedCycles = g_nCyclesExecuted + Z80_ICount;
-#endif
 	// Calc # of cycles executed since this func was last called
 	ULONG nCycles = nExecutedCycles - g_nCyclesExecuted;
 	_ASSERT( (LONG)nCycles >= 0 );
@@ -1603,21 +1593,17 @@ DWORD CpuExecute (DWORD uCycles)
 {
 	DWORD uExecutedCycles =	0;
 
-// KEN::add the bits done with each CPU
+	g_nCyclesSubmitted = uCycles;
+	g_nCyclesExecuted =	0;
+
+	//
 
 	MB_StartOfCpuExecute();
 
-#ifdef SUPPORT_CPM
-	while (uExecutedCycles < uCycles)
-#endif
-	{
-		g_nCyclesSubmitted = uCycles;
-		g_nCyclesExecuted =	0;
-
 	if (uCycles	== 0)	// Do single step
-			uExecutedCycles	+= InternalCpuExecute(0);
+		uExecutedCycles	= InternalCpuExecute(0);
 	else				// Do multi-opcode emulation
-			uExecutedCycles	+= InternalCpuExecute(uCycles);
+		uExecutedCycles	= InternalCpuExecute(uCycles);
 
 	MB_UpdateCycles(uExecutedCycles);	// Update 6522s (NB. Do this before updating g_nCumulativeCycles below)
 
@@ -1625,7 +1611,6 @@ DWORD CpuExecute (DWORD uCycles)
 
 	UINT nRemainingCycles =	uExecutedCycles	- g_nCyclesExecuted;
 	g_nCumulativeCycles	+= nRemainingCycles;
-	}
 
 	return uExecutedCycles;
 }
@@ -1750,6 +1735,11 @@ void CpuReset()
 	regs.sp = 0x0100 | ((regs.sp - 3) & 0xFF);
 
 	regs.bJammed = 0;
+
+#ifdef SUPPORT_CPM
+	g_ActiveCPU = CPU_6502;
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================
