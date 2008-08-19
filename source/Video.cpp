@@ -931,12 +931,13 @@ void DrawMonoLoResSource () {
 //===========================================================================
 void DrawMonoTextSource (HDC hDstDC)
 {
-	static HBITMAP hCharBitmap[3];
+	static HBITMAP hCharBitmap[4];
 	HDC     hSrcDC  = CreateCompatibleDC(hDstDC);
 
 	hCharBitmap[0] = LoadBitmap(g_hInstance,TEXT("CHARSET40"));
 	hCharBitmap[1] = LoadBitmap(g_hInstance,TEXT("CHARSET82"));
 	hCharBitmap[2] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));
+	hCharBitmap[3] = LoadBitmap(g_hInstance,TEXT("CHARSET8M"));
 
 	HBRUSH hBrush;
 	switch (videotype)
@@ -964,11 +965,12 @@ void DrawMonoTextSource (HDC hDstDC)
 void DrawTextSource (HDC dc)
 {
 	HDC     memdc  = CreateCompatibleDC(dc);
-	static HBITMAP hCharBitmap[3];
+	static HBITMAP hCharBitmap[4];
 	//The charset is set below
 	hCharBitmap[0] = LoadBitmap(g_hInstance,TEXT("CHARSET40"));
 	hCharBitmap[1] = LoadBitmap(g_hInstance,TEXT("CHARSET82"));
 	hCharBitmap[2] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));
+	hCharBitmap[3] = LoadBitmap(g_hInstance,TEXT("CHARSET8M"));  //CHARSET8Ì has a higher index than CHARSET8C in order to avoid circling through it with CTRL+F9
 	SelectObject(memdc,hCharBitmap[g_nCharsetType]);
 
 	BitBlt(

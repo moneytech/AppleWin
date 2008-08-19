@@ -37,6 +37,7 @@ TCHAR filepath[MAX_PATH * 2];
 #define DEFAULT_PRINT_FILENAME "Printer.txt"
 static char g_szPrintFilename[MAX_PATH] = {0};
 bool g_bDumpToPrinter = false;
+bool g_bConvertEncoding = true;
 
 //===========================================================================
 
@@ -140,7 +141,7 @@ static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG)
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 {
 	         char Lat8A[]= "abwgdevzijklmnoprstufhc~{}yx`q|]";
-             char Lat82[]= "abwgdevzijklmnoprstufhc^[]yx@q{}~`"; //Character Ý is used just to fix } convertion
+             char Lat82[]= "abwgdevzijklmnoprstufhc^[]yx@q{}~`"; 
 			 char Kir82[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞß[]^@";
 	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞßÝ";
 	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïðñòóôõö÷øùúüþÿý";
@@ -150,7 +151,7 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
     }
 	
 	char c = NULL;
-	if (g_Apple2Type == A2TYPE_PRAVETS8A)  //This is print convertion for Pravets 8A/C. Print convertion for Pravets82/M is still to be done.
+	if ((g_Apple2Type == A2TYPE_PRAVETS8A) &&  g_bConvertEncoding)  //This is print convertion for Pravets 8A/C. Print convertion for Pravets82/M is still to be done.
 		{
 			if ((value > 90) && (value < 128)) //This range shall be set more precisely
 			{
@@ -178,7 +179,7 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 					}
 				}
 	} //End if (g_Apple2Type == A2TYPE_PRAVETS8A)
-		else if (g_Apple2Type == A2TYPE_PRAVETS82)
+		else if (((g_Apple2Type == A2TYPE_PRAVETS82) || (g_Apple2Type == A2TYPE_PRAVETS8M)) && g_bConvertEncoding)
 		{
 			c =  value & 0x7F;
 			int loop = 0;

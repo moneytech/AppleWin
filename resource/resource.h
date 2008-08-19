@@ -32,7 +32,8 @@
 #define IDR_APPLE2E_ROM                 128
 #define IDR_APPLE2E_ENHANCED_ROM        129
 #define IDR_PRAVETS_82_ROM              149
-#define IDR_PRAVETS_8C_ROM              150
+#define IDR_PRAVETS_8M_ROM              150
+#define IDR_PRAVETS_8C_ROM              151
 #define IDC_MB_ENABLE                   130
 #define IDD_TFE_SETTINGS_DIALOG         131
 #define IDR_PRINTDRVR_FW                132
@@ -87,6 +88,7 @@
 #define IDC_DUMPTOPRINTER               1051
 #define IDC_DUMP_FILENAME               1052
 #define IDC_DUMP_FILENAME_BROWSE        1053
+#define IDC_CONVERT_ENCODING            1054
 
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002

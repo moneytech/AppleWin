@@ -201,7 +201,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			}
 			
 			//Remap some keys for Pravets82/M
-			if (g_Apple2Type == A2TYPE_PRAVETS82)
+			if ((g_Apple2Type == A2TYPE_PRAVETS82) || (g_Apple2Type == A2TYPE_PRAVETS8M))
 			{
 				if (key == 64) 
 					keycode = 96;

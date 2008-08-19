@@ -122,12 +122,14 @@ static UINT g_bEnableFreezeDlgButton = UNDEFINED;
 
 enum {
 	CLONETYPE_PRAVETS82=0,
+	CLONETYPE_PRAVETS8M,
 	CLONETYPE_PRAVETS8A,
 	CLONETYPE_NUM
 };
 DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
 
 static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")	// Bulgarian
+									TEXT("Pravets 8M\0")
 									TEXT("Pravets 8A\0");	// Bulgarian
 
 
@@ -244,7 +246,8 @@ static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 			switch (NewCloneType)
 			{
 			case 0: return A2TYPE_PRAVETS82; break;
-			case 1: return A2TYPE_PRAVETS8A; break;
+			case 1: return A2TYPE_PRAVETS8M; break;
+			case 2: return A2TYPE_PRAVETS8A; break;
 			}			
 		default:	return A2TYPE_APPLE2EEHANCED;
 	}
@@ -300,7 +303,7 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	if (NewApple2Type > A2TYPE_CLONE) 
 		NewCloneType = NewApple2Type - A2TYPE_CLONE;		
 
-	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8A))
+	if ((NewApple2Type == A2TYPE_PRAVETS82) || (NewApple2Type == A2TYPE_PRAVETS8A) || (NewApple2Type == A2TYPE_PRAVETS8M))
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),A2TYPE_CLONE );
 	else
 		SAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
@@ -423,7 +426,8 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_APPLE2E:		iApple2String = 2; break;
 		case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
 		case A2TYPE_PRAVETS82:	    iApple2String = 4; break;
-		case A2TYPE_PRAVETS8A:	    iApple2String = 5; break;
+		case A2TYPE_PRAVETS8M:	    iApple2String = 5; break;
+		case A2TYPE_PRAVETS8A:	    iApple2String = 6; break;
 	  }
 
 	  if ((iApple2String == 4) || (iApple2String == 5))
@@ -1059,7 +1063,8 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
 	g_bDumpToPrinter = IsDlgButtonChecked(window, IDC_DUMPTOPRINTER ) ? true : false;
 	SAVE(TEXT(REGVALUE_DUMP_TO_PRINTER), g_bDumpToPrinter ? 1 : 0);
-
+	g_bConvertEncoding = IsDlgButtonChecked(window, IDC_CONVERT_ENCODING ) ? true : false;
+	SAVE(TEXT(REGVALUE_CONVERT_ENCODING), g_bConvertEncoding ? 1 : 0);
 	//
 
 	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
@@ -1205,6 +1210,7 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter  ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_CONVERT_ENCODING, g_bConvertEncoding  ? BST_CHECKED : BST_UNCHECKED);
 
 		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
 		InitFreezeDlgButton(window);

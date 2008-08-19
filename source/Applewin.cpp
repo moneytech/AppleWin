@@ -380,7 +380,8 @@ void LoadConfiguration ()
 		switch (g_uCloneType)
 		{
 		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
-		case 1:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
+		case 1:	g_Apple2Type = A2TYPE_PRAVETS8M; break;
+		case 2:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
 		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; break;
 		}
 	  }	
@@ -410,6 +411,7 @@ void LoadConfiguration ()
 	case A2TYPE_APPLE2EEHANCED:	g_nCharsetType  = 0; break; 
 	case A2TYPE_PRAVETS82:	    g_nCharsetType  = 1; break; 
 	case A2TYPE_PRAVETS8A:	    g_nCharsetType  = 2; break; 
+	case A2TYPE_PRAVETS8M:	    g_nCharsetType  = 3; break; //This charset has a very small difference with the PRAVETS82 one an probably has some misplaced characters. Still the Pravets82 charset is used, because settiong charset to 3 results in some problems.
 	}
 
 
@@ -450,6 +452,9 @@ void LoadConfiguration ()
 
   if(LOAD(TEXT(REGVALUE_DUMP_TO_PRINTER), &dwTmp))
 	  g_bDumpToPrinter = dwTmp ? true : false;
+
+   if(LOAD(TEXT(REGVALUE_CONVERT_ENCODING), &dwTmp))
+	  g_bConvertEncoding = dwTmp ? true : false;
 
   if(LOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
 	  HD_SetEnabled(dwTmp ? true : false);

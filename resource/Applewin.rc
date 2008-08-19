@@ -60,8 +60,6 @@ DRIVE1_BUTTON           BITMAP                  "DRIVE1.BMP"
 DRIVE2_BUTTON           BITMAP                  "DRIVE2.BMP"
 SETUP_BUTTON            BITMAP                  "SETUP.BMP"
 CHARSET40               BITMAP                  "CHARSET4.BMP"
-CHARSET8C               BITMAP                  "CHARSET8C.BMP"
-CHARSET82               BITMAP                  "CHARSET82.BMP"
 DISKOFF_BITMAP          BITMAP                  "DISKOFF.BMP"
 DISKREAD_BITMAP         BITMAP                  "DISKREAD.BMP"
 DISKWRITE_BITMAP        BITMAP                  "DISKWRIT.BMP"
@@ -71,8 +69,11 @@ CAPSON_BITMAP           BITMAP                  "CAPSON.BMP"
 //Pravets8 appendices
 LATOFF_BITMAP           BITMAP                  "LATOFF.BMP"
 LATON_BITMAP            BITMAP                  "LATON.BMP"
-CAPSOFF_P8_BITMAP          BITMAP                  "CAPSOFF_P8.BMP"
-CAPSON_P8_BITMAP           BITMAP                  "CAPSON_P8.BMP"
+CAPSOFF_P8_BITMAP       BITMAP                  "CAPSOFF_P8.BMP"
+CAPSON_P8_BITMAP        BITMAP                  "CAPSON_P8.BMP"
+CHARSET82               BITMAP                  "CHARSET82.BMP"
+CHARSET8M               BITMAP                  "CHARSET8M.BMP"
+CHARSET8C               BITMAP                  "CHARSET8C.BMP"
 ///////////////////////////////////////////////////////////////////////////
 HELP_BUTTON             BITMAP                  "HELP.BMP"
 DRIVESWAP_BUTTON        BITMAP                  "DRIVESWAP.BMP"
@@ -216,6 +217,7 @@ BEGIN
     //PUSHBUTTON      "Browse...",IDC_DUMP_FILENAME_BROWSE,154,148,50,14
     //EDITTEXT        IDC_DUMP_FILENAME,5,148,143,12,ES_AUTOHSCROLL
 	CONTROL         "Dump to printer (disastrous with images)",IDC_DUMPTOPRINTER,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,163,180,10
+	CONTROL         "Encoding convertion for clones",IDC_CONVERT_ENCODING,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,173,180,10
 END
 
 
@@ -302,7 +304,8 @@ IDR_APPLE2_ROM				ROM		"Apple2.rom"
 IDR_APPLE2_PLUS_ROM			ROM		"Apple2_Plus.rom"
 IDR_APPLE2E_ROM				ROM		"Apple2e.rom"
 IDR_APPLE2E_ENHANCED_ROM	ROM		"Apple2e_Enhanced.rom"
-IDR_PRAVETS_82_ROM			ROM		"Pravets82.rom" 
+IDR_PRAVETS_82_ROM			ROM		"Pravets82.rom"
+IDR_PRAVETS_8M_ROM			ROM		"Pravets8M.rom"
 IDR_PRAVETS_8C_ROM			ROM		"Pravets8C.rom"
 IDR_FREEZES_F8_ROM      ROM                     "FREEZES_NON-AUTOSTART_F8_ROM.rom"
 
