@@ -89,7 +89,8 @@ enum AppMode_e
 #define  REGVALUE_CLONETYPE          "Clone Type"
 #define  REGVALUE_CIDERPRESSLOC      "CiderPress Location"
 #define  REGVALUE_DUMP_TO_PRINTER    "Dump to printer"
-#define  REGVALUE_CONVERT_ENCODING    "Convert printer encoding for clones"
+#define  REGVALUE_CONVERT_ENCODING   "Convert printer encoding for clones"
+#define  REGVALUE_PRINTER_FILENAME   "Printer Filename"
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR      "Starting Directory"

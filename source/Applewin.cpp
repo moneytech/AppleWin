@@ -484,9 +484,12 @@ void LoadConfiguration ()
   //
 
   char szFilename[MAX_PATH] = {0};
-
   RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
   Snapshot_SetFilename(szFilename);	// If not in Registry than default will be used
+  
+  char prFilename[MAX_PATH] = {0};
+  RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_PRINTER_FILENAME),1,prFilename,sizeof(prFilename));
+  Printer_SetFilename(prFilename);	// If not in Registry than default will be used
 
   // Current/Starting Dir is the "root" of where the user keeps his disk images
   RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);

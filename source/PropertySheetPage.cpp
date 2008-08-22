@@ -926,7 +926,8 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
 		case IDC_CIDERPRESS_BROWSE:
 			{
-				string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+				//string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+				string CiderPressLoc = BrowseToFile (window, TEXT("Select path to CiderPress"), REGVALUE_CIDERPRESSLOC, TEXT("Applications (*.exe)\0*.exe\0") TEXT("All Files\0*.*\0") );
 				RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
 				SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
 			}
@@ -951,7 +952,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		TCHAR PathToCiderPress[MAX_PATH] = "";
 		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
 		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
-
+		
 		//
 		
 		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
@@ -1058,6 +1059,8 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	szFilename[nLineLength] = 0x00;
 
 	SaveStateUpdate();
+	RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,Printer_GetFilename());
+//	PrinterStateUpdate();
 
 	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
 	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
@@ -1168,6 +1171,21 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 			if(SaveStateSelectImage(window, TEXT("Select Save State file"), true))
 				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szNewFilename);
 			break;
+		case IDC_DUMP_FILENAME_BROWSE:
+			{
+				//string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
+				/*string PrinterDumpLoc = BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0"));
+				RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,PrinterDumpLoc.c_str());
+				SendDlgItemMessage(window, IDC_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM) PrinterDumpLoc.c_str());
+				Printer_SetFilename (PrinterDumpLoc.c_str());*/
+				char PrinterDumpLoc[MAX_PATH] = {0};
+				strcpy(PrinterDumpLoc, BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0")).c_str());
+				//PrinterDumpLoc = BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0"));
+				RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,PrinterDumpLoc);
+				SendDlgItemMessage(window, IDC_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM) PrinterDumpLoc);
+				Printer_SetFilename (PrinterDumpLoc);
+			}
+			break;
 		case IDC_SAVESTATE_ON_EXIT:
 			break;
 		case IDC_SAVESTATE:
@@ -1207,10 +1225,15 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 		g_nLastPage = PG_ADVANCED;
 
 		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
-
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
-		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter  ? BST_CHECKED : BST_UNCHECKED);
-		CheckDlgButton(window, IDC_CONVERT_ENCODING, g_bConvertEncoding  ? BST_CHECKED : BST_UNCHECKED);
+
+		SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)Printer_GetFilename());
+		//CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
+		/*TCHAR PathToDumpFile[MAX_PATH] = "";
+		//RegLoadString(TEXT("Configuration"), REGVALUE_PRINTER_FILENAME, 1, PathToDumpFile,MAX_PATH);
+		RegLoadString(TEXT("Configuration"), Printer_GetFilename , 1, PathToDumpFile,MAX_PATH);
+		SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)PathToDumpFile);
+		*/
 
 		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
 		InitFreezeDlgButton(window);
@@ -1540,17 +1563,17 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 }
 
 
-string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
+
+string BrowseToFile (HWND hWindow, TCHAR* pszTitle, TCHAR* REGVALUE,TCHAR* FILEMASKS)
 {
 
-	static char SaveStatePath[MAX_PATH] = {0}; //This is a really awkward way to prevent mixing CiderPress and SaveStated values (RAPCS), but it seem the quickest. Here is its Line 1.
-	strcpy(SaveStatePath, Snapshot_GetFilename()); //RAPCS, line 2.
-
+	static char PathToFile[MAX_PATH] = {0}; //This is a really awkward way to prevent mixing CiderPress and SaveStated values (RAPCS), but it seem the quickest. Here is its Line 1.
+	strcpy(PathToFile, Snapshot_GetFilename()); //RAPCS, line 2.
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
-	TCHAR szCPFilename[MAX_PATH];
-	strcpy(szCPFilename, "");
-	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename ,MAX_PATH);
-	string PathName = szCPFilename;
+	TCHAR szFilename[MAX_PATH];
+	strcpy(szFilename, "");
+	RegLoadString(TEXT("Configuration"), REGVALUE, 1, szFilename ,MAX_PATH);
+	string PathName = szFilename;
 
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn,sizeof(OPENFILENAME));
@@ -1558,9 +1581,11 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 	ofn.lStructSize     = sizeof(OPENFILENAME);
 	ofn.hwndOwner       = hWindow;
 	ofn.hInstance       = g_hInstance;
-	ofn.lpstrFilter     =	TEXT("Applications (*.exe)\0*.exe\0")
-							TEXT("All Files\0*.*\0");
-	ofn.lpstrFile       = szCPFilename;
+	ofn.lpstrFilter     = FILEMASKS;
+	/*ofn.lpstrFilter     =	TEXT("Applications (*.exe)\0*.exe\0")
+							TEXT("Text files (*.txt)\0*.txt\0")
+							TEXT("All Files\0*.*\0");*/
+	ofn.lpstrFile       = szFilename;
 	ofn.nMaxFile        = MAX_PATH;
 	ofn.lpstrInitialDir = szDirectory;
 	ofn.Flags           = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
@@ -1569,21 +1594,21 @@ string BrowseToCiderPress (HWND hWindow, TCHAR* pszTitle)
 	int nRes = GetOpenFileName(&ofn);
 	if(nRes) //Okay is pressed
 	{
-		strcpy(g_szNewFilename, &szCPFilename[ofn.nFileOffset]);
+		strcpy(g_szNewFilename, &szFilename[ofn.nFileOffset]);
 
-		szCPFilename[ofn.nFileOffset] = 0;
-		if (_tcsicmp(szDirectory, szCPFilename))
-			strcpy(g_szNewDirectory, szCPFilename);
+		szFilename[ofn.nFileOffset] = 0;
+		if (_tcsicmp(szDirectory, szFilename))
+			strcpy(g_szNewDirectory, szFilename);
 
-		PathName = szCPFilename;
+		PathName = szFilename;
 		PathName.append (g_szNewFilename);	
 	}
 	else //Cancel is pressed.
 	{
-		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szCPFilename,MAX_PATH);
-		PathName = szCPFilename;
+		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szFilename,MAX_PATH);
+		PathName = szFilename;
 	}
-	strcpy(g_szNewFilename, SaveStatePath); //RAPCS, line 3 (last).
+	strcpy(g_szNewFilename, PathToFile); //RAPCS, line 3 (last).
 	return PathName;
 }
 

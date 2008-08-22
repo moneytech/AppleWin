@@ -44,13 +44,7 @@ bool g_bConvertEncoding = true;
 static BYTE __stdcall PrintStatus(WORD, WORD, BYTE, BYTE, ULONG);
 static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG);
 
-void Print_SetFilename(char* prtFilename)
-{
-	if(*prtFilename)
-		strcpy(g_szPrintFilename, (const char *) prtFilename);
-	else
-		strcpy(g_szPrintFilename, DEFAULT_PRINT_FILENAME);
-}
+
 
 
 VOID PrintLoadRom(LPBYTE pCxRomPeripheral, const UINT uSlot)
@@ -84,10 +78,11 @@ static BOOL CheckPrint()
     inactivity = 0;
     if (file == NULL)
     {
-        //TCHAR filepath[MAX_PATH * 2];
-        _tcsncpy(filepath, g_sProgramDir, MAX_PATH);
-        _tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
-        file = fopen(filepath, "wb");
+		//TCHAR filepath[MAX_PATH * 2];
+		//_tcsncpy(filepath, g_sProgramDir, MAX_PATH);
+        //_tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
+		//file = fopen(filepath, "wb");
+		file = fopen(Printer_GetFilename(), "wb");
     }
     return (file != NULL);
 }
@@ -208,3 +203,20 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 }
 
 //===========================================================================
+
+char* Printer_GetFilename()
+{
+	return g_szPrintFilename;
+}
+
+void Printer_SetFilename(char* prtFilename)
+{
+	if(*prtFilename)
+		strcpy(g_szPrintFilename, (const char *) prtFilename);
+	else  //No registry entry is available
+	{
+		_tcsncpy(g_szPrintFilename, g_sProgramDir, MAX_PATH);
+        _tcsncat(g_szPrintFilename, _T(DEFAULT_PRINT_FILENAME), MAX_PATH);		
+	}
+}
+
