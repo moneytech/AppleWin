@@ -29,6 +29,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 #include "..\resource\resource.h"
+#include <stdlib.h>
+//#include <process.h>
+
 
 static DWORD inactivity = 0;
 static FILE* file = NULL;
@@ -38,6 +41,8 @@ TCHAR filepath[MAX_PATH * 2];
 static char g_szPrintFilename[MAX_PATH] = {0};
 bool g_bDumpToPrinter = false;
 bool g_bConvertEncoding = true;
+bool g_bFilterUnprintable = true;
+bool g_bPrinterAppend = false;
 
 //===========================================================================
 
@@ -82,7 +87,10 @@ static BOOL CheckPrint()
 		//_tcsncpy(filepath, g_sProgramDir, MAX_PATH);
         //_tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
 		//file = fopen(filepath, "wb");
-		file = fopen(Printer_GetFilename(), "wb");
+		if (g_bPrinterAppend )
+			file = fopen(Printer_GetFilename(), "ab");
+		else
+			file = fopen(Printer_GetFilename(), "wb");
     }
     return (file != NULL);
 }
@@ -94,7 +102,14 @@ static void ClosePrint()
     {
         fclose(file);
         file = NULL;
-		if (g_bDumpToPrinter) ShellExecute(NULL, "print", filepath, NULL, NULL, 0);
+		//char* PrintCommand = "copy "";
+		string ExtendedFileName = "copy \"";
+		ExtendedFileName.append (Printer_GetFilename());
+		ExtendedFileName.append ("\" prn");
+		//if (g_bDumpToPrinter) ShellExecute(NULL, "print", Printer_GetFilename(), NULL, NULL, 0);
+		if (g_bDumpToPrinter) 
+			system (ExtendedFileName.c_str ());
+			
     }
     inactivity = 0;	
 }
@@ -140,6 +155,7 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 			 char Kir82[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞß[]^@";
 	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞßÝ";
 	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïðñòóôõö÷øùúüþÿý";
+	bool Pres = false;
     if (!CheckPrint())
     {
         return 0;
@@ -189,10 +205,9 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 		{			
 			c =  value & 0x7F;
 		}
-
-	fwrite(&c, 1, 1, file); //break;
-			
-	
+	if ((g_bFilterUnprintable == false) || (c>63) || (c==32) || (c==13) || (c==10) || (c<0)) //c<0 is needed for cyrillic characters
+		fwrite(&c, 1, 1, file); //break;
+				
 
 	/*else
 	{
@@ -217,6 +232,7 @@ void Printer_SetFilename(char* prtFilename)
 	{
 		_tcsncpy(g_szPrintFilename, g_sProgramDir, MAX_PATH);
         _tcsncat(g_szPrintFilename, _T(DEFAULT_PRINT_FILENAME), MAX_PATH);		
+		RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,g_szPrintFilename);
 	}
 }
 

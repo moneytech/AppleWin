@@ -201,24 +201,37 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			}
 			
 			//Remap some keys for Pravets82/M
-			if ((g_Apple2Type == A2TYPE_PRAVETS82) || (g_Apple2Type == A2TYPE_PRAVETS8M))
+			if (g_Apple2Type == A2TYPE_PRAVETS82)
 			{
-				if (key == 64) 
-					keycode = 96;
-				if (key == '^') 
-					keycode = '~';	
+				if (key == 64) keycode = 96;
+				if (key == '^')	keycode = '~';	
 						
-				if (g_bCapsLock == false) //i.e. cyrillic letters
+				if (g_bCapsLock == false) //cyrillic letters
 				{
 					if (key == '`') keycode = '^';
 					if (key == 92) keycode = '@'; // \ to @	
 					if (key == 124) keycode = 92;
 				}
-				else //(g_bCapsLock == true) //i.e. latin letters
+				else //(g_bCapsLock == true) //latin letters
 				{
 				if (key == 91) keycode = 123;
 				if (key == 93) keycode = 125;
 				if (key == 124) keycode = 92;					
+				}
+			}
+			if (g_Apple2Type == A2TYPE_PRAVETS8M)  //Pravets 8M charset is still uncertain
+			{
+				if (g_bCapsLock == false) //cyrillic letters
+				{
+					if (key == '[') keycode = '{';
+					if (key == ']') keycode = '}';
+					if (key == '`') keycode = '~'; //96= key `~
+					if (key == 92) keycode = 96;
+				}
+				else //latin letters
+				{
+					if (key == '`') 
+						keycode = '^'; //96= key `~
 				}
 			}
 			//Remap some keys for Pravets8A/C, which has a different charset for Pravtes82/M, whose keys MUST NOT be remapped.

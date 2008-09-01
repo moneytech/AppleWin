@@ -1066,8 +1066,14 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
 	g_bDumpToPrinter = IsDlgButtonChecked(window, IDC_DUMPTOPRINTER ) ? true : false;
 	SAVE(TEXT(REGVALUE_DUMP_TO_PRINTER), g_bDumpToPrinter ? 1 : 0);
-	g_bConvertEncoding = IsDlgButtonChecked(window, IDC_CONVERT_ENCODING ) ? true : false;
+	g_bConvertEncoding = IsDlgButtonChecked(window, IDC_PRINTER_CONVERT_ENCODING ) ? true : false;
 	SAVE(TEXT(REGVALUE_CONVERT_ENCODING), g_bConvertEncoding ? 1 : 0);
+
+	g_bFilterUnprintable = IsDlgButtonChecked(window, IDC_PRINTER_FILTER_UNPRINTABLE ) ? true : false;
+	SAVE(TEXT(REGVALUE_FILTER_UNPRINTABLE), g_bFilterUnprintable ? 1 : 0);
+
+	g_bPrinterAppend = IsDlgButtonChecked(window, IDC_PRINTER_APPEND) ? true : false;
+	SAVE(TEXT(REGVALUE_PRINTER_APPEND), g_bPrinterAppend ? 1 : 0);
 	//
 
 	DWORD NewCloneType = (DWORD)SendDlgItemMessage(window, IDC_CLONETYPE, CB_GETCURSEL, 0, 0);
@@ -1172,15 +1178,9 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szNewFilename);
 			break;
 		case IDC_DUMP_FILENAME_BROWSE:
-			{
-				//string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
-				/*string PrinterDumpLoc = BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0"));
-				RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,PrinterDumpLoc.c_str());
-				SendDlgItemMessage(window, IDC_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM) PrinterDumpLoc.c_str());
-				Printer_SetFilename (PrinterDumpLoc.c_str());*/
+			{				
 				char PrinterDumpLoc[MAX_PATH] = {0};
 				strcpy(PrinterDumpLoc, BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0")).c_str());
-				//PrinterDumpLoc = BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0"));
 				RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,PrinterDumpLoc);
 				SendDlgItemMessage(window, IDC_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM) PrinterDumpLoc);
 				Printer_SetFilename (PrinterDumpLoc);
@@ -1226,6 +1226,10 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 
 		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_PRINTER_CONVERT_ENCODING, g_bConvertEncoding ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_PRINTER_FILTER_UNPRINTABLE, g_bFilterUnprintable ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_PRINTER_APPEND, g_bPrinterAppend ? BST_CHECKED : BST_UNCHECKED);
 
 		SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)Printer_GetFilename());
 		//CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
@@ -1605,7 +1609,7 @@ string BrowseToFile (HWND hWindow, TCHAR* pszTitle, TCHAR* REGVALUE,TCHAR* FILEM
 	}
 	else //Cancel is pressed.
 	{
-		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, szFilename,MAX_PATH);
+		RegLoadString(TEXT("Configuration"), REGVALUE, 1, szFilename,MAX_PATH);
 		PathName = szFilename;
 	}
 	strcpy(g_szNewFilename, PathToFile); //RAPCS, line 3 (last).

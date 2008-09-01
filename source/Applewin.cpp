@@ -456,6 +456,12 @@ void LoadConfiguration ()
    if(LOAD(TEXT(REGVALUE_CONVERT_ENCODING), &dwTmp))
 	  g_bConvertEncoding = dwTmp ? true : false;
 
+    if(LOAD(TEXT(REGVALUE_FILTER_UNPRINTABLE), &dwTmp))
+	  g_bFilterUnprintable = dwTmp ? true : false;
+
+	if(LOAD(TEXT(REGVALUE_PRINTER_APPEND), &dwTmp))
+	  g_bPrinterAppend = dwTmp ? true : false;
+
   if(LOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
 	  HD_SetEnabled(dwTmp ? true : false);
 

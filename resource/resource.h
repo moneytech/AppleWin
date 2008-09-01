@@ -88,7 +88,9 @@
 #define IDC_DUMPTOPRINTER               1051
 #define IDC_DUMP_FILENAME               1052
 #define IDC_DUMP_FILENAME_BROWSE        1053
-#define IDC_CONVERT_ENCODING            1054
+#define IDC_PRINTER_CONVERT_ENCODING    1054
+#define IDC_PRINTER_FILTER_UNPRINTABLE  1055
+#define IDC_PRINTER_APPEND				1056
 
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
