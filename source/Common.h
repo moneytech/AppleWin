@@ -93,6 +93,7 @@ enum AppMode_e
 #define  REGVALUE_FILTER_UNPRINTABLE "Filter unprintable characters"
 #define  REGVALUE_PRINTER_FILENAME   "Printer Filename"
 #define  REGVALUE_PRINTER_APPEND     "Append to printer file"
+#define  REGVALUE_PRINTER_IDLE_LIMIT "Printer idle limit"
 
 // Preferences 
 #define REGVALUE_PREF_START_DIR      "Starting Directory"

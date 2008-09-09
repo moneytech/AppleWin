@@ -501,6 +501,13 @@ void LoadConfiguration ()
   RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
   SetCurrentDirectory(g_sCurrentDir);
   
+ DWORD g_iPrinterIdleL= (10);
+    /*if(LOAD(TEXT(REGVALUE_PDL_YTRIM), &dwTmp))
+      JoySetTrim((short)dwTmp, false);
+	  */
+  LOAD(TEXT(REGVALUE_PRINTER_IDLE_LIMIT), &g_iPrinterIdleL);
+  Printer_SetIdleLimit (g_iPrinterIdleL);
+
   char szUthernetInt[MAX_PATH] = {0};
   RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
   update_tfe_interface(szUthernetInt,NULL);

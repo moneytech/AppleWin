@@ -43,6 +43,7 @@ bool g_bDumpToPrinter = false;
 bool g_bConvertEncoding = true;
 bool g_bFilterUnprintable = true;
 bool g_bPrinterAppend = false;
+int  g_iPrinterIdleLimit = 10;
 
 //===========================================================================
 
@@ -102,13 +103,12 @@ static void ClosePrint()
     {
         fclose(file);
         file = NULL;
-		//char* PrintCommand = "copy "";
 		string ExtendedFileName = "copy \"";
 		ExtendedFileName.append (Printer_GetFilename());
 		ExtendedFileName.append ("\" prn");
-		//if (g_bDumpToPrinter) ShellExecute(NULL, "print", Printer_GetFilename(), NULL, NULL, 0);
+		//if (g_bDumpToPrinter) ShellExecute(NULL, "print", Printer_GetFilename(), NULL, NULL, 0); //Print through Notepad
 		if (g_bDumpToPrinter) 
-			system (ExtendedFileName.c_str ());
+			system (ExtendedFileName.c_str ()); //Print through console. This is supposed to be the better way, because it shall print images (with older printers only).
 			
     }
     inactivity = 0;	
@@ -127,9 +127,10 @@ void PrintUpdate(DWORD totalcycles)
     {
         return;
     }
-    if ((inactivity += totalcycles) > (10 * 1000 * 1000)) // around 10 seconds, shall be made adustable
+//    if ((inactivity += totalcycles) > (Printer_GetIdleLimit () * 1000 * 1000))  //This line seems to give a very big deviation
+	if ((inactivity += totalcycles) > (Printer_GetIdleLimit () * 710000)) 
     {
-        // inactive, so close the file (next print will overwrite it)
+        // inactive, so close the file (next print will overwrite or append to it, according to the settings made)
         ClosePrint();
     }
 }
@@ -205,7 +206,7 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 		{			
 			c =  value & 0x7F;
 		}
-	if ((g_bFilterUnprintable == false) || (c>63) || (c==32) || (c==13) || (c==10) || (c<0)) //c<0 is needed for cyrillic characters
+	if ((g_bFilterUnprintable == false) || (c>31) || (c==13) || (c==10) || (c<0)) //c<0 is needed for cyrillic characters
 		fwrite(&c, 1, 1, file); //break;
 				
 
@@ -236,3 +237,13 @@ void Printer_SetFilename(char* prtFilename)
 	}
 }
 
+unsigned int Printer_GetIdleLimit()
+{
+	return g_iPrinterIdleLimit;
+}
+
+//unsigned int
+void Printer_SetIdleLimit(unsigned int Duration)
+{	
+	g_iPrinterIdleLimit = Duration;
+}

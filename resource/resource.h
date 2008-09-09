@@ -91,6 +91,7 @@
 #define IDC_PRINTER_CONVERT_ENCODING    1054
 #define IDC_PRINTER_FILTER_UNPRINTABLE  1055
 #define IDC_PRINTER_APPEND				1056
+#define IDC_SPIN_PRINTER_IDLE           1057
 
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002

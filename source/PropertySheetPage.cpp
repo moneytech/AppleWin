@@ -129,7 +129,7 @@ enum {
 DWORD g_uCloneType = CLONETYPE_PRAVETS82 ;
 
 static TCHAR g_CloneChoices[]	=	TEXT("Pravets 82\0")	// Bulgarian
-									TEXT("Pravets 8M\0")
+									TEXT("Pravets 8M\0")    // Bulgarian
 									TEXT("Pravets 8A\0");	// Bulgarian
 
 
@@ -414,7 +414,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
       CheckRadioButton(window, IDC_AUTHENTIC_SPEED, IDC_CUSTOM_SPEED, IDC_CUSTOM_SPEED);	// FirstButton, LastButton, CheckButton
       break;
 
-    case WM_INITDIALOG:
+    case WM_INITDIALOG: //Init general settings dialog
 	{
       g_nLastPage = PG_CONFIG;
 
@@ -430,7 +430,7 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 		case A2TYPE_PRAVETS8A:	    iApple2String = 6; break;
 	  }
 
-	  if ((iApple2String == 4) || (iApple2String == 5))
+	  if (iApple2String > 3) 
 		FillComboBox(window,IDC_COMPUTER,computerchoices,4);
 	  else
 		FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
@@ -648,7 +648,7 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
       }
       break;
 
-    case WM_INITDIALOG:
+    case WM_INITDIALOG: //Init input settings dialog
 	{
       g_nLastPage = PG_INPUT;
 
@@ -935,7 +935,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
       }
       break;
 
-    case WM_INITDIALOG:
+    case WM_INITDIALOG: //Init disk settings dialog
 	{
 		g_nLastPage = PG_DISK;
 
@@ -1080,6 +1080,9 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 
 	SAVE(TEXT(REGVALUE_CLONETYPE), NewCloneType);
 	SAVE(TEXT(REGVALUE_THE_FREEZES_F8_ROM),g_uTheFreezesF8Rom);	// NB. Can also be disabled on Config page (when Apple2Type changes) 
+	
+    Printer_SetIdleLimit((short)SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE , UDM_GETPOS, 0, 0));
+	SAVE(TEXT(REGVALUE_PRINTER_IDLE_LIMIT),Printer_GetIdleLimit());
 
 	eApple2Type NewApple2Clone = GetApple2Type(4, NewCloneType);
 
@@ -1220,24 +1223,19 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
       }
       break;
 
-    case WM_INITDIALOG:
+    case WM_INITDIALOG:  //Init advanced settings dialog
 	{
 		g_nLastPage = PG_ADVANCED;
-
+		
 		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_CONVERT_ENCODING, g_bConvertEncoding ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_FILTER_UNPRINTABLE, g_bFilterUnprintable ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_APPEND, g_bPrinterAppend ? BST_CHECKED : BST_UNCHECKED);
-
-		SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)Printer_GetFilename());
-		//CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
-		/*TCHAR PathToDumpFile[MAX_PATH] = "";
-		//RegLoadString(TEXT("Configuration"), REGVALUE_PRINTER_FILENAME, 1, PathToDumpFile,MAX_PATH);
-		RegLoadString(TEXT("Configuration"), Printer_GetFilename , 1, PathToDumpFile,MAX_PATH);
-		SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)PathToDumpFile);
-		*/
+		SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE, UDM_SETRANGE, 0, MAKELONG(999,0));
+        SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE, UDM_SETPOS, 0, MAKELONG(Printer_GetIdleLimit (),0));
+    	SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)Printer_GetFilename());
 
 		FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
 		InitFreezeDlgButton(window);
