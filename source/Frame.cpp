@@ -32,18 +32,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "..\resource\resource.h"
 #include <sys/stat.h>
 
-#define ENABLE_MENU 0
+//#define ENABLE_MENU 0
 
 // Magic numbers (used by FrameCreateWindow to calc width/height):
 #define MAGICX 5	// 3D border between Apple window & Emulator's RHS buttons
 #define MAGICY 5	// 3D border between Apple window & Title bar
 
-#define  VIEWPORTCX  560
-#if ENABLE_MENU
-#define  VIEWPORTCY  400
-#else
-#define  VIEWPORTCY  384
-#endif
+#define VIEWPORTCX FRAMEBUFFER_W
+#define VIEWPORTCY FRAMEBUFFER_H
+
 #define  BUTTONX     (VIEWPORTCX + VIEWPORTX*2)
 #define  BUTTONY     0
 #define  BUTTONCX    45
@@ -81,7 +78,7 @@ static RECT    framerect       = {0,0,0,0};
 HWND    g_hFrameWindow     = (HWND)0;
 BOOL    fullscreen      = 0;
 static BOOL    helpquit        = 0;
-static BOOL    painting        = 0;
+static BOOL    g_bPaintingWindow = 0;
 static HFONT   smallfont       = (HFONT)0;
 static HWND    tooltipwindow   = (HWND)0;
 static BOOL    g_bUsingCursor	= 0;		// 1=AppleWin is using (hiding) the mouse-cursor
@@ -377,7 +374,7 @@ static void DrawCrosshairs (int x, int y) {
 static void DrawFrameWindow () {
   FrameReleaseDC();
   PAINTSTRUCT ps;
-  HDC         dc = (painting ? BeginPaint(g_hFrameWindow,&ps)
+  HDC         dc = (g_bPaintingWindow ? BeginPaint(g_hFrameWindow,&ps)
                              : GetDC(g_hFrameWindow));
   VideoRealizePalette(dc);
 
@@ -408,7 +405,7 @@ static void DrawFrameWindow () {
 
   // DRAW THE STATUS AREA
   DrawStatusArea(dc,DRAW_BACKGROUND | DRAW_LEDS);
-  if (painting)
+  if (g_bPaintingWindow)
     EndPaint(g_hFrameWindow,&ps);
   else
     ReleaseDC(g_hFrameWindow,dc);
@@ -599,7 +596,12 @@ LRESULT CALLBACK FrameWndProc (
 			if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) ||
 				((g_nAppMode == MODE_STEPPING) && (wparam != TEXT('\x1B'))))
 			{
+			  if( !g_bDebuggerEatKey )
+ 	                  {
 				KeybQueueKeypress((int)wparam,ASCII);
+			   } else {
+		                   g_bDebuggerEatKey = false;
+ 	                           }
 			}
 			else
 			if ((g_nAppMode == MODE_DEBUG) || (g_nAppMode == MODE_STEPPING))
@@ -630,6 +632,7 @@ LRESULT CALLBACK FrameWndProc (
 
     case WM_DDE_EXECUTE: {
       LPTSTR filename = (LPTSTR)GlobalLock((HGLOBAL)lparam);
+//MessageBox( NULL, filename, "DDE Exec", MB_OK );
       int error = DiskInsert(0,filename,0,0);
       if (!error) {
         if (!fullscreen)
@@ -638,7 +641,9 @@ LRESULT CALLBACK FrameWndProc (
         ProcessButtonClick(BTN_RUN);
       }
       else
+	{
         DiskNotifyInvalidImage(filename,error);
+	}
       GlobalUnlock((HGLOBAL)lparam);
       break;
     }
@@ -694,6 +699,35 @@ LRESULT CALLBACK FrameWndProc (
       break;
     }
 
+     // @see: http://answers.google.com/answers/threadview?id=133059
+ 	 // Win32 doesn't pass the PrintScreen key via WM_CHAR
+ 	 //              else if (wparam == VK_SNAPSHOT)
+ 	 // Solution: 2 choices:
+ 	 //              1) register hotkey, or
+ 	 //              2) Use low level Keyboard hooks
+ 	 // We use the 1st one since it is compatible with Win95
+ 	         case WM_HOTKEY:
+ 	                 // wparam = user id
+ 	                 // lparam = modifiers: shift, ctrl, alt, win
+ 	                 if (wparam == VK_SNAPSHOT_560)
+ 	                 {
+ 	                  #if _DEBUG
+		 	 //                      MessageBox( NULL, "Double 580x384 size!", "PrintScreen", MB_OK );
+		 	 #endif
+ 	                	         Video_TakeScreenShot( SCREENSHOT_560x384 );
+ 	        	         }
+	 	                 else
+ 		                 if (wparam == VK_SNAPSHOT_280)
+ 	                 	{
+ 	                        	 if( lparam & MOD_SHIFT)
+	 	                         {
+ 				 #if _DEBUG
+			 	 //                              MessageBox( NULL, "Normal 280x192 size!", "PrintScreen", MB_OK );
+ 	 			#endif
+ 	                         }
+ 	                         Video_TakeScreenShot( SCREENSHOT_280x192 );
+ 	                 }
+ 	                 break;
 	case WM_KEYDOWN:
 		KeybUpdateCtrlShiftStatus();
 		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == -1))
@@ -711,16 +745,9 @@ LRESULT CALLBACK FrameWndProc (
 		{			
 			if (GetKeyState(VK_CONTROL) < 0) //CTRL+F9
 			{
-				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9). The Pravets 8M charset is ommited.
-				if (g_nCharsetType >= 4) 
+				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9).
+				if (g_nCharsetType >= 3) 
 					g_nCharsetType = 0;
-				if (g_nCharsetType >= 3)  //The Pravets8M charset is skipped deliberately
-				{
-					if (g_Apple2Type = A2TYPE_PRAVETS8M) 
-						g_nCharsetType = 3;
-				else
-					g_nCharsetType = 0;
-				}
 			}
 			else	// Cycle through available video modes
 			{
@@ -1027,9 +1054,9 @@ LRESULT CALLBACK FrameWndProc (
 
     case WM_PAINT:
       if (GetUpdateRect(window,NULL,0)) {
-        painting = 1;
+        g_bPaintingWindow = 1;
         DrawFrameWindow();
-        painting = 0;
+        g_bPaintingWindow = 0;
       }
       break;
 
@@ -1394,6 +1421,9 @@ void ResetMachineState () {
   MB_Reset();
   SpkrReset();
   sg_Mouse.Reset();
+  #ifdef SUPPORT_CPM
+   g_ActiveCPU = CPU_6502;
+  #endif
 
   SoundCore_SetFade(FADE_NONE);
 }
@@ -1565,7 +1595,7 @@ HDC FrameGetDC () {
 //===========================================================================
 HDC FrameGetVideoDC (LPBYTE *addr, LONG *pitch)
 {
-	if (fullscreen && g_bAppActive && !painting)
+	if (fullscreen && g_bAppActive && !g_bPaintingWindow)
 	{
 		RECT rect = {	FSVIEWPORTX,
 						FSVIEWPORTY,
@@ -1625,7 +1655,7 @@ void FrameReleaseDC () {
 
 //===========================================================================
 void FrameReleaseVideoDC () {
-  if (fullscreen && g_bAppActive && !painting) {
+  if (fullscreen && g_bAppActive && !g_bPaintingWindow) {
 
     // THIS IS CORRECT ACCORDING TO THE DIRECTDRAW DOCS
     RECT rect = {FSVIEWPORTX,

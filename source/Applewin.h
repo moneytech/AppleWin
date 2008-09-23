@@ -1,5 +1,9 @@
 #pragma once
 
+void SetCurrentCLK6502();
+void SetCurrentImageDir();
+
+
 extern char VERSIONSTRING[];	// Contructed in WinMain()
 
 extern TCHAR     *g_pAppTitle;
@@ -42,4 +46,6 @@ extern UINT		g_Slot4;	// Mockingboard or Mouse in slot4
 
 extern HANDLE	g_hCustomRomF8;		// NULL if no custom rom
 
-void    SetCurrentCLK6502();
+enum eCPU {CPU_6502=1, CPU_Z80};
+extern eCPU		g_ActiveCPU;
+

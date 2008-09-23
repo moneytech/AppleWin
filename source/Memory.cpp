@@ -29,6 +29,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 #include "MouseInterface.h"
+#ifdef SUPPORT_CPM
+#include "z80\z80emu.h"
+#include "z80\z80.h"
+#endif
 #include "..\resource\resource.h"
 
 #define  MF_80STORE    0x00000001
@@ -899,7 +903,6 @@ void MemInitialize()
 	const UINT Apple2RomSize = 12*1024;
 	const UINT Apple2eRomSize = Apple2RomSize+CxRomSize;
 	//const UINT Pravets82RomSize = 12*1024;
-	//const UINT Pravets8MRomSize = 12*1024;
 	//const UINT Pravets8ARomSize = Pravets82RomSize+CxRomSize;
 
 	// ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
@@ -957,7 +960,6 @@ void MemInitialize()
 	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	case A2TYPE_PRAVETS82:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_82_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break; 
-	case A2TYPE_PRAVETS8M:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_8M_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break; 
 	case A2TYPE_PRAVETS8A:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_8C_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break; 
 	}
 
@@ -970,8 +972,7 @@ void MemInitialize()
 		case A2TYPE_APPLE2PLUS:		_tcscpy(sRomFileName, TEXT("APPLE2_PLUS.ROM")); break;
 		case A2TYPE_APPLE2E:		_tcscpy(sRomFileName, TEXT("APPLE2E.ROM")); break;
 		case A2TYPE_APPLE2EEHANCED:	_tcscpy(sRomFileName, TEXT("APPLE2E_ENHANCED.ROM")); break;
-		case A2TYPE_PRAVETS82:	    _tcscpy(sRomFileName, TEXT("PRAVETS82.ROM")); break;  
-		case A2TYPE_PRAVETS8M:	    _tcscpy(sRomFileName, TEXT("PRAVETS8M.ROM")); break;  
+		case A2TYPE_PRAVETS82:	    _tcscpy(sRomFileName, TEXT("PRAVETS82.ROM")); break;  //Rom to be changed. Currently an Apple 2E Rom is used, because of the lack of a genuine Pravets82 one.
 		case A2TYPE_PRAVETS8A:	    _tcscpy(sRomFileName, TEXT("PRAVETS8C.ROM")); break;
 		}
 
@@ -1053,6 +1054,9 @@ void MemInitialize()
 	sg_SSC.CommInitialize(pCxRomPeripheral, 2);		// $C200 : SSC
 	if (g_Slot4 == CT_MouseInterface)
 		sg_Mouse.Initialize(pCxRomPeripheral, 4);	// $C400 : Mouse f/w
+#ifdef SUPPORT_CPM
+	ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);			// $C500 ; Z80 card
+#endif
 	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w
 	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
 
@@ -1105,6 +1109,9 @@ void MemReset ()
 	CpuInitialize();
 	//Sets Caps Lock = false (Pravets 8A/C only)
 
+#ifdef SUPPORT_CPM
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================
@@ -1115,12 +1122,11 @@ void MemReset ()
 void MemResetPaging ()
 {
   ResetPaging(0);
-  PrintReset();
   	if (g_Apple2Type == A2TYPE_PRAVETS8A)
 	{
 		P8CAPS_ON = false; 
 		TapeWrite (0, 0, 0, 0 ,0);
-		FrameRefreshStatus(DRAW_LEDS);		
+		FrameRefreshStatus(DRAW_LEDS);
 	}
 }
 

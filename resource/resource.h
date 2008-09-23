@@ -31,9 +31,6 @@
 #define IDR_APPLE2_PLUS_ROM             127
 #define IDR_APPLE2E_ROM                 128
 #define IDR_APPLE2E_ENHANCED_ROM        129
-#define IDR_PRAVETS_82_ROM              149
-#define IDR_PRAVETS_8M_ROM              150
-#define IDR_PRAVETS_8C_ROM              151
 #define IDC_MB_ENABLE                   130
 #define IDD_TFE_SETTINGS_DIALOG         131
 #define IDR_PRINTDRVR_FW                132
@@ -42,7 +39,11 @@
 #define IDR_SSC_FW                      134
 #define IDR_MOCKINGBOARD_D_FW           135
 #define IDR_MOUSEINTERFACE_FW           136
-#define IDR_FREEZES_F8_ROM              137
+#define IDR_THUNDERCLOCKPLUS_FW         137
+#define IDR_FREEZES_F8_ROM              138
+#define IDR_PRAVETS_82_ROM              139
+#define IDR_PRAVETS_8M_ROM              140
+#define IDR_PRAVETS_8C_ROM              142
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -85,13 +86,14 @@
 #define IDC_MOUSE_RESTRICT_TO_WINDOW    1048
 #define IDC_CIDERPRESS_BROWSE           1049
 #define IDC_CIDERPRESS_FILENAME         1050
-#define IDC_DUMPTOPRINTER               1051
-#define IDC_DUMP_FILENAME               1052
-#define IDC_DUMP_FILENAME_BROWSE        1053
-#define IDC_PRINTER_CONVERT_ENCODING    1054
-#define IDC_PRINTER_FILTER_UNPRINTABLE  1055
-#define IDC_PRINTER_APPEND				1056
-#define IDC_SPIN_PRINTER_IDLE           1057
+#define IDC_Z80_IN_SLOT5                1051
+#define IDC_DUMPTOPRINTER               1052
+#define IDC_DUMP_FILENAME               1053
+#define IDC_DUMP_FILENAME_BROWSE        1054
+#define IDC_PRINTER_CONVERT_ENCODING    1055
+#define IDC_PRINTER_FILTER_UNPRINTABLE  1056
+#define IDC_PRINTER_APPEND				1057
+#define IDC_SPIN_PRINTER_IDLE           1058
 
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
@@ -106,9 +108,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        137
-#define _APS_NEXT_COMMAND_VALUE         40007
-#define _APS_NEXT_CONTROL_VALUE         1047
+#define _APS_NEXT_RESOURCE_VALUE        141
+#define _APS_NEXT_COMMAND_VALUE         40008
+#define _APS_NEXT_CONTROL_VALUE         1052
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -30,8 +30,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include <objbase.h>
 #include "MouseInterface.h"
+#include "z80\z80.h"
 
-char VERSIONSTRING[] = "xx.yy.zz.ww";
+char VERSIONSTRING[16] = "xx.yy.zz.ww";
 
 TCHAR *g_pAppTitle = TITLE_APPLE_2E_ENHANCED;
 
@@ -74,7 +75,13 @@ bool		g_bDisableDirectSound = false;
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
 
+#ifdef SUPPORT_CPM
+UINT            g_Slot4 = CT_Empty;
+#else
 UINT		g_Slot4 = CT_Mockingboard;		// CT_Mockingboard or CT_MouseInterface
+#endif
+	 
+eCPU            g_ActiveCPU = CPU_6502;
 
 HANDLE		g_hCustomRomF8 = INVALID_HANDLE_VALUE;	// Cmd-line specified custom ROM at $F800..$FFFF
 static bool	g_bCustomRomF8Failed = false;			// Set if custom ROM file failed
@@ -466,9 +473,9 @@ void LoadConfiguration ()
 	  HD_SetEnabled(dwTmp ? true : false);
 
   char szHDFilename[MAX_PATH] = {0};
-  if(RegLoadString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
+  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
 	  HD_InsertDisk2(0, szHDFilename);
-  if(RegLoadString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE2), 1, szHDFilename, sizeof(szHDFilename)))
+  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE2), 1, szHDFilename, sizeof(szHDFilename)))
 	  HD_InsertDisk2(1, szHDFilename);
 
   if(LOAD(TEXT(REGVALUE_PDL_XTRIM), &dwTmp))
@@ -485,21 +492,33 @@ void LoadConfiguration ()
 	  g_uMouseShowCrosshair = dwTmp;
   if(LOAD(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW), &dwTmp))
 	  g_uMouseRestrictToWindow = dwTmp;
-  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
 
+#ifdef SUPPORT_CPM
+   if(LOAD(TEXT(REGVALUE_Z80_IN_SLOT5), &dwTmp))
+           g_uZ80InSlot5 = dwTmp;
+ 
+   if (g_uZ80InSlot5)
+           MB_SetSoundcardType(SC_NONE);
+ 
+   g_Slot4 = g_uMouseInSlot4     ? CT_MouseInterface
+           : g_uZ80InSlot5 ? CT_Empty
+ 	              : CT_Mockingboard;
+ 	 #else
+  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
+#endif
   //
 
   char szFilename[MAX_PATH] = {0};
-  RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
+  RegLoadString(TEXT(REG_CONFIG),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
   Snapshot_SetFilename(szFilename);	// If not in Registry than default will be used
   
   char prFilename[MAX_PATH] = {0};
-  RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_PRINTER_FILENAME),1,prFilename,sizeof(prFilename));
+  RegLoadString(TEXT(REG_CONFIG),TEXT(REGVALUE_PRINTER_FILENAME),1,prFilename,sizeof(prFilename));
   Printer_SetFilename(prFilename);	// If not in Registry than default will be used
 
   // Current/Starting Dir is the "root" of where the user keeps his disk images
-  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
-  SetCurrentDirectory(g_sCurrentDir);
+  RegLoadString(TEXT(REG_PREFS),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
+  SetCurrentImageDir();
   
  DWORD g_iPrinterIdleL= (10);
     /*if(LOAD(TEXT(REGVALUE_PDL_YTRIM), &dwTmp))
@@ -509,12 +528,18 @@ void LoadConfiguration ()
   Printer_SetIdleLimit (g_iPrinterIdleL);
 
   char szUthernetInt[MAX_PATH] = {0};
-  RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
+  RegLoadString(TEXT(REG_CONFIG),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
   update_tfe_interface(szUthernetInt,NULL);
 
 }
 
 //===========================================================================
+ void SetCurrentImageDir()
+ 	 {
+ 	         SetCurrentDirectory(g_sCurrentDir);
+ 	 }
+ 	 
+ 	 //===========================================================================
 void RegisterExtensions ()
 {
 	TCHAR szCommandTmp[MAX_PATH];
@@ -562,7 +587,31 @@ void RegisterExtensions ()
 }
 
 //===========================================================================
+	 void AppleWin_RegisterHotKeys()
+ 	 {
+ 	         BOOL bStatus = true;
+ 	 
+ 	         bStatus &= RegisterHotKey(
+ 	                 g_hFrameWindow  , // HWND hWnd
+			VK_SNAPSHOT_560 , // int id (user/custom id)
+ 	                 0                                       , // UINT fsModifiers
+			 VK_SNAPSHOT               // UINT vk = PrintScreen
+ 	         );
+ 	 
+	         bStatus &= RegisterHotKey(
+ 	                 g_hFrameWindow  , // HWND hWnd
+ 	                 VK_SNAPSHOT_280, // int id (user/custom id)
+ 	                 MOD_SHIFT               , // UINT fsModifiers
+ 	                 VK_SNAPSHOT               // UINT vk = PrintScreen
+ 	         );
 
+ 	         if (! bStatus)
+ 	         {
+ 	                 MessageBox( g_hFrameWindow, "Unable to capture PrintScreen key", "Warning", MB_OK );
+ 	         }
+ 	 }
+ 	 
+ 	 //===========================================================================
 LPSTR GetCurrArg(LPSTR lpCmdLine)
 {
 	if(*lpCmdLine == '\"')
@@ -675,7 +724,10 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 			if ((g_hCustomRomF8 == INVALID_HANDLE_VALUE) || (GetFileSize(g_hCustomRomF8, NULL) != 0x800))
 				g_bCustomRomF8Failed = true;
 		}
-
+                 else if(strcmp(lpCmdLine, "-printscreen") == 0)         // turn on dispay of the last filename print screen was saved to
+ 	         {
+ 	         	g_bDisplayPrintScreenFileName = true;
+ 	         }
 		lpCmdLine = lpNextArg;
 	}
 
@@ -720,7 +772,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
             unsigned long fix       = pFixedFileInfo->dwFileVersionLS >> 16;
 			unsigned long fix_minor = pFixedFileInfo->dwFileVersionLS & 0xffff;
 
-            sprintf(VERSIONSTRING, "%d.%d.%d.%d", major, minor, fix, fix_minor);
+sprintf(VERSIONSTRING, "%d.%d.%d.%d", major, minor, fix, fix_minor); // potential buffer overflow
         }
     }
 
@@ -773,6 +825,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		MemInitialize();
 		VideoInitialize();
 		FrameCreateWindow();
+		// PrintScrn support
+ 	              AppleWin_RegisterHotKeys(); // needs valid g_hFrameWindow
+
 		// Need to test if it's safe to call ResetMachineState(). In the meantime, just call DiskReset():
 		DiskReset();	// Switch from a booting A][+ to a non-autostart A][, so need to turn off floppy motor
 

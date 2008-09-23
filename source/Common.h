@@ -1,8 +1,14 @@
 #pragma once
 
+#define SUPPORT_CPM
+
 const double _M14 = (157500000.0 / 11.0); // 14.3181818... * 10^6
 const double CLK_6502 = ((_M14 * 65.0) / 912.0); // 65 cycles per 912 14M clocks
 //const double CLK_6502 = 23 * 44100;			// 1014300
+
+// The effective Z-80 clock rate is 2.041MHz
+// See: http://www.apple2info.net/hardware/softcard/SC-SWHW_a2in.pdf
+const double CLK_Z80 = (CLK_6502 * 2);
 
 const UINT uCyclesPerLine			= 65;	// 25 cycles of HBL & 40 cycles of HBL'
 const UINT uVisibleLinesPerFrame	= 64*3;	// 192
@@ -29,11 +35,6 @@ enum AppMode_e
 	, MODE_STEPPING
 };
 
-//#define  MODE_LOGO         0
-//#define  MODE_PAUSED       1
-//#define  MODE_RUNNING      2
-//#define  MODE_DEBUG        3
-//#define  MODE_STEPPING     4
 
 #define  SPEED_MIN         0
 #define  SPEED_NORMAL      10
@@ -70,6 +71,7 @@ enum AppMode_e
 #define  SAVE(a,b) RegSaveValue(TEXT("Configuration"),a,1,b)
 
 // Configuration
+#define REG_CONFIG                   "Configuration"
 #define  REGVALUE_APPLE2_TYPE        "Apple2 Type"
 #define  REGVALUE_SPKR_VOLUME        "Speaker Volume"
 #define  REGVALUE_MB_VOLUME          "Mockingboard Volume"
@@ -88,6 +90,7 @@ enum AppMode_e
 #define  REGVALUE_THE_FREEZES_F8_ROM "The Freeze's F8 Rom"
 #define  REGVALUE_CLONETYPE          "Clone Type"
 #define  REGVALUE_CIDERPRESSLOC      "CiderPress Location"
+#define  REGVALUE_Z80_IN_SLOT5       "Z80 in slot 5"
 #define  REGVALUE_DUMP_TO_PRINTER    "Dump to printer"
 #define  REGVALUE_CONVERT_ENCODING   "Convert printer encoding for clones"
 #define  REGVALUE_FILTER_UNPRINTABLE "Filter unprintable characters"
@@ -96,13 +99,17 @@ enum AppMode_e
 #define  REGVALUE_PRINTER_IDLE_LIMIT "Printer idle limit"
 
 // Preferences 
+#define REG_PREFS                    "Preferences"
 #define REGVALUE_PREF_START_DIR      "Starting Directory"
+#define REGVALUE_PREF_LAST_DISK_1        "Last Disk Image 1"
+#define REGVALUE_PREF_LAST_DISK_2        "Last Disk Image 2"
 
 #define WM_USER_BENCHMARK	WM_USER+1
 #define WM_USER_RESTART		WM_USER+2
 #define WM_USER_SAVESTATE	WM_USER+3
 #define WM_USER_LOADSTATE	WM_USER+4
-
+#define VK_SNAPSHOT_560         WM_USER+5
+#define VK_SNAPSHOT_280         WM_USER+6
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 

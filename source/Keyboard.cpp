@@ -166,16 +166,16 @@ DWORD KeybGetNumQueries ()	// Used in determining 'idleness' of Apple system
 //===========================================================================
 void KeybQueueKeypress (int key, BOOL bASCII)
 {
-	static bool bFreshReset;
+	static bool bFreshReset = false;
 
 	if (bASCII == ASCII)
 	{
 		if (bFreshReset && key == 0x03)
 		{
-			bFreshReset = 0;
+			bFreshReset = false;
 			return; // Swallow spurious CTRL-C caused by CTRL-BREAK
 		}
-		bFreshReset = 0;
+		bFreshReset = false;
 		if (key > 0x7F)
 			return;
 
@@ -236,6 +236,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			}
 			//Remap some keys for Pravets8A/C, which has a different charset for Pravtes82/M, whose keys MUST NOT be remapped.
 			if (g_Apple2Type == A2TYPE_PRAVETS8A) //&& (g_bCapsLock == false))
+			{
 				if (g_bCapsLock == false) //i.e. cyrillic letters
 			    {
 				if (key == '[') keycode = '{';
@@ -271,12 +272,15 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 					if ((key == '[') || (key == ']') || (key == 92) || (key == '^') || (key == 95))
 						P8Shift= true; 
 					if (key == 96)	 //This line shall generate sth. else i.e. ` In fact. this character is not generateable by the pravets keyboard.
-						{keycode = '^';
-						P8Shift= true;}
+						{
+							keycode = '^';
+							P8Shift= true;
+						}
 					if (key == 126)	keycode = '^';					
 					}					
 				}						
 		}
+}
 		else
 		{
 			if (g_Apple2Type == A2TYPE_PRAVETS8A)
@@ -311,7 +315,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 #endif
 
 			CpuReset();
-			bFreshReset = 1;
+			bFreshReset = true;
 			return;
 		}
 
@@ -508,7 +512,7 @@ void KeybToggleCapsLock ()
 //===========================================================================
 void KeybToggleP8ACapsLock ()
 {
-	if (g_Apple2Type == A2TYPE_PRAVETS8A)
+	_ASSERT(g_Apple2Type == A2TYPE_PRAVETS8A);
 		P8CAPS_ON = !P8CAPS_ON;
 		FrameRefreshStatus(DRAW_LEDS);
 		// g_bP8CapsLock= g_bP8CapsLock?false:true; //The same as the upper, but slower
