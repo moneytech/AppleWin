@@ -37,7 +37,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // . The exception is, what he calls "SKB" and "SKW" I call "NOP",
 // . for consistency's sake. Several other naming conventions exist.
 // . Of course, only the 6502 has illegal opcodes, the 65C02 doesn't.
-// . Thus they're not emulated in Enhanced //e g_nAppMode. Games relying on them
+// . Thus they're not emulated in Enhanced //e mode. Games relying on them
 // . don't run on a real Enhanced //e either. The old mixture of 65C02
 // . emulation and skipping the right number of bytes for illegal 6502
 // . opcodes, while working surprisingly well in practice, was IMHO
@@ -71,7 +71,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 // NB2. bSlowerOnPagecross can't be used for r/w detection, as these
 // .    opcodes don't init this flag:
-// . $EC CPX ABS (since there's no addressing g_nAppMode of CPY which has variable cycle number)
+// . $EC CPX ABS (since there's no addressing mode of CPY which has variable cycle number)
 // . $CC CPY ABS (same)
 //
 // 65C02 info:
@@ -87,6 +87,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma	 hdrstop
 #include "MouseInterface.h"
+
+#ifdef SUPPORT_CPM
+#include "z80\z80.h"
+#include "z80\z80emu.h"
+#include "z80\z80io.h"
+#endif
 
 #define	 AF_SIGN       0x80
 #define	 AF_OVERFLOW   0x40
@@ -823,6 +829,18 @@ static __forceinline void DoIrqProfiling(DWORD uCycles)
 
 //===========================================================================
 
+BYTE CpuRead(USHORT addr, ULONG uExecutedCycles)
+{
+	return READ;
+}
+
+void CpuWrite(USHORT addr, BYTE a, ULONG uExecutedCycles)
+{
+	WRITE(a);
+}
+
+//===========================================================================
+
 static __forceinline int Fetch(BYTE& iOpcode, ULONG uExecutedCycles)
 {
 		//g_uInternalExecutedCycles = uExecutedCycles;
@@ -911,6 +929,14 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		UINT uExtraCycles = 0;
 		BYTE iOpcode;
 
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{
+			const UINT uZ80Cycles = InternalZ80Execute(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
+		}
+		else
+#endif
+		{
 		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
 
@@ -1173,7 +1199,7 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_CMOS CYC(6)  break;
 		case 0xFF:   INV NOP	     CYC(2)  break;
 		}
-
+		}
 
 		CheckInterruptSources(uExecutedCycles);
 		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
@@ -1211,6 +1237,14 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		UINT uExtraCycles = 0;
 		BYTE iOpcode;
 
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{
+			const UINT uZ80Cycles = InternalZ80Execute(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
+		}
+		else
+#endif
+		{
 		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
 
@@ -1473,6 +1507,7 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_NMOS CYC(6)  break;
 		case 0xFF:   INV ABSX INS	     CYC(7)  break;
 		}
+		}
 
 		CheckInterruptSources(uExecutedCycles);
 		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
@@ -1593,6 +1628,12 @@ void CpuInitialize ()
 	g_bCritSectionValid = true;
 	CpuIrqReset();
 	CpuNmiReset();
+
+#ifdef SUPPORT_CPM
+	// Z80
+	InitTables();
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================
@@ -1694,6 +1735,11 @@ void CpuReset()
 	regs.sp = 0x0100 | ((regs.sp - 3) & 0xFF);
 
 	regs.bJammed = 0;
+
+#ifdef SUPPORT_CPM
+	g_ActiveCPU = CPU_6502;
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================

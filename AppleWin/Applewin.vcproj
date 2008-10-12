@@ -386,6 +386,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\source\Tape.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\Tape.h"
+				>
+			</File>
+			<File
 				RelativePath=".\source\Util_MemoryTextFile.cpp"
 				>
 			</File>
@@ -461,7 +469,7 @@
 				Name="Uthernet"
 				>
 				<File
-					RelativePath=".\source\Tfe\bittypes.h"
+					RelativePath=".\source\Tfe\Bittypes.h"
 					>
 				</File>
 				<File
@@ -514,6 +522,42 @@
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Uilib.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Z80"
+				>
+				<File
+					RelativePath=".\source\Z80\README.txt"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80codes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80daa.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80emu.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80emu.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80\z80io.h"
 					>
 				</File>
 			</Filter>
@@ -593,11 +637,27 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\CAPSOFF_P8.BMP"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\CAPSON.BMP"
 				>
 			</File>
 			<File
+				RelativePath=".\resource\CAPSON_P8.BMP"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\CHARSET4.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CHARSET82.bmp"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CHARSET8C.bmp"
 				>
 			</File>
 			<File
@@ -669,6 +729,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\LATOFF.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\LATON.BMP"
+				>
+			</File>
+			<File
 				RelativePath=".\resource\Mockingboard-D.rom"
 				>
 			</File>
@@ -681,7 +749,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\PRAVETS82.ROM"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Pravets8C.rom"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\RUN.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\RUNP.BMP"
 				>
 			</File>
 			<File
@@ -690,6 +770,10 @@
 			</File>
 			<File
 				RelativePath=".\resource\SSC.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\ThunderClockPlus.rom"
 				>
 			</File>
 		</Filter>

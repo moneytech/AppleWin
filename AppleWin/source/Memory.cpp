@@ -29,6 +29,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #pragma  hdrstop
 #include "MouseInterface.h"
+#ifdef SUPPORT_CPM
+#include "z80\z80emu.h"
+#include "z80\z80.h"
+#endif
 #include "..\resource\resource.h"
 
 #define  MF_80STORE    0x00000001
@@ -86,11 +90,9 @@ static LPBYTE  memimage     = NULL;
 static LPBYTE	pCxRomInternal		= NULL;
 static LPBYTE	pCxRomPeripheral	= NULL;
 
-//
-
 static DWORD   memmode      = MF_BANK2 | MF_SLOTCXROM | MF_WRITERAM;
 static BOOL    modechanging = 0;
-
+static BOOL    Pravets8charmode = 0;
 MemoryInitPattern_e g_eMemoryInitPattern = MIP_FF_FF_00_00;
 
 #ifdef RAMWORKS
@@ -239,17 +241,23 @@ static BYTE __stdcall IOWrite_C05x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULON
 //-------------------------------------
 
 static BYTE __stdcall IORead_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
-{
+{	
+	static byte CurrentKestroke = 0;
+	CurrentKestroke = KeybGetKeycode();
 	switch (addr & 0xf)
 	{
-	case 0x0:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x1:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x2:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x3:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x4:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x5:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x6:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
-	case 0x7:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft);
+	//In Pravets8A/C if SETMODE (8bit character encoding) is enabled, bit6 in $C060 is 0; Else it is 1
+	//If (CAPS lOCK of Pravets8A/C is on or Shift is pressed) and (MODE is enabled), bit7 in $C000 is 1; Else it is 0
+	//Writing into $C060 sets MODE on and off. If bit 0 is 0 the the MODE is set 0, if bit 0 is 1 then MODE is set to 1 (8-bit)
+
+	case 0x0:	return TapeRead(pc, addr, bWrite, d, nCyclesLeft); 
+	case 0x1:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C061 Digital input 0 (If bit 7=1 then JoyButton 0 or OpenApple is pressed)
+	case 0x2:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C062 Digital input 1 (If bit 7=1 then JoyButton 1 or ClosedApple is pressed)
+	case 0x3:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C063 Digital input 2
+	case 0x4:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft); //$C064 Analog input 0
+	case 0x5:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft); //$C065 Analog input 1
+	case 0x6:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft); //$C066 Analog input 2
+	case 0x7:	return JoyReadPosition(pc, addr, bWrite, d, nCyclesLeft); //$C067 Analog input 3
 	case 0x8:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0x9:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0xA:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
@@ -265,7 +273,15 @@ static BYTE __stdcall IORead_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 
 static BYTE __stdcall IOWrite_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
-	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	switch (addr & 0xf)
+	{
+	case 0x0:	
+		if (g_Apple2Type == A2TYPE_PRAVETS8A )
+			return TapeWrite (pc, addr, bWrite, d, nCyclesLeft);			
+		else
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft); //Apple2 value
+	}
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft); //Apple2 value
 }
 
 //-------------------------------------
@@ -274,7 +290,7 @@ static BYTE __stdcall IORead_C07x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 {
 	switch (addr & 0xf)
 	{
-	case 0x0:	return JoyResetPosition(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x0:	return JoyResetPosition(pc, addr, bWrite, d, nCyclesLeft);  //$C070 Analog input reset
 	case 0x1:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0x2:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0x3:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
@@ -886,6 +902,8 @@ void MemInitialize()
 	const UINT CxRomSize = 4*1024;
 	const UINT Apple2RomSize = 12*1024;
 	const UINT Apple2eRomSize = Apple2RomSize+CxRomSize;
+	//const UINT Pravets82RomSize = 12*1024;
+	//const UINT Pravets8ARomSize = Pravets82RomSize+CxRomSize;
 
 	// ALLOCATE MEMORY FOR THE APPLE MEMORY IMAGE AND ASSOCIATED DATA STRUCTURES
 	memaux   = (LPBYTE)VirtualAlloc(NULL,_6502_MEM_END+1,MEM_COMMIT,PAGE_READWRITE);
@@ -941,6 +959,8 @@ void MemInitialize()
 	case A2TYPE_APPLE2PLUS:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2_PLUS_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break;
 	case A2TYPE_APPLE2E:		hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
 	case A2TYPE_APPLE2EEHANCED:	hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APPLE2E_ENHANCED_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break;
+	case A2TYPE_PRAVETS82:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_82_ROM), "ROM"); ROM_SIZE = Apple2RomSize; break; 
+	case A2TYPE_PRAVETS8A:	    hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_PRAVETS_8C_ROM), "ROM"); ROM_SIZE = Apple2eRomSize; break; 
 	}
 
 	if(hResInfo == NULL)
@@ -952,6 +972,8 @@ void MemInitialize()
 		case A2TYPE_APPLE2PLUS:		_tcscpy(sRomFileName, TEXT("APPLE2_PLUS.ROM")); break;
 		case A2TYPE_APPLE2E:		_tcscpy(sRomFileName, TEXT("APPLE2E.ROM")); break;
 		case A2TYPE_APPLE2EEHANCED:	_tcscpy(sRomFileName, TEXT("APPLE2E_ENHANCED.ROM")); break;
+		case A2TYPE_PRAVETS82:	    _tcscpy(sRomFileName, TEXT("PRAVETS82.ROM")); break;  //Rom to be changed. Currently an Apple 2E Rom is used, because of the lack of a genuine Pravets82 one.
+		case A2TYPE_PRAVETS8A:	    _tcscpy(sRomFileName, TEXT("PRAVETS8C.ROM")); break;
 		}
 
 		TCHAR sText[ MAX_PATH ];
@@ -1032,6 +1054,9 @@ void MemInitialize()
 	sg_SSC.CommInitialize(pCxRomPeripheral, 2);		// $C200 : SSC
 	if (g_Slot4 == CT_MouseInterface)
 		sg_Mouse.Initialize(pCxRomPeripheral, 4);	// $C400 : Mouse f/w
+#ifdef SUPPORT_CPM
+	ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);			// $C500 ; Z80 card
+#endif
 	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w
 	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
 
@@ -1082,6 +1107,11 @@ void MemReset ()
 	// INITIALIZE & RESET THE CPU
 	// . Do this after ROM has been copied back to mem[], so that PC is correctly init'ed from 6502's reset vector
 	CpuInitialize();
+	//Sets Caps Lock = false (Pravets 8A/C only)
+
+#ifdef SUPPORT_CPM
+	Z80_Reset();
+#endif
 }
 
 //===========================================================================
@@ -1092,6 +1122,12 @@ void MemReset ()
 void MemResetPaging ()
 {
   ResetPaging(0);
+  	if (g_Apple2Type == A2TYPE_PRAVETS8A)
+	{
+		P8CAPS_ON = false; 
+		TapeWrite (0, 0, 0, 0 ,0);
+		FrameRefreshStatus(DRAW_LEDS);
+	}
 }
 
 //===========================================================================

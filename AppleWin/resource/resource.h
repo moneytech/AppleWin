@@ -39,7 +39,10 @@
 #define IDR_SSC_FW                      134
 #define IDR_MOCKINGBOARD_D_FW           135
 #define IDR_MOUSEINTERFACE_FW           136
-#define IDR_FREEZES_F8_ROM              137
+#define IDR_THUNDERCLOCKPLUS_FW         137
+#define IDR_FREEZES_F8_ROM              138
+#define IDR_PRAVETS_82_ROM              139
+#define IDR_PRAVETS_8C_ROM              140
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -77,23 +80,28 @@
 #define IDC_SCROLLLOCK_TOGGLE           1043
 #define IDC_MOUSE_IN_SLOT4              1044
 #define IDC_THE_FREEZES_F8_ROM_FW       1045
-#define IDC_MOUSE_CROSSHAIR             1045
-#define IDC_CLONETYPE                   1046
+#define IDC_MOUSE_CROSSHAIR             1046
+#define IDC_CLONETYPE                   1047
+#define IDC_MOUSE_RESTRICT_TO_WINDOW    1048
+#define IDC_CIDERPRESS_BROWSE           1049
+#define IDC_CIDERPRESS_FILENAME         1050
+#define IDC_Z80_IN_SLOT5                1051
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
 #define IDM_ABOUT                       40003
 #define ID_DISKMENU_EJECT               40004
 #define ID_DISKMENU_WRITEPROTECTION_ON  40005
 #define ID_DISKMENU_WRITEPROTECTION_OFF 40006
+#define ID_DISKMENU_SENDTO_CIDERPRESS   40007
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        137
-#define _APS_NEXT_COMMAND_VALUE         40007
-#define _APS_NEXT_CONTROL_VALUE         1047
+#define _APS_NEXT_RESOURCE_VALUE        141
+#define _APS_NEXT_COMMAND_VALUE         40008
+#define _APS_NEXT_CONTROL_VALUE         1052
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

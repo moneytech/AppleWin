@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Debugger
  *
- * Author: Copyright (C) 2006, Michael Pohoreski
+ * Author: Copyright (C) 2006-2008 Michael Pohoreski
  */
 
 // disable warning C4786: symbol greater than 255 character:
@@ -43,11 +43,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // TODO: COLOR LOAD ["filename"]
 
 	// See Debugger_Changelong.txt for full details
-	const int DEBUGGER_VERSION = MAKE_VERSION(2,5,7,11);
+	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,0,6);
 
 
 // Public _________________________________________________________________________________________
 
+// All (Global)
+	bool g_bDebuggerEatKey = false;
 
 // Bookmarks __________________________________________________________________
 //	vector<int> g_aBookmarks;
@@ -112,15 +114,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	#define __COMMANDS_VERIFY_TXT__ "\xDE\xAD\xC0\xDE"
 	#define __PARAMS_VERIFY_TXT__   "\xDE\xAD\xDA\x1A"
 
-	class commands_functor_compare
-	{
-		public:
-			int operator() ( const Command_t & rLHS, const Command_t & rRHS ) const
-			{
-				return _tcscmp( rLHS.m_sName, rRHS.m_sName );
-			}
-	};
-
 	int g_iCommand; // last command (enum) // used for consecuitive commands
 
 	vector<int>       g_vPotentialCommands; // global, since TAB-completion also needs
@@ -138,7 +131,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("A")           , CmdAssemble          , CMD_ASSEMBLE             , "Assemble instructions"      },
 		{TEXT("BRK")         , CmdBreakInvalid      , CMD_BREAK_INVALID        , "Enter debugger on BRK or INVALID" },
 		{TEXT("BRKOP")       , CmdBreakOpcode       , CMD_BREAK_OPCODE         , "Enter debugger on opcode"   },
-		{TEXT("GO")          , CmdGo                , CMD_GO                   , "Run [until PC = address]"   },
+		{TEXT("G")           , CmdGo                , CMD_GO                   , "Run [until PC = address]"   },
 		{TEXT("IN")          , CmdIn                , CMD_IN                   , "Input byte from IO $C0xx"   },
 		{TEXT("KEY")         , CmdKey               , CMD_INPUT_KEY            , "Feed key into emulator"     },
 		{TEXT("JSR")         , CmdJSR               , CMD_JSR                  , "Call sub-routine"           },
@@ -162,7 +155,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("BMA")         , CmdBookmarkAdd       , CMD_BOOKMARK_ADD         , "Add/Update addess to bookmark"  },
 		{TEXT("BMC")         , CmdBookmarkClear     , CMD_BOOKMARK_CLEAR       , "Clear (remove) bookmark"        },
 		{TEXT("BML")         , CmdBookmarkList      , CMD_BOOKMARK_LIST        , "List all bookmarks"             },
-		{"BMG"               , CmdBookmarkGoto      , CMD_BOOKMARK_GOTO        , "Move cursor to bookmark"        },
+		{TEXT("BMG")         , CmdBookmarkGoto      , CMD_BOOKMARK_GOTO        , "Move cursor to bookmark"        },
 //		{TEXT("BMLOAD")      , CmdBookmarkLoad      , CMD_BOOKMARK_LOAD        , "Load bookmarks"                 },
 		{TEXT("BMSAVE")      , CmdBookmarkSave      , CMD_BOOKMARK_SAVE        , "Save bookmarks"                 },
 	// Breakpoints
@@ -261,6 +254,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("M")           , CmdMemoryMove        , CMD_MEMORY_MOVE          , "Memory move"                  },
 		{TEXT("BSAVE")       , CmdMemorySave        , CMD_MEMORY_SAVE          , "Save a region of memory"      },
 		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        , "Search memory for text / hex values" },
+		{TEXT("@")				,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory resuts" },
 //		{TEXT("SA")          , CmdMemorySearchAscii,  CMD_MEMORY_SEARCH_ASCII  , "Search ASCII text"            },
 //		{TEXT("ST")          , CmdMemorySearchApple , CMD_MEMORY_SEARCH_APPLE  , "Search Apple text (hi-bit)"   },
 		{TEXT("SH")          , CmdMemorySearchHex   , CMD_MEMORY_SEARCH_HEX    , "Search memory for hex values" },
@@ -292,6 +286,25 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //		{TEXT("VARSLOAD")    , CmdVarsLoad          , CMD_VARIABLES_LOAD       },
 //		{TEXT("VARSSAVE")    , CmdVarsSave          , CMD_VARIABLES_SAVE       },
 //		{TEXT("SET")         , CmdVarsSet           , CMD_VARIABLES_SET        },
+	// View
+		{TEXT("TEXT")        , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X, "View Text screen (current page)"        },
+		{TEXT("TEXT1")       , CmdViewOutput_Text41 , CMD_VIEW_TEXT41, "View Text screen Page 1"                },
+		{TEXT("TEXT2")       , CmdViewOutput_Text42 , CMD_VIEW_TEXT42, "View Text screen Page 2"                },
+		{TEXT("TEXT80")      , CmdViewOutput_Text8X , CMD_VIEW_TEXT8X, "View 80-col Text screen (current page)" },
+		{TEXT("TEXT81")      , CmdViewOutput_Text81 , CMD_VIEW_TEXT8X, "View 80-col Text screen Page 1"         },
+		{TEXT("TEXT82")      , CmdViewOutput_Text82 , CMD_VIEW_TEXT8X, "View 80-col Text screen Page 2"         },
+		{TEXT("GR")          , CmdViewOutput_GRX    , CMD_VIEW_GRX   , "View Lo-Res screen (current page)"      },
+		{TEXT("GR1")         , CmdViewOutput_GR1    , CMD_VIEW_GR1   , "View Lo-Res screen Page 1"              },
+		{TEXT("GR2")         , CmdViewOutput_GR2    , CMD_VIEW_GR2   , "View Lo-Res screen Page 2"              },
+		{TEXT("DGR")			, CmdViewOutput_DGRX   , CMD_VIEW_DGRX  , "View Double lo-res (current page)"      },
+		{TEXT("DGR1")			, CmdViewOutput_DGR1   , CMD_VIEW_DGR1  , "View Double lo-res Page 1"              },
+		{TEXT("DGR2")			, CmdViewOutput_DGR2   , CMD_VIEW_DGR2  , "View Double lo-res Page 2"              },
+		{TEXT("HGR")			, CmdViewOutput_HGRX   , CMD_VIEW_HGRX  , "View Hi-res (current page)"             },
+		{TEXT("HGR1")			, CmdViewOutput_HGR1   , CMD_VIEW_HGR1  , "View Hi-res Page 1"                     },
+		{TEXT("HGR2")			, CmdViewOutput_HGR2   , CMD_VIEW_HGR2  , "View Hi-res Page 2"                     },
+		{TEXT("DHGR")			, CmdViewOutput_DHGRX  , CMD_VIEW_DHGRX , "View Double Hi-res (current page)"      },
+		{TEXT("DHGR1")			, CmdViewOutput_DHGR1  , CMD_VIEW_DHGR1 , "View Double Hi-res Page 1"              },
+		{TEXT("DHGR2")			, CmdViewOutput_DHGR2  , CMD_VIEW_DHGR2 , "View Double Hi-res Page 2"              },
 	// Watch
 		{TEXT("W")           , CmdWatch             , CMD_WATCH_ADD     , "Alias for WA (Watch Add)"                      },
 		{TEXT("WA")          , CmdWatchAdd          , CMD_WATCH_ADD     , "Add/Update address or symbol to watch"         },
@@ -386,6 +399,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("SYM1" )       , CmdSymbolsInfo       , CMD_SYMBOLS_MAIN         },
 		{TEXT("SYM2" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER         },
 		{TEXT("SYM3" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC          },
+		{TEXT("TEXT40")      , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X          },
+		{TEXT("TEXT41")      , CmdViewOutput_Text41 , CMD_VIEW_TEXT41          },
+		{TEXT("TEXT42")      , CmdViewOutput_Text42 , CMD_VIEW_TEXT42          },
+
 		{TEXT("WATCH")       , CmdWatchAdd          , CMD_WATCH_ADD            },
 		{TEXT("WINDOW")      , CmdWindow            , CMD_WINDOW               },
 //		{TEXT("W?")          , CmdWatchAdd          , CMD_WATCH_ADD            },
@@ -682,9 +699,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{"RANGE"       , NULL, PARAM_CAT_RANGE       },
 //		{TEXT("REGISTERS")  , NULL, PARAM_CAT_REGISTERS   },
 		{"SYMBOLS"     , NULL, PARAM_CAT_SYMBOLS     },
+		{"VIEW"			, NULL, PARAM_CAT_VIEW        },
 		{"WATCHES"     , NULL, PARAM_CAT_WATCHES     },
 		{"WINDOW"      , NULL, PARAM_CAT_WINDOW      },
-		{"ZEROPAGE"    , NULL, PARAM_CAT_ZEROPAGE    },	
+		{"ZEROPAGE"    , NULL, PARAM_CAT_ZEROPAGE    },
 // Memory
 		{TEXT("?")          , NULL, PARAM_MEM_SEARCH_WILD },
 //		{TEXT("*")          , NULL, PARAM_MEM_SEARCH_BYTE },
@@ -695,6 +713,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("SYMBOLS")    , NULL, PARAM_SRC_SYMBOLS     },	
 		{TEXT("MERLIN")     , NULL, PARAM_SRC_MERLIN      },	
 		{TEXT("ORCA")       , NULL, PARAM_SRC_ORCA        },	
+// View
+//		{TEXT("VIEW")       , NULL, PARAM_SRC_??? },
 // Window                                                       Win   Cmd   WinEffects      CmdEffects
 		{TEXT("CODE")       , NULL, PARAM_CODE           }, //   x     x    code win only   switch to code window
 //		{TEXT("CODE1")      , NULL, PARAM_CODE_1         }, //   -     x    code/data win   
@@ -893,10 +913,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	bool        Range_CalcEndLen( const RangeType_t eRange
 		, const WORD & nAddress1, const WORD & nAddress2
 		, WORD & nAddressEnd_, int & nAddressLen_ );
-
-	bool  StringCat( TCHAR * pDst, LPCSTR pSrc, const int nDstSize );
-	bool  TestStringCat ( TCHAR * pDst, LPCSTR pSrc, const int nDstSize );
-	bool  TryStringCat ( TCHAR * pDst, LPCSTR pSrc, const int nDstSize );
 
 	char FormatCharTxtCtrl ( const BYTE b, bool *pWasCtrl_ );
 	char FormatCharTxtAsci ( const BYTE b, bool *pWasAsci_ );
@@ -2407,6 +2423,7 @@ Update_t CmdGo (int nArgs)
 //  if (!g_nDebugStepUntil)
 //    g_nDebugStepUntil = GetAddress(g_aArgs[1].sArg);
 
+	g_bDebuggerEatKey = true;
 	g_nAppMode = MODE_STEPPING;
 	FrameRefreshStatus(DRAW_TITLE);
 
@@ -4979,49 +4996,95 @@ int _SearchMemoryFind(
 
 
 //===========================================================================
-Update_t _SearchMemoryDisplay()
+Update_t _SearchMemoryDisplay (int nArgs)
 {
+	const UINT nBuf = CONSOLE_WIDTH * 2;
+
 	int nFound = g_vMemorySearchResults.size() - 1;
 
-	TCHAR sMatches[ CONSOLE_WIDTH ] = TEXT("");
-	int   nThisLineLen = 0; // string length of matches for this line, for word-wrap
+	int nLen = 0; // temp
+	int nLineLen = 0; // string length of matches for this line, for word-wrap
+
+	TCHAR sMatches[ nBuf ] = TEXT("");
+	TCHAR sResult[ nBuf ];
+	TCHAR sText[ nBuf ] = TEXT("");
 
 	if (nFound > 0)
 	{
-		TCHAR sText[ CONSOLE_WIDTH ];
-
 		int iFound = 1;
 		while (iFound <= nFound)
 		{
 			WORD nAddress = g_vMemorySearchResults.at( iFound );
 
-			wsprintf( sText, "%2d:$%04X ", iFound, nAddress );
-			int nLen = _tcslen( sText );
+//			sprintf( sText, "%2d:$%04X ", iFound, nAddress );
+//			int nLen = _tcslen( sText );
+
+			sResult[0] = 0;
+			nLen = 0;
+
+			        StringCat( sResult, CHC_COMMAND, nBuf );
+			sprintf( sText, "%2d", iFound );
+			nLen += StringCat( sResult, sText , nBuf );
+
+			        StringCat( sResult, CHC_DEFAULT, nBuf );
+			nLen += StringCat( sResult, ":" , nBuf );
+
+			        StringCat( sResult, CHC_ADDRESS, nBuf );
+			sprintf( sText, "$%04X", nAddress );
+			nLen += StringCat( sResult, sText, nBuf );
 
 			// Fit on same line?
-			if ((nThisLineLen + nLen) > (g_nConsoleDisplayWidth)) // CONSOLE_WIDTH
+			if ((nLineLen + nLen) > (g_nConsoleDisplayWidth - 1)) // CONSOLE_WIDTH
 			{
-				ConsoleDisplayPush( sMatches );
-				_tcscpy( sMatches, sText );
-				nThisLineLen = nLen;
+				//ConsoleDisplayPush( sMatches );
+				ConsolePrint( sMatches );
+				_tcscpy( sMatches, sResult );
+				nLineLen = nLen;
 			}
 			else
 			{
-				_tcscat( sMatches, sText );
-				nThisLineLen += nLen;
+				StringCat( sMatches, sResult, nBuf );
+				nLineLen += nLen;
 			}
 
 			iFound++;
 		}
-		ConsoleDisplayPush( sMatches );
+		ConsolePrint( sMatches );
 	}
 
-	wsprintf( sMatches, "Total: %d  (#$%04X)", nFound, nFound );
-	ConsoleDisplayPush( sMatches );
+//	wsprintf( sMatches, "Total: %d  (#$%04X)", nFound, nFound );
+//	ConsoleDisplayPush( sMatches );
+		sResult[0] = 0;
+
+		        StringCat( sResult, CHC_USAGE , nBuf );
+		nLen += StringCat( sResult, "Total", nBuf );
+
+		        StringCat( sResult, CHC_DEFAULT, nBuf );
+		nLen += StringCat( sResult, ": " , nBuf );
+
+		        StringCat( sResult, CHC_NUM_DEC, nBuf );
+		sprintf( sText, "%d  ", nFound );
+		nLen += StringCat( sResult, sText, nBuf );
+
+		        StringCat( sResult, CHC_ARG_OPT, nBuf );
+		nLen += StringCat( sResult, "(" , nBuf );
+
+		        StringCat( sResult, CHC_DEFAULT, nBuf );
+		nLen += StringCat( sResult, "#$", nBuf );
+
+		        StringCat( sResult, CHC_NUM_HEX, nBuf );
+		sprintf( sText, "%04X", nFound );
+		nLen += StringCat( sResult, sText, nBuf );
+
+		        StringCat( sResult, CHC_ARG_OPT, nBuf );
+		nLen += StringCat( sResult, ")" , nBuf );
+		
+		ConsolePrint( sResult );
 
 	// g_vMemorySearchResults is cleared in DebugEnd()
 
-	return UPDATE_CONSOLE_DISPLAY;
+//	return UPDATE_CONSOLE_DISPLAY;
+	return ConsoleUpdate();
 }
 
 
@@ -6691,6 +6754,114 @@ Update_t CmdSymbolsSave (int nArgs)
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
+
+// View ___________________________________________________________________________________________
+
+// See: CmdWindowViewOutput (int nArgs)
+enum ViewVideoPage_t
+{
+	VIEW_PAGE_X, // current page
+	VIEW_PAGE_1,
+	VIEW_PAGE_2
+};
+
+Update_t _ViewOutput( ViewVideoPage_t iPage, VideoUpdateFuncPtr_t pfUpdate );
+
+Update_t _ViewOutput( ViewVideoPage_t iPage, VideoUpdateFuncPtr_t pfUpdate )
+{
+	g_VideoForceFullRedraw = true;
+	_Video_Dirty();
+	switch( iPage ) 
+	{
+		case VIEW_PAGE_X: _Video_SetupBanks( g_bVideoDisplayPage2 ); break; // Page Current
+		case VIEW_PAGE_1: _Video_SetupBanks( false ); break; // Page 1
+		case VIEW_PAGE_2: _Video_SetupBanks( true ); break; // Page 2 !
+		default:
+			break;
+	}
+	_Video_RedrawScreen( pfUpdate );
+	g_bDebuggerViewingAppleOutput = true;
+	return UPDATE_NOTHING; // intentional
+}
+
+// Text 40
+	Update_t CmdViewOutput_Text4X (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, Update40ColCell );
+	}
+	Update_t CmdViewOutput_Text41 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, Update40ColCell );
+	}
+	Update_t CmdViewOutput_Text42 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, Update40ColCell );
+	}
+// Text 80
+	Update_t CmdViewOutput_Text8X (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, Update80ColCell );
+	}
+	Update_t CmdViewOutput_Text81 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, Update80ColCell );
+	}
+	Update_t CmdViewOutput_Text82 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, Update80ColCell );
+	}
+// Lo-Res
+	Update_t CmdViewOutput_GRX (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, UpdateLoResCell );
+	}
+	Update_t CmdViewOutput_GR1 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, UpdateLoResCell );
+	}
+	Update_t CmdViewOutput_GR2 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, UpdateLoResCell );
+	}
+// Double Lo-Res
+	Update_t CmdViewOutput_DGRX (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, UpdateDLoResCell );
+	}
+	Update_t CmdViewOutput_DGR1 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, UpdateDLoResCell );
+	}
+	Update_t CmdViewOutput_DGR2 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, UpdateDLoResCell );
+	}
+// Hi-Res
+	Update_t CmdViewOutput_HGRX (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, UpdateHiResCell );
+	}
+	Update_t CmdViewOutput_HGR1 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, UpdateHiResCell );
+	}
+	Update_t CmdViewOutput_HGR2 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, UpdateHiResCell );
+	}
+// Double Hi-Res
+	Update_t CmdViewOutput_DHGRX (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_X, UpdateDHiResCell );
+	}
+	Update_t CmdViewOutput_DHGR1 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_1, UpdateDHiResCell );
+	}
+	Update_t CmdViewOutput_DHGR2 (int nArgs)
+	{
+		return _ViewOutput( VIEW_PAGE_2, UpdateDHiResCell );
+	}
 
 // Watches ________________________________________________________________________________________
 
