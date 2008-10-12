@@ -7,7 +7,7 @@
 #define  TRACKS   35
 
 extern BOOL       enhancedisk;
-
+extern string DiskPathFilename[2];
 void    DiskInitialize (); // DiskManagerStartup()
 void    DiskDestroy (); // no, doesn't "destroy" the disk image.  DiskManagerShutdown()
 
@@ -39,3 +39,6 @@ bool    DiskDriveSwap();
 void    DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot);
 DWORD   DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
 DWORD   DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
+
+void Disk_LoadLastDiskImage( int iDrive );
+void Disk_SaveLastDiskImage( int iDrive );

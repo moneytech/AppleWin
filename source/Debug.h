@@ -15,6 +15,9 @@ using namespace std;
 
 // Globals __________________________________________________________________
 
+// All (Global)
+	extern bool g_bDebuggerEatKey;
+
 // Benchmarking
 	extern DWORD      extbench;
 
@@ -42,6 +45,16 @@ using namespace std;
 	extern Command_t g_aCommands[];
 	extern Command_t g_aParameters[];
 
+	class commands_functor_compare
+	{
+		public:
+			bool operator() ( const Command_t & rLHS, const Command_t & rRHS ) const
+			{
+				// return true if lhs<rhs
+				return (_tcscmp( rLHS.m_sName, rRHS.m_sName ) <= 0) ? true : false;
+			}
+	};
+
 // Config - FileName
 	extern char      g_sFileNameConfig[];
 
@@ -52,7 +65,7 @@ using namespace std;
 
 	extern bool g_bDisasmCurBad   ;
 	extern int  g_nDisasmCurLine  ; // Aligned to Top or Center
-    extern int  g_iDisasmCurState ;
+	extern int  g_iDisasmCurState ;
 
 	extern int  g_nDisasmWinHeight;
 
