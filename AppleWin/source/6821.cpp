@@ -71,9 +71,8 @@ BYTE C6821::mc6821_read_pra(unsigned int dnr)
     //if (mc6821[dnr].drive->parallel_cable == DRIVE_PC_DD3)
     //    byte = parallel_cable_drive_read(hs);
 
-	//mc6821[dnr].cra = (BYTE)(mc6821[dnr].cra & 0x7f);	// AppleWin:TC - BUG!
-	mc6821[dnr].cra = (BYTE)(mc6821[dnr].cra & 0xbf);	// AppleWin:TC (Clear IRQ1)
-	mc6821[dnr].crb = (BYTE)(mc6821[dnr].crb & 0xbf);	// AppleWin:TC (Clear IRQ1)
+	mc6821[dnr].cra = (BYTE)(mc6821[dnr].cra & 0x7f);
+	mc6821[dnr].cra = (BYTE)(mc6821[dnr].cra & 0xbf);	// AppleWin:TC (Clear IRQ2)
 
     return (mc6821[dnr].pra & mc6821[dnr].ddra)
         | (byte & ~(mc6821[dnr].ddra));
@@ -100,8 +99,8 @@ void C6821::mc6821_write_ddrb(BYTE byte, unsigned int dnr)
 
 BYTE C6821::mc6821_read_prb(unsigned int dnr)
 {
-	mc6821[dnr].cra = (BYTE)(mc6821[dnr].cra & 0x7f);	// AppleWin:TC (Clear IRQ2)
-	mc6821[dnr].crb = (BYTE)(mc6821[dnr].crb & 0x7f);
+	mc6821[dnr].crb = (BYTE)(mc6821[dnr].crb & 0x7f);	// AppleWin:TC (Clear IRQ1)
+	mc6821[dnr].crb = (BYTE)(mc6821[dnr].crb & 0xbf);	// AppleWin:TC (Clear IRQ2)
 
 	BYTE byte = m_byIB;				// AppleWin:TC
 
