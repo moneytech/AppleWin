@@ -144,7 +144,8 @@ static SY6522_AY8910 g_MB[NUM_AY8910];
 
 // Timer vars
 static ULONG g_n6522TimerPeriod = 0;
-static USHORT g_nMBTimerDevice = 0;	// SY6522 device# which is generating timer IRQ
+static const UINT TIMERDEVICE_INVALID = -1;
+static UINT g_nMBTimerDevice = TIMERDEVICE_INVALID;	// SY6522 device# which is generating timer IRQ
 static UINT64 g_uLastCumulativeCycles = 0;
 
 // SSI263 vars:
@@ -159,7 +160,7 @@ static short* ppAYVoiceBuffer[NUM_VOICES] = {0};
 
 static unsigned __int64	g_nMB_InActiveCycleCount = 0;
 static bool g_bMB_RegAccessedFlag = false;
-static bool g_bMB_Active = true;
+static bool g_bMB_Active = false;
 
 static HANDLE g_hThread = NULL;
 
@@ -197,7 +198,9 @@ static const double g_f6522TimerPeriod_NoIRQ = CLK_6502 / 60.0;		// Constant wha
 
 // External global vars:
 bool g_bMBTimerIrqActive = false;
+#ifdef _DEBUG
 UINT32 g_uTimer1IrqCount = 0;	// DEBUG
+#endif
 
 //---------------------------------------------------------------------------
 
@@ -235,7 +238,7 @@ static void StopTimer(SY6522_AY8910* pMB)
 {
 	pMB->nTimerStatus = 0;
 	g_bMBTimerIrqActive = false;
-	g_nMBTimerDevice = 0;
+	g_nMBTimerDevice = TIMERDEVICE_INVALID;
 }
 
 //-----------------------------------------------------------------------------
@@ -254,6 +257,7 @@ static void ResetSY6522(SY6522_AY8910* pMB)
 
 static void AY8910_Write(BYTE nDevice, BYTE nReg, BYTE nValue, BYTE nAYDevice)
 {
+	g_bMB_RegAccessedFlag = true;
 	SY6522_AY8910* pMB = &g_MB[nDevice];
 
 	if((nValue & 4) == 0)
@@ -323,7 +327,6 @@ static void UpdateIFR(SY6522_AY8910* pMB)
 
 static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 {
-	g_bMB_RegAccessedFlag = true;
 	g_bMB_Active = true;
 
 	SY6522_AY8910* pMB = &g_MB[nDevice];
@@ -432,8 +435,6 @@ static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 				if(pMB->nTimerStatus == 0)
 					break;
 				
-				pMB->nTimerStatus = 0;
-				
 				// Stop timer
 				StopTimer(pMB);
 			}
@@ -455,7 +456,7 @@ static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 
 static BYTE SY6522_Read(BYTE nDevice, BYTE nReg)
 {
-	g_bMB_RegAccessedFlag = true;
+//	g_bMB_RegAccessedFlag = true;
 	g_bMB_Active = true;
 
 	SY6522_AY8910* pMB = &g_MB[nDevice];
@@ -509,7 +510,7 @@ static BYTE SY6522_Read(BYTE nDevice, BYTE nReg)
 			nValue = pMB->sy6522.IFR;
 			break;
 		case 0x0e:	// IER
-			nValue = 0x80;
+			nValue = 0x80;	// Datasheet says this is 0x80|IER
 			break;
 		case 0x0f:	// ORA_NO_HS
 			nValue = pMB->sy6522.ORA;
@@ -1361,6 +1362,7 @@ void MB_Reset()
 		AY8910_reset(i);
 	}
 
+	g_bMB_Active = (g_SoundcardType != SC_NONE);
 	g_nPhasorMode = 0;
 	MB_Reinitialize();	// Reset CLK for AY8910s
 }
@@ -1529,7 +1531,7 @@ void MB_EndOfVideoFrame()
 	if(g_SoundcardType == SC_NONE)
 		return;
 
-	if(!g_bFullSpeed && !g_bMBTimerIrqActive && !(g_MB[0].sy6522.IFR & IxR_TIMER1))
+	if(!g_bFullSpeed && !g_bMBTimerIrqActive /*&& !(g_MB[0].sy6522.IFR & IxR_TIMER1)*/)
 		MB_Update();
 }
 
@@ -1565,7 +1567,9 @@ void MB_UpdateCycles(ULONG uExecutedCycles)
 
 		if( bTimer1Underflow && (g_nMBTimerDevice == i) && g_bMBTimerIrqActive )
 		{
+#ifdef _DEBUG
 			g_uTimer1IrqCount++;	// DEBUG
+#endif
 
 			pMB->sy6522.IFR |= IxR_TIMER1;
 			UpdateIFR(pMB);
@@ -1573,7 +1577,9 @@ void MB_UpdateCycles(ULONG uExecutedCycles)
 			if((pMB->sy6522.ACR & RUNMODE) == RM_ONESHOT)
 			{
 				// One-shot mode
-				StopTimer(pMB);		// Phasor's playback code uses one-shot mode
+				// - Phasor's playback code uses one-shot mode
+				// - Willy Byte sets to one-shot to stop the timer IRQ
+				StopTimer(pMB);
 			}
 			else
 			{
@@ -1585,6 +1591,16 @@ void MB_UpdateCycles(ULONG uExecutedCycles)
 
 			if(!g_bFullSpeed)
 				MB_Update();
+		}
+		else if ( bTimer1Underflow
+					&& !g_bMBTimerIrqActive								// StopTimer() has been called
+					&& (pMB->sy6522.IFR & IxR_TIMER1)					// IRQ
+					&& ((pMB->sy6522.ACR & RUNMODE) == RM_ONESHOT) )	// One-shot mode
+		{
+			// Fix for Willy Byte - need to confirm that 6522 really does this!
+			// . It never accesses IER/IFR/TIMER1 regs to clear IRQ
+			pMB->sy6522.IFR &= ~IxR_TIMER1;		// Deassert the TIMER IRQ
+			UpdateIFR(pMB);
 		}
 	}
 }
