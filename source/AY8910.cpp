@@ -32,7 +32,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <crtdbg.h>
-#include "ay8910.h"
+#include "AY8910.h"
 
 #include "Common.h"
 #include "Structs.h"
@@ -783,12 +783,12 @@ void AY8910_InitClock(int nClock)
 
 //-------------------------------------
 
-BYTE* AY8910_GetRegsPtr(UINT nAyNum)
+BYTE* AY8910_GetRegsPtr(UINT uChip)
 {
-	if(nAyNum >= MAX_8910)
+	if(uChip >= MAX_8910)
 		return NULL;
 
-	return &AYPSG[nAyNum].Regs[0];
+	return &AYPSG[uChip].Regs[0];
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -797,11 +797,7 @@ BYTE* AY8910_GetRegsPtr(UINT nAyNum)
 
 #else
 
-typedef ULONG libspectrum_dword;
-typedef UCHAR libspectrum_byte;
-typedef SHORT libspectrum_signed_word;
-
-libspectrum_signed_word** g_ppSoundBuffers;
+libspectrum_signed_word** g_ppSoundBuffers;	// Used to pass param to sound_ay_overlay()
 
 /* configuration */
 //int sound_enabled = 0;		/* Are we currently using the sound card */
@@ -822,13 +818,13 @@ libspectrum_signed_word** g_ppSoundBuffers;
 //#define AMPL_BEEPER		( 50 * 256)
 //#define AMPL_TAPE		( 2 * 256 )
 //#define AMPL_AY_TONE		( 24 * 256 )	/* three of these */
-#define AMPL_AY_TONE		( 127 * 256 )	/* three of these */
+#define AMPL_AY_TONE		( 42 * 256 )	// 42*3 = 126
 
 /* max. number of sub-frame AY port writes allowed;
  * given the number of port writes theoretically possible in a
  * 50th I think this should be plenty.
  */
-#define AY_CHANGE_MAX		8000
+//#define AY_CHANGE_MAX		8000	// [TC] Moved into AY8910.h
 
 ///* frequency to generate sound at for hifi sound */
 //#define HIFI_FREQ              88200
@@ -855,31 +851,6 @@ static int sound_oldpos[2], sound_fillpos[2];
 static int sound_oldval[2], sound_oldval_orig[2];
 #endif
 
-/* foo_subcycles are fixed-point with low 16 bits as fractional part.
- * The other bits count as the chip does.
- */
-static unsigned int ay_tone_tick[3], ay_tone_high[3], ay_noise_tick;
-static unsigned int ay_tone_subcycles, ay_env_subcycles;
-static unsigned int ay_env_internal_tick, ay_env_tick;
-static unsigned int ay_tick_incr;
-static unsigned int ay_tone_period[3], ay_noise_period, ay_env_period;
-
-static int beeper_last_subpos[2] = { 0, 0 };
-
-/* Local copy of the AY registers */
-static libspectrum_byte sound_ay_registers[16];
-
-struct ay_change_tag
-{
-  libspectrum_dword tstates;
-  unsigned short ofs;
-  unsigned char reg, val;
-};
-
-static struct ay_change_tag ay_change[ AY_CHANGE_MAX ];
-static int ay_change_count;
-
-
 #if 0
 #define STEREO_BUF_SIZE 4096
 
@@ -890,42 +861,51 @@ static int rstereobuf_l[ STEREO_BUF_SIZE ], rstereobuf_r[ STEREO_BUF_SIZE ];
 static int rstereopos, rchan1pos, rchan2pos, rchan3pos;
 #endif
 
-// Fwd refs:
-void sound_end( void );
+
+// Statics:
+double CAY8910::m_fCurrentCLK_AY8910 = 0.0;
 
 
-static void
-sound_ay_init( void )
+CAY8910::CAY8910() :
+	// Init the statics that were in sound_ay_overlay()
+	rng(1),
+	noise_toggle(0),
+	env_first(1), env_rev(0), env_counter(15)
 {
-/* AY output doesn't match the claimed levels; these levels are based
- * on the measurements posted to comp.sys.sinclair in Dec 2001 by
- * Matthew Westcott, adjusted as I described in a followup to his post,
- * then scaled to 0..0xffff.
- */
-  static const int levels[16] = {
-    0x0000, 0x0385, 0x053D, 0x0770,
-    0x0AD7, 0x0FD5, 0x15B0, 0x230C,
-    0x2B4C, 0x43C1, 0x5A4B, 0x732F,
-    0x9204, 0xAFF1, 0xD921, 0xFFFF
-  };
-  int f;
+	m_fCurrentCLK_AY8910 = g_fCurrentCLK6502;
+};
 
-/* scale the values down to fit */
-  for( f = 0; f < 16; f++ )
-    ay_tone_levels[f] = ( levels[f] * AMPL_AY_TONE + 0x8000 ) / 0xffff;
 
-  ay_noise_tick = ay_noise_period = 0;
-  ay_env_internal_tick = ay_env_tick = ay_env_period = 0;
-  ay_tone_subcycles = ay_env_subcycles = 0;
-  for( f = 0; f < 3; f++ )
-    ay_tone_tick[f] = ay_tone_high[f] = 0, ay_tone_period[f] = 1;
+void CAY8910::sound_ay_init( void )
+{
+	/* AY output doesn't match the claimed levels; these levels are based
+	* on the measurements posted to comp.sys.sinclair in Dec 2001 by
+	* Matthew Westcott, adjusted as I described in a followup to his post,
+	* then scaled to 0..0xffff.
+	*/
+	static const int levels[16] = {
+		0x0000, 0x0385, 0x053D, 0x0770,
+		0x0AD7, 0x0FD5, 0x15B0, 0x230C,
+		0x2B4C, 0x43C1, 0x5A4B, 0x732F,
+		0x9204, 0xAFF1, 0xD921, 0xFFFF
+	};
+	int f;
 
-  ay_change_count = 0;
+	/* scale the values down to fit */
+	for( f = 0; f < 16; f++ )
+		ay_tone_levels[f] = ( levels[f] * AMPL_AY_TONE + 0x8000 ) / 0xffff;
+
+	ay_noise_tick = ay_noise_period = 0;
+	ay_env_internal_tick = ay_env_tick = ay_env_period = 0;
+	ay_tone_subcycles = ay_env_subcycles = 0;
+	for( f = 0; f < 3; f++ )
+		ay_tone_tick[f] = ay_tone_high[f] = 0, ay_tone_period[f] = 1;
+
+	ay_change_count = 0;
 }
 
 
-void
-sound_init( const char *device )
+void CAY8910::sound_init( const char *device )
 {
 //  static int first_init = 1;
 //  int f, ret;
@@ -1083,7 +1063,7 @@ sound_init( const char *device )
 							 machine ) /
 			   sound_generator_freq );
 #endif
-  ay_tick_incr = ( int ) ( 65536. * g_fCurrentCLK6502 / sound_generator_freq );	// [TC]
+  ay_tick_incr = ( int ) ( 65536. * m_fCurrentCLK_AY8910 / sound_generator_freq );	// [TC]
 }
 
 
@@ -1108,8 +1088,7 @@ sound_unpause( void )
 #endif
 
 
-void
-sound_end( void )
+void CAY8910::sound_end( void )
 {
 #if 0
   if( sound_enabled ) {
@@ -1240,12 +1219,8 @@ sound_write_buf_pstereo( libspectrum_signed_word * out, int c )
 
 #define HZ_COMMON_DENOMINATOR 50
 
-static void
-sound_ay_overlay( void )
+void CAY8910::sound_ay_overlay( void )
 {
-  static int rng = 1;
-  static int noise_toggle = 0;
-  static int env_first = 1, env_rev = 0, env_counter = 15;
   int tone_level[3];
   int mixer, envshape;
   int f, g, level, count;
@@ -1266,7 +1241,7 @@ sound_ay_overlay( void )
    avoid overflowing a dword */
   sfreq = sound_generator_freq / HZ_COMMON_DENOMINATOR;
 //  cpufreq = machine_current->timings.processor_speed / HZ_COMMON_DENOMINATOR;
-  cpufreq = (libspectrum_dword) (g_fCurrentCLK6502 / HZ_COMMON_DENOMINATOR);	// [TC]
+  cpufreq = (libspectrum_dword) (m_fCurrentCLK_AY8910 / HZ_COMMON_DENOMINATOR);	// [TC]
   for( f = 0; f < ay_change_count; f++ )
     ay_change[f].ofs = (USHORT) (( ay_change[f].tstates * sfreq ) / cpufreq);	// [TC] Added cast
 
@@ -1488,8 +1463,7 @@ sound_ay_overlay( void )
 /* don't make the change immediately; record it for later,
  * to be made by sound_frame() (via sound_ay_overlay()).
  */
-void
-sound_ay_write( int reg, int val, libspectrum_dword now )
+void CAY8910::sound_ay_write( int reg, int val, libspectrum_dword now )
 {
   if( ay_change_count < AY_CHANGE_MAX ) {
     ay_change[ ay_change_count ].tstates = now;
@@ -1503,8 +1477,7 @@ sound_ay_write( int reg, int val, libspectrum_dword now )
 /* no need to call this initially, but should be called
  * on reset otherwise.
  */
-void
-sound_ay_reset( void )
+void CAY8910::sound_ay_reset( void )
 {
   int f;
 
@@ -1583,8 +1556,7 @@ sound_resample( void )
 }
 #endif /* #ifdef HAVE_SAMPLERATE */
 
-void
-sound_frame( void )
+void CAY8910::sound_frame( void )
 {
 #if 0
   libspectrum_signed_word *ptr, *tptr;
@@ -1722,90 +1694,60 @@ sound_beeper( int is_tape, int on )
 
 // AY8910 interface
 
+// TODO:
+// . AY reset, eg. at end of Ultima3 tune
+
 #include "CPU.h"	// For g_nCumulativeCycles
 
+static CAY8910 g_AY8910[MAX_8910];
 static unsigned __int64 g_uLastCumulativeCycles = 0;
-static INT16* g_pBuffers[3] = {0};
 
-void _AYWriteReg(int n, int r, int v)
+
+void _AYWriteReg(int chip, int r, int v)
 {
 	libspectrum_dword uOffset = (libspectrum_dword) (g_nCumulativeCycles - g_uLastCumulativeCycles);
-	sound_ay_write(r, v, uOffset);
+	g_AY8910[chip].sound_ay_write(r, v, uOffset);
 }
 
 void AY8910_reset(int chip)
 {
-	sound_ay_reset();	// Calls: sound_ay_init();
+	// Don't reset the AY CLK, as this is a property of the card (MB/Phasor), not the AY chip
+	g_AY8910[chip].sound_ay_reset();	// Calls: sound_ay_init();
 }
 
 void AY8910Update(int chip, INT16** buffer, int nNumSamples)
 {
 	g_uLastCumulativeCycles = g_nCumulativeCycles;
 
-#if 1
-	_ASSERT(nNumSamples <= sound_framesiz);
-	if (nNumSamples > sound_framesiz)
-		nNumSamples = sound_framesiz;
-
 	sound_generator_framesiz = nNumSamples;
 	g_ppSoundBuffers = buffer;
-	sound_frame();
-#else
-	static UINT uSamplesLeft = 0;
-	static UINT uSrcOffset = 0;
-
-	UINT uDstOffset = 0;
-
-	while (nNumSamples)
-	{
-		if (uSamplesLeft)
-		{
-			UINT uCopyLen = (UINT)nNumSamples < uSamplesLeft ? nNumSamples : uSamplesLeft;
-			memcpy(&buffer[0][uDstOffset], &g_pBuffers[0][uSrcOffset], uCopyLen*sizeof(INT16));
-			memcpy(&buffer[1][uDstOffset], &g_pBuffers[1][uSrcOffset], uCopyLen*sizeof(INT16));
-			memcpy(&buffer[2][uDstOffset], &g_pBuffers[2][uSrcOffset], uCopyLen*sizeof(INT16));
-
-			uDstOffset += uCopyLen;
-
-			uSamplesLeft -= uCopyLen;
-			if (uSamplesLeft)
-				uSrcOffset += uCopyLen;
-
-			nNumSamples -= uCopyLen;
-			if (nNumSamples == 0)
-				return;
-		}
-
-		g_ppSoundBuffers = g_pBuffers;
-		sound_frame();
-
-		uSamplesLeft = sound_generator_framesiz;
-		uSrcOffset = 0;
-	}
-#endif
+	g_AY8910[chip].sound_frame();
 }
 
 void AY8910_InitAll(int nClock, int nSampleRate)
 {
-	if (g_pBuffers[0] == NULL)
+	for (UINT i=0; i<MAX_8910; i++)
 	{
-		g_pBuffers[0] = new INT16 [1024];
-		g_pBuffers[1] = new INT16 [1024];
-		g_pBuffers[2] = new INT16 [1024];
+		g_AY8910[i].sound_init(NULL);	// Inits mainly static members (except ay_tick_incr)
+		g_AY8910[i].sound_ay_init();
 	}
-
-	sound_init(NULL);
-	sound_ay_init();
 }
 
 void AY8910_InitClock(int nClock)
 {
-	// TODO
+	CAY8910::SetCLK( (double)nClock );
+	for (UINT i=0; i<MAX_8910; i++)
+	{
+		g_AY8910[i].sound_init(NULL);	// ay_tick_incr is dependent on AY_CLK
+	}
 }
 
-BYTE* AY8910_GetRegsPtr(UINT nAyNum)
+BYTE* AY8910_GetRegsPtr(UINT uChip)
 {
-	return &sound_ay_registers[0];
+	if(uChip >= MAX_8910)
+		return NULL;
+
+	return g_AY8910[uChip].GetAYRegsPtr();
 }
 
 #endif
