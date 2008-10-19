@@ -81,7 +81,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include <wchar.h>
 
-#include "ay8910.h"
+#include "AY8910.h"
 #include "SSI263Phonemes.h"
 
 
@@ -770,8 +770,26 @@ static void MB_Update()
 		nNumSamples = 2*nNumSamplesPerPeriod;
 
 	if(nNumSamples)
+	{
+#ifdef DBG_SINGLE_AY8910_CHIP
+		for(int nChip=0; nChip<NUM_AY8910; nChip++)
+		{
+			if (nChip == 0)
+			{
+				AY8910Update(nChip, &ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910], nNumSamples);
+			}
+			else
+			{
+				memset(&ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910][0], 0, nNumSamples*sizeof(USHORT));
+				memset(&ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910][1], 0, nNumSamples*sizeof(USHORT));
+				memset(&ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910][2], 0, nNumSamples*sizeof(USHORT));
+			}
+		}
+#else
 		for(int nChip=0; nChip<NUM_AY8910; nChip++)
 			AY8910Update(nChip, &ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910], nNumSamples);
+#endif
+	}
 
 	//
 
