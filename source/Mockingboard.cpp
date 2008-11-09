@@ -728,12 +728,25 @@ static void Votrax_Write(BYTE nDevice, BYTE nValue)
 
 static void MB_Update()
 {
-	if(!MockingboardVoice.bActive)
+	if (!MockingboardVoice.bActive)
 		return;
+
+	if (g_bFullSpeed)
+	{
+		// Keep AY reg writes relative to the current 'frame'
+		// - Required for Ultima3:
+		//   . Tune ends
+		//   . g_bFullSpeed:=true (disk-spinning) for ~50 frames
+		//   . U3 sets AY_ENABLE:=0xFF (as a side-effect, this sets g_bFullSpeed:=false)
+		//   o Without this, the write to AY_ENABLE gets ignored (since AY8910's /g_uLastCumulativeCycles/ was last set 50 frame ago)
+		AY8910UpdateSetCycles();
+
+		return;
+	}
 
 	//
 
-	if(!g_bMB_RegAccessedFlag)
+	if (!g_bMB_RegAccessedFlag)
 	{
 		if(!g_nMB_InActiveCycleCount)
 		{
@@ -757,13 +770,11 @@ static void MB_Update()
 	static DWORD dwByteOffset = (DWORD)-1;
 	static int nNumSamplesError = 0;
 
+	const double n6522TimerPeriod = MB_GetFramePeriod();
 
-	int nNumSamples;
-	double n6522TimerPeriod = MB_GetFramePeriod();
-
-	double nIrqFreq = g_fCurrentCLK6502 / n6522TimerPeriod + 0.5;			// Round-up
-	int nNumSamplesPerPeriod = (int) ((double)SAMPLE_RATE / nIrqFreq);		// Eg. For 60Hz this is 735
-	nNumSamples = nNumSamplesPerPeriod + nNumSamplesError;					// Apply correction
+	const double nIrqFreq = g_fCurrentCLK6502 / n6522TimerPeriod + 0.5;			// Round-up
+	const int nNumSamplesPerPeriod = (int) ((double)SAMPLE_RATE / nIrqFreq);	// Eg. For 60Hz this is 735
+	int nNumSamples = nNumSamplesPerPeriod + nNumSamplesError;					// Apply correction
 	if(nNumSamples <= 0)
 		nNumSamples = 0;
 	if(nNumSamples > 2*nNumSamplesPerPeriod)
@@ -824,7 +835,7 @@ static void MB_Update()
 
 	//
 
-	double fAttenuation = g_bPhasorEnable ? 2.0/3.0 : 1.0;
+	const double fAttenuation = g_bPhasorEnable ? 2.0/3.0 : 1.0;
 
 	for(int i=0; i<nNumSamples; i++)
 	{
@@ -832,7 +843,7 @@ static void MB_Update()
 		// L = Address.b7=0, R = Address.b7=1
 		int nDataL = 0, nDataR = 0;
 
-		for(unsigned int j=0; j<NUM_VOICES_PER_AY8910; j++)
+		for(UINT j=0; j<NUM_VOICES_PER_AY8910; j++)
 		{
 			// Slot4
 			nDataL += (int) ((double)ppAYVoiceBuffer[0*NUM_VOICES_PER_AY8910+j][i] * fAttenuation);
@@ -872,7 +883,7 @@ static void MB_Update()
 
 	// Commit sound buffer
 	hr = MockingboardVoice.lpDSBvoice->Unlock((void*)pDSLockedBuffer0, dwDSLockedBufferSize0,
-										(void*)pDSLockedBuffer1, dwDSLockedBufferSize1);
+											  (void*)pDSLockedBuffer1, dwDSLockedBufferSize1);
 
 	dwByteOffset = (dwByteOffset + (DWORD)nNumSamples*sizeof(short)*g_nMB_NumChannels) % g_dwDSBufferSize;
 
@@ -1531,15 +1542,13 @@ void MB_EndOfVideoFrame()
 	if(g_SoundcardType == SC_NONE)
 		return;
 
-	if(!g_bFullSpeed && !g_bMBTimerIrqActive /*&& !(g_MB[0].sy6522.IFR & IxR_TIMER1)*/)
+	if(!g_bMBTimerIrqActive)
 		MB_Update();
 }
 
 //-----------------------------------------------------------------------------
 
-// Called by InternalCpuExecute() after every N opcodes
-// OLD: Called by InternalCpuExecute() after every opcode
-// OLD: void MB_UpdateCycles(USHORT nClocks)
+// Called by CpuExecute() after every N opcodes (N = ~1000 @ 1MHz)
 void MB_UpdateCycles(ULONG uExecutedCycles)
 {
 	if(g_SoundcardType == SC_NONE)
@@ -1589,8 +1598,7 @@ void MB_UpdateCycles(ULONG uExecutedCycles)
 				StartTimer(pMB);
 			}
 
-			if(!g_bFullSpeed)
-				MB_Update();
+			MB_Update();
 		}
 		else if ( bTimer1Underflow
 					&& !g_bMBTimerIrqActive								// StopTimer() has been called

@@ -791,6 +791,12 @@ BYTE* AY8910_GetRegsPtr(UINT uChip)
 	return &AYPSG[uChip].Regs[0];
 }
 
+//-------------------------------------
+
+void AY8910UpdateSetCycles()
+{
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -1459,6 +1465,8 @@ void CAY8910::sound_ay_overlay( void )
   }
 }
 
+// AppleWin:TC  Holding down ScrollLock will result in lots of AY changes /ay_change_count/
+//              - since sound_ay_overlay() is called to consume them.
 
 /* don't make the change immediately; record it for later,
  * to be made by sound_frame() (via sound_ay_overlay()).
@@ -1694,9 +1702,6 @@ sound_beeper( int is_tape, int on )
 
 // AY8910 interface
 
-// TODO:
-// . AY reset, eg. at end of Ultima3 tune
-
 #include "CPU.h"	// For g_nCumulativeCycles
 
 static CAY8910 g_AY8910[MAX_8910];
@@ -1715,9 +1720,14 @@ void AY8910_reset(int chip)
 	g_AY8910[chip].sound_ay_reset();	// Calls: sound_ay_init();
 }
 
-void AY8910Update(int chip, INT16** buffer, int nNumSamples)
+void AY8910UpdateSetCycles()
 {
 	g_uLastCumulativeCycles = g_nCumulativeCycles;
+}
+
+void AY8910Update(int chip, INT16** buffer, int nNumSamples)
+{
+	AY8910UpdateSetCycles();
 
 	sound_generator_framesiz = nNumSamples;
 	g_ppSoundBuffers = buffer;
