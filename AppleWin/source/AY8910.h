@@ -15,6 +15,8 @@ void AY8910_InitAll(int nClock, int nSampleRate);
 void AY8910_InitClock(int nClock);
 BYTE* AY8910_GetRegsPtr(UINT uChip);
 
+void AY8910UpdateSetCycles();
+
 //-------------------------------------
 // FUSE stuff
 
