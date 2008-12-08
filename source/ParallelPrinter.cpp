@@ -163,7 +163,7 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
     }
 	
 	char c = NULL;
-	if ((g_Apple2Type == A2TYPE_PRAVETS8A) &&  g_bConvertEncoding)  //This is print convertion for Pravets 8A/C. Print convertion for Pravets82/M is still to be done.
+	if ((g_Apple2Type == A2TYPE_PRAVETS8A) &&  g_bConvertEncoding)  //This is print conversion for Pravets 8A/C. Print conversion for Pravets82/M is still to be done.
 		{
 			if ((value > 90) && (value < 128)) //This range shall be set more precisely
 			{
