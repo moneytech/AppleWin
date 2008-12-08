@@ -318,7 +318,7 @@ IDR_APPLE2E_ENHANCED_ROM	ROM		"Apple2e_Enhanced.rom"
 IDR_PRAVETS_82_ROM			ROM		"Pravets82.rom"
 IDR_PRAVETS_8M_ROM			ROM		"Pravets8M.rom"
 IDR_PRAVETS_8C_ROM			ROM		"Pravets8C.rom"
-IDR_FREEZES_F8_ROM      ROM                     "FREEZES_NON-AUTOSTART_F8_ROM.rom"
+IDR_FREEZES_F8_ROM          ROM     "FREEZES_NON-AUTOSTART_F8_ROM.rom"
 
 /////////////////////////////////////////////////////////////////////////////
 //
