@@ -741,6 +741,9 @@ static void MB_Update()
 		//   o Without this, the write to AY_ENABLE gets ignored (since AY8910's /g_uLastCumulativeCycles/ was last set 50 frame ago)
 		AY8910UpdateSetCycles();
 
+		// TODO:
+		// If any AY regs have changed then push them out to the AY chip
+
 		return;
 	}
 
