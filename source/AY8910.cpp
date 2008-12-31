@@ -1,3 +1,15 @@
+#include <windows.h>
+#include <stdio.h>
+#include <crtdbg.h>
+#include "AY8910.h"
+
+#include "Common.h"
+#include "Structs.h"
+#include "Applewin.h"		// For g_fh
+#include "Mockingboard.h"	// For g_uTimer1IrqCount
+
+#if 0
+
 /***************************************************************************
 
   ay8910.c
@@ -28,18 +40,6 @@
 //    freely available as well.
 // 
 
-
-#include <windows.h>
-#include <stdio.h>
-#include <crtdbg.h>
-#include "AY8910.h"
-
-#include "Common.h"
-#include "Structs.h"
-#include "Applewin.h"		// For g_fh
-#include "Mockingboard.h"	// For g_uTimer1IrqCount
-
-#if 0
 
 ///////////////////////////////////////////////////////////
 // typedefs & dummy funcs to allow MAME code to compile:
@@ -802,6 +802,45 @@ void AY8910UpdateSetCycles()
 ///////////////////////////////////////////////////////////////////////////////
 
 #else
+
+// [AppleWin-TC] From FUSE's sound.c module
+
+/* sound.c: Sound support
+   Copyright (c) 2000-2007 Russell Marks, Matan Ziv-Av, Philip Kendall,
+                           Fredrick Meunier
+
+   $Id$
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+   Author contact information:
+
+   E-mail: philip-fuse@shadowmagic.org.uk
+
+*/
+
+/* The AY white noise RNG algorithm is based on info from MAME's ay8910.c -
+ * MAME's licence explicitly permits free use of info (even encourages it).
+ */
+
+/* NB: I know some of this stuff looks fairly CPU-hogging.
+ * For example, the AY code tracks changes with sub-frame timing
+ * in a rather hairy way, and there's subsampling here and there.
+ * But if you measure the CPU use, it doesn't actually seem
+ * very high at all. And I speak as a Cyrix owner. :-)
+ */
 
 libspectrum_signed_word** g_ppSoundBuffers;	// Used to pass param to sound_ay_overlay()
 

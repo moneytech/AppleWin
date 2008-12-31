@@ -2584,7 +2584,7 @@ void Z80_Out (byte Port,byte Value)
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-unsigned Z80_RDMEM(DWORD Addr)
+BYTE Z80_RDMEM(DWORD Addr)
 {
 	WORD addr;
 
