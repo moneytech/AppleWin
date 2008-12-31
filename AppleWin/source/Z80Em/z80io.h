@@ -23,7 +23,7 @@ void Z80_Out (BYTE Port,BYTE Value);
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-unsigned Z80_RDMEM(DWORD A);
+BYTE Z80_RDMEM(DWORD A);
 
 /****************************************************************************/
 /* Write a byte to given memory location                                    */

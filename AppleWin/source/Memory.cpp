@@ -30,8 +30,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include "MouseInterface.h"
 #ifdef SUPPORT_CPM
-#include "z80\z80emu.h"
-#include "z80\z80.h"
+#include "z80emu.h"
+
+#include "z80Em\z80.h"
+//
+#include "Z80VICE\z80.h"
+#include "Z80VICE\z80mem.h"
 #endif
 #include "..\resource\resource.h"
 
@@ -1055,7 +1059,7 @@ void MemInitialize()
 	if (g_Slot4 == CT_MouseInterface)
 		sg_Mouse.Initialize(pCxRomPeripheral, 4);	// $C400 : Mouse f/w
 #ifdef SUPPORT_CPM
-	ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);			// $C500 ; Z80 card
+	ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);	// $C500 : Z80 card
 #endif
 	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w
 	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
@@ -1110,7 +1114,8 @@ void MemReset ()
 	//Sets Caps Lock = false (Pravets 8A/C only)
 
 #ifdef SUPPORT_CPM
-	Z80_Reset();
+	Z80_Reset();	// Z80Em
+	z80_reset();	// Z80VICE
 #endif
 }
 
