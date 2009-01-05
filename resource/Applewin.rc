@@ -54,7 +54,7 @@ END
 
 FULLSCR_BUTTON          BITMAP                  "FULLSCR.BMP"
 RUN_BUTTON              BITMAP                  "RUN.BMP"
-RUNP_BUTTON             BITMAP					"RUNP.BMP"
+RUNP_BUTTON             BITMAP                  "RUNP.BMP"
 DEBUG_BUTTON            BITMAP                  "DEBUG.BMP"
 DRIVE1_BUTTON           BITMAP                  "DRIVE1.BMP"
 DRIVE2_BUTTON           BITMAP                  "DRIVE2.BMP"
@@ -137,7 +137,7 @@ BEGIN
     CONTROL         "Restrict mouse to Apple window",IDC_MOUSE_RESTRICT_TO_WINDOW,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,21,156,159,10
     CONTROL         "Microsoft CP/M SoftCard in slot 5",IDC_Z80_IN_SLOT5,
- 	                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,171,122,10
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,171,122,10
 END
 
 IDD_PROPPAGE_SOUND DIALOGEX 0, 0, 210, 221
@@ -247,8 +247,8 @@ DISK_ICON               ICON                    "DISK.ICO"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,15,0,3
- PRODUCTVERSION 1,15,0,3
+ FILEVERSION 1,15,0,4
+ PRODUCTVERSION 1,15,0,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -266,12 +266,12 @@ BEGIN
             VALUE "Comments", "http://applewin.berlios.de"
             VALUE "CompanyName", "Michael O'Brien, Oliver Schmidt, Tom Charlesworth"
             VALUE "FileDescription", "Apple //e Emulator for Windows"
-            VALUE "FileVersion", "1, 15 , 0 ,3"
+            VALUE "FileVersion", "1, 15, 0, 4"
             VALUE "InternalName", "APPLEWIN"
-            VALUE "LegalCopyright", "© 1994-2008 Michael O'Brien, Oliver Schmidt, Tom Charlesworth, Michael Pohoreski, Nick Westgate, Linards Ticmanis"
+            VALUE "LegalCopyright", " 1994-2008 Michael O'Brien, Oliver Schmidt, Tom Charlesworth, Michael Pohoreski, Nick Westgate, Linards Ticmanis"
             VALUE "OriginalFilename", "APPLEWIN.EXE"
             VALUE "ProductName", "Apple //e Emulator"
-            VALUE "ProductVersion", "1, 15 , 0 ,3"
+            VALUE "ProductVersion", "1, 15, 0, 4"
         END
     END
     BLOCK "VarFileInfo"
@@ -345,7 +345,7 @@ BEGIN
         MENUITEM "&Eject",                      ID_DISKMENU_EJECT
         MENUITEM "Read / &Write",               ID_DISKMENU_WRITEPROTECTION_OFF
         MENUITEM "&Read only",                  ID_DISKMENU_WRITEPROTECTION_ON
-		MENUITEM "Send to &CiderPress",         ID_DISKMENU_SENDTO_CIDERPRESS
+        MENUITEM "Send to &CiderPress",         ID_DISKMENU_SENDTO_CIDERPRESS
     END
 END
 
