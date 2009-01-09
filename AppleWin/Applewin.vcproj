@@ -530,52 +530,6 @@
 				</File>
 			</Filter>
 			<Filter
-				Name="Z80Em"
-				>
-				<File
-					RelativePath=".\source\Z80Em\README.txt"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Z80Em\z80.cpp"
-					>
-					<FileConfiguration
-						Name="Release|Win32"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-							ObjectFile="$(IntDir)\$(InputName)1.obj"
-							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Debug|Win32"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-							ObjectFile="$(IntDir)\$(InputName)1.obj"
-							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-						/>
-					</FileConfiguration>
-				</File>
-				<File
-					RelativePath=".\source\Z80Em\z80.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Z80Em\z80codes.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Z80Em\z80daa.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Z80Em\z80io.h"
-					>
-				</File>
-			</Filter>
-			<Filter
 				Name="Z80VICE"
 				>
 				<File

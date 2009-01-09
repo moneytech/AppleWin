@@ -30,7 +30,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include <objbase.h>
 #include "MouseInterface.h"
-#include "z80Em\z80.h"
 
 char VERSIONSTRING[16] = "xx.yy.zz.ww";
 

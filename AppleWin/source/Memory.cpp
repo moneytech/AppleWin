@@ -31,9 +31,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "MouseInterface.h"
 #ifdef SUPPORT_CPM
 #include "z80emu.h"
-
-#include "z80Em\z80.h"
-//
 #include "Z80VICE\z80.h"
 #include "Z80VICE\z80mem.h"
 #endif
@@ -1119,8 +1116,7 @@ void MemReset ()
 	//Sets Caps Lock = false (Pravets 8A/C only)
 
 #ifdef SUPPORT_CPM
-	Z80_Reset();	// Z80Em
-	z80_reset();	// Z80VICE
+	z80_reset();
 #endif
 }
 
