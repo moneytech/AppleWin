@@ -78,7 +78,7 @@ static RECT    framerect       = {0,0,0,0};
 HWND    g_hFrameWindow     = (HWND)0;
 BOOL    fullscreen      = 0;
 static BOOL    helpquit        = 0;
-static BOOL    g_bPaintingWindow = 0;
+static BOOL    g_bPaintingWindow        = 0;
 static HFONT   smallfont       = (HFONT)0;
 static HWND    tooltipwindow   = (HWND)0;
 static BOOL    g_bUsingCursor	= 0;		// 1=AppleWin is using (hiding) the mouse-cursor
@@ -596,12 +596,12 @@ LRESULT CALLBACK FrameWndProc (
 			if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) ||
 				((g_nAppMode == MODE_STEPPING) && (wparam != TEXT('\x1B'))))
 			{
-			  if( !g_bDebuggerEatKey )
- 	                  {
-				KeybQueueKeypress((int)wparam,ASCII);
-			   } else {
-		                   g_bDebuggerEatKey = false;
- 	                           }
+				if( !g_bDebuggerEatKey )
+				{
+					KeybQueueKeypress((int)wparam,ASCII);
+				} else {
+					g_bDebuggerEatKey = false;
+				}
 			}
 			else
 			if ((g_nAppMode == MODE_DEBUG) || (g_nAppMode == MODE_STEPPING))
@@ -641,9 +641,9 @@ LRESULT CALLBACK FrameWndProc (
         ProcessButtonClick(BTN_RUN);
       }
       else
-	{
+      {
         DiskNotifyInvalidImage(filename,error);
-	}
+      }
       GlobalUnlock((HGLOBAL)lparam);
       break;
     }
@@ -699,35 +699,36 @@ LRESULT CALLBACK FrameWndProc (
       break;
     }
 
-     // @see: http://answers.google.com/answers/threadview?id=133059
- 	 // Win32 doesn't pass the PrintScreen key via WM_CHAR
- 	 //              else if (wparam == VK_SNAPSHOT)
- 	 // Solution: 2 choices:
- 	 //              1) register hotkey, or
- 	 //              2) Use low level Keyboard hooks
- 	 // We use the 1st one since it is compatible with Win95
- 	         case WM_HOTKEY:
- 	                 // wparam = user id
- 	                 // lparam = modifiers: shift, ctrl, alt, win
- 	                 if (wparam == VK_SNAPSHOT_560)
- 	                 {
- 	                  #if _DEBUG
-		 	 //                      MessageBox( NULL, "Double 580x384 size!", "PrintScreen", MB_OK );
-		 	 #endif
- 	                	         Video_TakeScreenShot( SCREENSHOT_560x384 );
- 	        	         }
-	 	                 else
- 		                 if (wparam == VK_SNAPSHOT_280)
- 	                 	{
- 	                        	 if( lparam & MOD_SHIFT)
-	 	                         {
- 				 #if _DEBUG
-			 	 //                              MessageBox( NULL, "Normal 280x192 size!", "PrintScreen", MB_OK );
- 	 			#endif
- 	                         }
- 	                         Video_TakeScreenShot( SCREENSHOT_280x192 );
- 	                 }
- 	                 break;
+	// @see: http://answers.google.com/answers/threadview?id=133059
+	// Win32 doesn't pass the PrintScreen key via WM_CHAR
+	//		else if (wparam == VK_SNAPSHOT)
+	// Solution: 2 choices:
+	//		1) register hotkey, or
+	//		2) Use low level Keyboard hooks
+	// We use the 1st one since it is compatible with Win95
+	case WM_HOTKEY:
+		// wparam = user id
+		// lparam = modifiers: shift, ctrl, alt, win
+		if (wparam == VK_SNAPSHOT_560)
+		{
+#if _DEBUG
+//			MessageBox( NULL, "Double 580x384 size!", "PrintScreen", MB_OK );
+#endif
+			Video_TakeScreenShot( SCREENSHOT_560x384 );
+		}
+		else
+		if (wparam == VK_SNAPSHOT_280)
+		{
+			if( lparam & MOD_SHIFT)
+			{
+#if _DEBUG
+//				MessageBox( NULL, "Normal 280x192 size!", "PrintScreen", MB_OK );
+#endif
+			}
+			Video_TakeScreenShot( SCREENSHOT_280x192 );
+		}
+		break;
+
 	case WM_KEYDOWN:
 		KeybUpdateCtrlShiftStatus();
 		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == -1))
@@ -745,8 +746,8 @@ LRESULT CALLBACK FrameWndProc (
 		{			
 			if (GetKeyState(VK_CONTROL) < 0) //CTRL+F9
 			{
-				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9).
-				if (g_nCharsetType >= 3) 
+				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9)
+				if (g_nCharsetType >= 3)
 					g_nCharsetType = 0;
 			}
 			else	// Cycle through available video modes
@@ -1421,9 +1422,9 @@ void ResetMachineState () {
   MB_Reset();
   SpkrReset();
   sg_Mouse.Reset();
-  #ifdef SUPPORT_CPM
-   g_ActiveCPU = CPU_6502;
-  #endif
+#ifdef SUPPORT_CPM
+  g_ActiveCPU = CPU_6502;
+#endif
 
   SoundCore_SetFade(FADE_NONE);
 }

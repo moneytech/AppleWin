@@ -30,12 +30,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include "..\resource\resource.h"
 #include <stdlib.h>
-//#include <process.h>
-
 
 static DWORD inactivity = 0;
 static FILE* file = NULL;
-DWORD const PRINTDRVR_SIZE = 0x100;
+DWORD const PRINTDRVR_SIZE = APPLE_SLOT_SIZE;
 TCHAR filepath[MAX_PATH * 2];
 #define DEFAULT_PRINT_FILENAME "Printer.txt"
 static char g_szPrintFilename[MAX_PATH] = {0};
@@ -111,7 +109,7 @@ static void ClosePrint()
 			system (ExtendedFileName.c_str ()); //Print through console. This is supposed to be the better way, because it shall print images (with older printers only).
 			
     }
-    inactivity = 0;	
+    inactivity = 0;
 }
 
 //===========================================================================

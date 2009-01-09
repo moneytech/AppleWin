@@ -113,6 +113,7 @@ UINT g_uMouseShowCrosshair = 0;
 UINT g_uMouseRestrictToWindow = 0;
 
 UINT g_uZ80InSlot5 = 0;
+
 //
 
 UINT g_uTheFreezesF8Rom = 0;
@@ -645,32 +646,32 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
 			}
 			break;
 
-	                 case IDC_Z80_IN_SLOT5:
- 	                         {
- 	                                 UINT uNewState = IsDlgButtonChecked(window, IDC_Z80_IN_SLOT5) ? 1 : 0;
- 	                                 LPCSTR pMsg = uNewState ?
- 	                                                                 TEXT("The emulator needs to restart as the slot configuration has changed.\n")
- 	                                                                 TEXT("Microsoft CP/M SoftCard will be placed in slot 5.\n\n")
- 	                                                                 TEXT("Would you like to restart the emulator now?")
- 	                                                                 :
- 	                                                                 TEXT("The emulator needs to restart as the slot configuration has changed.\n")
- 	                                                                 TEXT("Microsoft CP/M SoftCard will be removed from slot 5\n\n")
- 	                                                                 TEXT("Would you like to restart the emulator now?");
- 	                                 if (MessageBox(window,
- 	                                                                 pMsg,
- 	                                                                 TEXT("Configuration"),
- 	                                                                 MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
- 	                                 {
- 	                                         g_uZ80InSlot5 = uNewState;
- 	                                         afterclose = WM_USER_RESTART;
- 	                                         PropSheet_PressButton(GetParent(window), PSBTN_OK);
- 	                                 }
- 	                                 else
- 	                                 {
- 	                                   CheckDlgButton(window, IDC_Z80_IN_SLOT5, g_uZ80InSlot5 ? BST_CHECKED : BST_UNCHECKED);
- 	                                 }
- 	                         }
- 	                         break;
+		case IDC_Z80_IN_SLOT5:
+			{
+				UINT uNewState = IsDlgButtonChecked(window, IDC_Z80_IN_SLOT5) ? 1 : 0;
+				LPCSTR pMsg = uNewState ?
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n")
+								TEXT("Microsoft CP/M SoftCard will be placed in slot 5.\n\n")
+								TEXT("Would you like to restart the emulator now?")
+								:
+								TEXT("The emulator needs to restart as the slot configuration has changed.\n")
+								TEXT("Microsoft CP/M SoftCard will be removed from slot 5\n\n")
+								TEXT("Would you like to restart the emulator now?");
+				if (MessageBox(window,
+								pMsg,
+								TEXT("Configuration"),
+								MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+				{
+					g_uZ80InSlot5 = uNewState;
+					afterclose = WM_USER_RESTART;
+					PropSheet_PressButton(GetParent(window), PSBTN_OK);
+				}
+				else
+				{
+				  CheckDlgButton(window, IDC_Z80_IN_SLOT5, g_uZ80InSlot5 ? BST_CHECKED : BST_UNCHECKED);
+				}
+			}
+			break;
 
 		case IDC_PASTE_FROM_CLIPBOARD:
 			ClipboardInitiatePaste();
@@ -697,7 +698,7 @@ static BOOL CALLBACK InputDlgProc (HWND   window,
       CheckDlgButton(window, IDC_MOUSE_RESTRICT_TO_WINDOW, g_uMouseRestrictToWindow ? BST_CHECKED : BST_UNCHECKED);
 	  EnableWindow(GetDlgItem(window, IDC_MOUSE_CROSSHAIR), g_uMouseInSlot4 ? TRUE : FALSE);
 	  EnableWindow(GetDlgItem(window, IDC_MOUSE_RESTRICT_TO_WINDOW), g_uMouseInSlot4 ? TRUE : FALSE);
-	CheckDlgButton(window, IDC_Z80_IN_SLOT5, g_uZ80InSlot5 ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(window, IDC_Z80_IN_SLOT5, g_uZ80InSlot5 ? BST_CHECKED : BST_UNCHECKED);
 
 	  afterclose = 0;
 	  break;
@@ -831,12 +832,12 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 	  {
 		EnableWindow(GetDlgItem(window, IDC_PHASOR_ENABLE), FALSE);
 	  }
-
+	  
 	  if (g_uZ80InSlot5)
- 	  {
- 	  	EnableWindow(GetDlgItem(window, IDC_MB_ENABLE), FALSE);
- 	  }
- 	 
+	  {
+		EnableWindow(GetDlgItem(window, IDC_MB_ENABLE), FALSE);
+	  }
+
       afterclose = 0;
 	  break;
 	}
@@ -962,8 +963,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
 		case IDC_CIDERPRESS_BROWSE:
 			{
-				//string CiderPressLoc = BrowseToCiderPress(window, TEXT("Select path to CiderPress"));
-				string CiderPressLoc = BrowseToFile (window, TEXT("Select path to CiderPress"), REGVALUE_CIDERPRESSLOC, TEXT("Applications (*.exe)\0*.exe\0") TEXT("All Files\0*.*\0") );
+				string CiderPressLoc = BrowseToFile(window, TEXT("Select path to CiderPress"), REGVALUE_CIDERPRESSLOC, TEXT("Applications (*.exe)\0*.exe\0") TEXT("All Files\0*.*\0") );
 				RegSaveString(TEXT("Configuration"),REGVALUE_CIDERPRESSLOC,1,CiderPressLoc.c_str());
 				SendDlgItemMessage(window, IDC_CIDERPRESS_FILENAME, WM_SETTEXT, 0, (LPARAM) CiderPressLoc.c_str());
 			}
@@ -988,7 +988,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		TCHAR PathToCiderPress[MAX_PATH] = "";
 		RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
 		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
-		
+
 		//
 		
 		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
@@ -1006,20 +1006,21 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 //===========================================================================
 
 static bool g_bSSNewFilename = false;
-static char g_szNewFilename[MAX_PATH];	 static char g_szSSNewDirectory[MAX_PATH];
+static char g_szNewFilename[MAX_PATH];
+static char g_szSSNewDirectory[MAX_PATH];
 static char g_szSSNewFilename[MAX_PATH];
 
 static void SaveStateUpdate()
 {
-        if (g_bSSNewFilename)
-        {
-        Snapshot_SetFilename(g_szSSNewFilename);
+	if (g_bSSNewFilename)
+	{
+		Snapshot_SetFilename(g_szSSNewFilename);
 
-	RegSaveString(TEXT(REG_CONFIG),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
+		RegSaveString(TEXT(REG_CONFIG),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
 
-	if(g_szSSNewDirectory[0])
-                 RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);	                         RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);
-		}
+		if(g_szSSNewDirectory[0])
+			RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);	                         RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);
+	}
 }
 
 static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
@@ -1064,22 +1065,22 @@ static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 	if(nRes)
 	{
 		strcpy(g_szSSNewFilename, &szFilename[ofn.nFileOffset]);
-		
-		if (bSave)      // Only for saving (allow loading of any file for backwards compatibility)
- 	        {
-		// Append .aws if it's not there
-		const char szAWS_EXT[] = ".aws";
-		const UINT uStrLenFile = strlen(g_szSSNewFilename);
-		const UINT uStrLenExt  = strlen(szAWS_EXT);
-		if ((uStrLenFile <= uStrLenExt) || (strcmp(&g_szSSNewFilename[uStrLenFile-uStrLenExt], szAWS_EXT) != 0))
-		strcpy(&g_szSSNewFilename[uStrLenFile], szAWS_EXT);
- 	        }
+
+		if (bSave)	// Only for saving (allow loading of any file for backwards compatibility)
+		{
+			// Append .aws if it's not there
+			const char szAWS_EXT[] = ".aws";
+			const UINT uStrLenFile = strlen(g_szSSNewFilename);
+			const UINT uStrLenExt  = strlen(szAWS_EXT);
+			if ((uStrLenFile <= uStrLenExt) || (strcmp(&g_szSSNewFilename[uStrLenFile-uStrLenExt], szAWS_EXT) != 0))
+				strcpy(&g_szSSNewFilename[uStrLenFile], szAWS_EXT);
+		}
 
 		szFilename[ofn.nFileOffset] = 0;
 		if (_tcsicmp(szDirectory, szFilename))
 			strcpy(g_szSSNewDirectory, szFilename);
 	}
-	
+
 	g_bSSNewFilename = nRes ? true : false;
 	return nRes;
 }
@@ -1114,6 +1115,7 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 //	PrinterStateUpdate();
 
 	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
+
 	SAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
 	g_bDumpToPrinter = IsDlgButtonChecked(window, IDC_DUMPTOPRINTER ) ? true : false;
 	SAVE(TEXT(REGVALUE_DUMP_TO_PRINTER), g_bDumpToPrinter ? 1 : 0);
@@ -1161,14 +1163,14 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 		if (NewApple2Clone != (g_uCloneType + APPLECLONE_MASK|APPLE2E_MASK))
 		{
 			MessageBox(window,
-				TEXT(
-				"You have changed the emulated clone type "
-				"but in order for the changes to take effect\n"
-				"you shall set the emulated computer type "
-				"to Clone from the Configuration tab.\n\n"),
-				TEXT("Clone type changed"),
-				MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;  
-		g_uCloneType = NewApple2Clone - APPLECLONE_MASK -APPLE2E_MASK;
+						TEXT(
+						"You have changed the emulated clone type "
+						"but in order for the changes to take effect\n"
+						"you shall set the emulated computer type "
+						"to Clone from the Configuration tab.\n\n"),
+						TEXT("Clone type changed"),
+						MB_ICONQUESTION | MB_OK  | MB_SETFOREGROUND) ;
+			g_uCloneType = NewApple2Clone - (APPLECLONE_MASK|APPLE2E_MASK);
 		}
 	}
 
@@ -1278,8 +1280,9 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
     case WM_INITDIALOG:  //Init advanced settings dialog
 	{
 		g_nLastPage = PG_ADVANCED;
-		
+
 		SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
+
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_CONVERT_ENCODING, g_bConvertEncoding ? BST_CHECKED : BST_UNCHECKED);
@@ -1617,11 +1620,10 @@ bool PSP_SaveStateSelectImage(HWND hWindow, bool bSave)
 	}
 }
 
+//===========================================================================
 
-
-string BrowseToFile (HWND hWindow, TCHAR* pszTitle, TCHAR* REGVALUE,TCHAR* FILEMASKS)
+string BrowseToFile(HWND hWindow, TCHAR* pszTitle, TCHAR* REGVALUE,TCHAR* FILEMASKS)
 {
-
 	static char PathToFile[MAX_PATH] = {0}; //This is a really awkward way to prevent mixing CiderPress and SaveStated values (RAPCS), but it seem the quickest. Here is its Line 1.
 	strcpy(PathToFile, Snapshot_GetFilename()); //RAPCS, line 2.
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
