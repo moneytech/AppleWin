@@ -14,9 +14,9 @@ extern regsrec    regs;
 extern unsigned __int64 g_nCumulativeCycles;
 
 void    CpuDestroy ();
-void    CpuCalcCycles(ULONG nCyclesLeft);
+void    CpuCalcCycles(ULONG nExecutedCycles);
 DWORD   CpuExecute (DWORD);
-ULONG   CpuGetCyclesThisFrame();
+ULONG   CpuGetCyclesThisFrame(ULONG nExecutedCycles);
 void    CpuInitialize ();
 void    CpuSetupBenchmark ();
 void	CpuIrqReset();
@@ -28,3 +28,6 @@ void	CpuNmiDeassert(eIRQSRC Device);
 void    CpuReset ();
 DWORD   CpuGetSnapshot(SS_CPU6502* pSS);
 DWORD   CpuSetSnapshot(SS_CPU6502* pSS);
+
+BYTE	CpuRead(USHORT addr, ULONG uExecutedCycles);
+void	CpuWrite(USHORT addr, BYTE a, ULONG uExecutedCycles);

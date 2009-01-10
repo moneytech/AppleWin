@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Debugger
  *
- * Author: Copyright (C) 2006, Michael Pohoreski
+ * Author: Copyright (C) 2006-2008 Michael Pohoreski
  */
 
 #include "StdAfx.h"
@@ -137,6 +137,7 @@ void Help_Categories()
 	int  nLen = 0;
 
 		// TODO/FIXME: Colorize( sText, ... )
+		// Colorize("Usage:")
 		nLen += StringCat( sText, CHC_USAGE , nBuf );
 		nLen += StringCat( sText, "Usage", nBuf );
 
@@ -158,7 +159,7 @@ void Help_Categories()
 			{
 				ConsolePrint( sText );
 				sText[ 0 ] = 0;
-				nLen = StringCat( sText, "    ", nBuf );
+				nLen = StringCat( sText, "    ", nBuf ); // indent
 			}
 
 			        StringCat( sText, CHC_COMMAND, nBuf );
@@ -166,8 +167,16 @@ void Help_Categories()
 
 			if (iCategory < (_PARAM_HELPCATEGORIES_END - 1))
 			{
+				char sSep[] = " | ";
+
+				if (nLen + strlen( sSep ) >= (CONSOLE_WIDTH - 1))
+				{
+					ConsolePrint( sText );
+					sText[ 0 ] = 0;
+					nLen = StringCat( sText, "    ", nBuf ); // indent
+				}
 				        StringCat( sText, CHC_ARG_SEP, nBuf );
-				nLen += StringCat( sText, " | "            , nBuf );
+				nLen += StringCat( sText, sSep, nBuf );
 			}
 		}
 		StringCat( sText, CHC_ARG_MAND, nBuf );
@@ -347,6 +356,9 @@ bool Colorize( char * pDst, const char * pSrc )
 	const char sUsage[] = "Usage:";
 	const int  nUsage   = sizeof( sUsage ) - 1;
 
+	const char sTotal[] = "Total:";
+	const int  nTotal = sizeof( sTotal ) - 1;
+
 	int nLen = 0;
 	while (*pSrc)
 	{
@@ -363,6 +375,11 @@ bool Colorize( char * pDst, const char * pSrc )
 		if (strncmp( sNote, pSrc, nNote) == 0)
 		{
 			_ColorizeHeader( pDst, pSrc, sNote, nNote );
+		}
+		else
+		if (strncmp( sTotal, pSrc, nNote) == 0)
+		{
+			_ColorizeHeader( pDst, pSrc, sTotal, nTotal );
 		}
 		else
 		if (*pSrc == '[')
@@ -513,7 +530,7 @@ Update_t CmdHelpSpecific (int nArgs)
 					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
 					if (nFound && (iCommand != CMD_OUT))
 					{
-						iCmdBegin = CMD_OUTPUT_CALC     ; iCmdEnd = CMD_OUTPUT_RUN           ; break;
+						iCmdBegin = CMD_OUTPUT_CALC     ; iCmdEnd = CMD_OUTPUT_RUN           ;
 						bCategory = true;
 					}
 					else
@@ -525,18 +542,31 @@ Update_t CmdHelpSpecific (int nArgs)
 					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
 					if (nFound && (iCommand != CMD_SYMBOLS_LOOKUP) && (iCommand != CMD_MEMORY_SEARCH))
 					{
-						iCmdBegin = CMD_SYMBOLS_LOOKUP  ; iCmdEnd = CMD_SYMBOLS_LIST         ; break;
+						iCmdBegin = CMD_SYMBOLS_LOOKUP  ; iCmdEnd = CMD_SYMBOLS_LIST         ;
 						bCategory = true;
 					}
 					else
 						bCategory = false;
 					break;
+
+				case PARAM_CAT_VIEW       :
+					// HACK: check if we have an exact command match first
+//					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
+//					if (nFound && (iCommand != CMD_VIEW_TEXT4X))
+					{
+						iCmdBegin = CMD_VIEW_TEXT4X     ; iCmdEnd = CMD_VIEW_DHGR2          ;
+						bCategory = true;
+					}
+//					else
+//						bCategory = false;
+					break;
+					
 				case PARAM_CAT_WATCHES    :
 					// HACK: check if we have an exact command match first
 					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
 					if (nFound && (iCommand != CMD_WATCH_ADD))
 					{
-						iCmdBegin = CMD_WATCH_ADD       ; iCmdEnd = CMD_WATCH_LIST           ; break;
+						iCmdBegin = CMD_WATCH_ADD       ; iCmdEnd = CMD_WATCH_LIST           ;
 						bCategory = true;
 					}
 					else
@@ -665,6 +695,9 @@ Update_t CmdHelpSpecific (int nArgs)
 			else
 			if (iCmd <= CMD_SYMBOLS_LIST)
 				wsprintf( sCategory, g_aParameters[ PARAM_CAT_SYMBOLS ].m_sName );
+			else
+			if (iCmd <= CMD_VIEW_DHGR2)
+				wsprintf( sCategory, g_aParameters[ PARAM_CAT_VIEW ].m_sName );
 			else
 			if (iCmd <= CMD_WATCH_SAVE)
 				wsprintf( sCategory, g_aParameters[ PARAM_CAT_WATCHES ].m_sName );
@@ -1242,6 +1275,26 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsolePrint( sText );
 			ConsoleBufferPush( "  Looks up symbol in all 3 symbol tables: main, user, source" );
 			break;
+	// View
+		case CMD_VIEW_TEXT4X:
+		case CMD_VIEW_TEXT41:
+		case CMD_VIEW_TEXT42:
+		case CMD_VIEW_TEXT8X:
+		case CMD_VIEW_TEXT81:
+		case CMD_VIEW_TEXT82:
+		case CMD_VIEW_GRX   :
+		case CMD_VIEW_GR1   :
+		case CMD_VIEW_GR2   :
+		case CMD_VIEW_DGRX  :
+		case CMD_VIEW_DGR1  :
+		case CMD_VIEW_DGR2  :
+		case CMD_VIEW_HGRX  :
+		case CMD_VIEW_HGR1  :
+		case CMD_VIEW_HGR2  :
+		case CMD_VIEW_DHGRX :
+		case CMD_VIEW_DHGR1 :
+		case CMD_VIEW_DHGR2 :
+			break;
 	// Watches
 		case CMD_WATCH_ADD:
 			Colorize( sText, " Usage: <address | symbol>" );
@@ -1293,6 +1346,7 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsolePrint( sText );
 			ConsoleBufferPush( "  * Display extra internal stats" );
 			break;
+
 		default:
 			if (bAllCommands)
 				break;
@@ -1306,7 +1360,7 @@ Update_t CmdHelpSpecific (int nArgs)
 			{
 //#if DEBUG_COMMAND_HELP
 #if _DEBUG
-			wsprintf( sText, "Command help not done yet: %s", g_aCommands[ iCommand ].m_sName );
+			wsprintf( sText, "Command help not done yet!: %s", g_aCommands[ iCommand ].m_sName );
 			ConsoleBufferPush( sText );
 #endif
 			}
@@ -1322,7 +1376,10 @@ Update_t CmdHelpSpecific (int nArgs)
 //===========================================================================
 Update_t CmdHelpList (int nArgs)
 {
-	char sText[ CONSOLE_WIDTH ] = "Commands: ";
+	const int nBuf = CONSOLE_WIDTH * 2;
+
+	char sText[ nBuf ] = "";
+	
 	int nLenLine = strlen( sText );
 	int y = 0;
 	int nLinesScrolled = 0;
@@ -1330,46 +1387,56 @@ Update_t CmdHelpList (int nArgs)
 	int nMaxWidth = g_nConsoleDisplayWidth - 1;
 	int iCommand;
 
-/*
+	extern vector<Command_t> g_vSortedCommands;
+
 	if (! g_vSortedCommands.size())
 	{
 		for (iCommand = 0; iCommand < NUM_COMMANDS_WITH_ALIASES; iCommand++ )
 		{
-//			TCHAR *pName = g_aCommands[ iCommand ].aName );
 			g_vSortedCommands.push_back( g_aCommands[ iCommand ] );
 		}
-
 		std::sort( g_vSortedCommands.begin(), g_vSortedCommands.end(), commands_functor_compare() );
 	}
 	int nCommands = g_vSortedCommands.size();
-*/
+
+	int nLen = 0;
+//		Colorize( sText, "Commands: " );
+ 		        StringCat( sText, CHC_USAGE , nBuf );
+		nLen += StringCat( sText, "Commands", nBuf );
+
+		        StringCat( sText, CHC_DEFAULT, nBuf );
+		nLen += StringCat( sText, ": " , nBuf );
+
 	for( iCommand = 0; iCommand < NUM_COMMANDS_WITH_ALIASES; iCommand++ ) // aliases are not printed
 	{
-//		Command_t *pCommand = & g_vSortedCommands.at( iCommand );
-		Command_t *pCommand = & g_aCommands[ iCommand ];
+		Command_t *pCommand = & g_vSortedCommands.at( iCommand );
+//		Command_t *pCommand = & g_aCommands[ iCommand ];
 		char      *pName = pCommand->m_sName;
 
 		if (! pCommand->pFunction)
 			continue; // not implemented function
 
 		int nLenCmd = strlen( pName );
-		if ((nLenLine + nLenCmd) < (nMaxWidth))
+		if ((nLen + nLenCmd) < (nMaxWidth))
 		{
-			strcat( sText, pName );
+			        StringCat( sText, CHC_COMMAND, nBuf );
+			nLen += StringCat( sText, pName      , nBuf );
 		}
 		else
 		{
-			ConsoleBufferPush( sText );
-			nLenLine = 1;
+			ConsolePrint( sText );
+			nLen = 1;
 			strcpy( sText, " " );
-			strcat( sText, pName );
+			        StringCat( sText, CHC_COMMAND, nBuf );
+			nLen += StringCat( sText, pName, nBuf );
 		}
 		
 		strcat( sText, " " );
-		nLenLine += (nLenCmd + 1);
+		nLen++;
 	}
 
-	ConsoleBufferPush( sText );
+	//ConsoleBufferPush( sText );
+	ConsolePrint( sText );
 	ConsoleUpdate();
 
 	return UPDATE_CONSOLE_DISPLAY;

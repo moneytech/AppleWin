@@ -11,6 +11,7 @@ enum VIDEOTYPE
 	, VT_MONO_AMBER
 	, VT_MONO_GREEN
 	, VT_MONO_WHITE
+	, VT_MONO_AUTHENTIC
 	, VT_NUM_MODES
 };
 
@@ -63,13 +64,38 @@ void    VideoRedrawScreen ();
 void    VideoRefreshScreen ();
 void    VideoReinitialize ();
 void    VideoResetState ();
-WORD    VideoGetScannerAddress(bool* pbVblBar_OUT = NULL);
+WORD    VideoGetScannerAddress(bool* pbVblBar_OUT, const DWORD uExecutedCycles);
+bool    VideoGetVbl(DWORD uExecutedCycles);
 void    VideoUpdateVbl (DWORD dwCyclesThisFrame);
 void    VideoUpdateFlash();
 bool    VideoGetSW80COL();
 DWORD   VideoGetSnapshot(SS_IO_Video* pSS);
 DWORD   VideoSetSnapshot(SS_IO_Video* pSS);
 
-BYTE __stdcall VideoCheckMode (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall VideoCheckVbl (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall VideoSetMode (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+typedef bool (*VideoUpdateFuncPtr_t)(int,int,int,int,int);
+
+extern bool g_bVideoDisplayPage2;
+extern bool g_VideoForceFullRedraw;
+
+void _Video_Dirty();
+void _Video_RedrawScreen( VideoUpdateFuncPtr_t update, bool bMixed = false );
+void _Video_SetupBanks( bool bBank2 );
+bool Update40ColCell (int x, int y, int xpixel, int ypixel, int offset);
+bool Update80ColCell (int x, int y, int xpixel, int ypixel, int offset);
+bool UpdateLoResCell (int x, int y, int xpixel, int ypixel, int offset);
+bool UpdateDLoResCell (int x, int y, int xpixel, int ypixel, int offset);
+bool UpdateHiResCell (int x, int y, int xpixel, int ypixel, int offset);
+bool UpdateDHiResCell (int x, int y, int xpixel, int ypixel, int offset);
+
+extern bool g_bDisplayPrintScreenFileName;
+void Video_ResetScreenshotCounter( char *pDiskImageFileName );
+enum VideoScreenShot_e
+{
+	SCREENSHOT_560x384 = 0,
+	SCREENSHOT_280x192
+};
+void Video_TakeScreenShot( int iScreenShotType );
+
+BYTE __stdcall VideoCheckMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+BYTE __stdcall VideoCheckVbl (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+BYTE __stdcall VideoSetMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);

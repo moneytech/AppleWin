@@ -1,4 +1,5 @@
 //#define WIN32_LEAN_AND_MEAN
+#define _WIN32_WINNT 0x0400	// For CoInitializeEx() to get defined in objbase.h
 
 // Mouse Wheel is not supported on Win95.
 // If we didn't care about supporting Win95 (compile/run-time errors)
@@ -19,7 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <tchar.h>
 #include <time.h>
 
 #include <windows.h>
@@ -45,6 +45,7 @@
 #include "Memory.h"
 #include "Mockingboard.h"
 #include "ParallelPrinter.h"
+#include "Peripheral_Clock_Generic.h"
 #include "PropertySheetPage.h"
 #include "Registry.h"
 #include "Riff.h"
@@ -52,5 +53,6 @@
 #include "SerialComms.h"
 #include "SoundCore.h"
 #include "Speaker.h"
+#include "Tape.h"
 #include "Tfe/Tfe.h"
 #include "Video.h"

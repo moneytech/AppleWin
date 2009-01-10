@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -41,7 +41,8 @@ static BYTE asciicode[2][10] = {
 static bool  g_bShiftKey = false;
 static bool  g_bCtrlKey  = false;
 static bool  g_bAltKey   = false;
-static bool  g_bCapsLock = true;
+static bool  g_bCapsLock = true; //Caps lock key for Apple2 and Lat/Cyr lock for Pravets8
+static bool  g_bP8CapsLock = true; //Caps lock key of Pravets 8A/C
 static int   lastvirtkey     = 0;	// Current PC keycode
 static BYTE  keycode         = 0;	// Current Apple keycode
 static DWORD keyboardqueries = 0;
@@ -116,7 +117,18 @@ bool KeybGetCapsStatus ()
 {
 	return g_bCapsLock;
 }
-
+//===========================================================================
+bool KeybGetP8CapsStatus()
+{
+	return g_bP8CapsLock;
+}
+//===========================================================================
+/*
+bool KeybGetCapsAllowed() //For Pravets 8A/C only
+{
+	return g_CapsLockAllowed;
+}
+*/
 //===========================================================================
 bool KeybGetCtrlStatus ()
 {
@@ -154,46 +166,150 @@ DWORD KeybGetNumQueries ()	// Used in determining 'idleness' of Apple system
 //===========================================================================
 void KeybQueueKeypress (int key, BOOL bASCII)
 {
-	static bool bFreshReset;
+	static bool bFreshReset = false;
 
 	if (bASCII == ASCII)
 	{
 		if (bFreshReset && key == 0x03)
 		{
-			bFreshReset = 0;
+			bFreshReset = false;
 			return; // Swallow spurious CTRL-C caused by CTRL-BREAK
 		}
-		bFreshReset = 0;
+
+		bFreshReset = false;
 		if (key > 0x7F)
 			return;
 
-		if (g_bApple2e) 
+		if (!IS_APPLE2) 
 		{
+			P8Shift = false;
 			if (g_bCapsLock && (key >= 'a') && (key <='z'))
+			{
+				P8Shift = true;
 				keycode = key - 32;
+			}
 			else
+			{
 				keycode = key;
+			}			
+
+			//The latter line should be applied for Pravtes 8A/C only, but not for Pravets 82/M !!!			
+			if ((g_bCapsLock == false) && (key >= 'A') && (key <='Z'))
+			{
+				P8Shift = true;
+				if (g_Apple2Type == A2TYPE_PRAVETS8A) 
+					keycode = key + 32;
+			}
+
+			//Remap some keys for Pravets82/M
+			if (g_Apple2Type == A2TYPE_PRAVETS82)
+			{
+				if (key == 64) 
+					keycode = 96;
+				if (key == '^') 
+					keycode = '~';
+
+				if (g_bCapsLock == false) //cyrillic letters
+				{
+					if (key == '`') keycode = '^';
+					if (key == 92) keycode = '@'; // \ to @	
+					if (key == 124) keycode = 92;
+				}
+				else //(g_bCapsLock == true) //latin letters
+				{
+					if (key == 91) keycode = 123;
+					if (key == 93) keycode = 125;
+					if (key == 124) keycode = 92;
+				}
+			}
+			if (g_Apple2Type == A2TYPE_PRAVETS8M)  //Pravets 8M charset is still uncertain
+			{
+				if (g_bCapsLock == false) //cyrillic letters
+				{
+					if (key == '[') keycode = '{';
+					if (key == ']') keycode = '}';
+					if (key == '`') keycode = '~'; //96= key `~
+					if (key == 92) keycode = 96;
+				}
+				else //latin letters
+				{
+					if (key == '`') 
+						keycode = '^'; //96= key `~
+				}
+			}
+			//Remap some keys for Pravets8A/C, which has a different charset for Pravtes82/M, whose keys MUST NOT be remapped.
+			if (g_Apple2Type == A2TYPE_PRAVETS8A) //&& (g_bCapsLock == false))
+			{
+				if (g_bCapsLock == false) //i.e. cyrillic letters
+			    {
+					if (key == '[') keycode = '{';
+					if (key == ']') keycode = '}';
+					if (key == '`') keycode = '~';
+					if (key == 92) keycode = 96;
+					if (GetCapsLockAllowed ()== true)
+					{
+						if ((key == 92) || (key == 124)) keycode = 96; //Ý to Þ
+						//This shall be rewriten, so that enabling CAPS_LOCK (i.e. F10) will not invert these keys values)
+						//The same for latin letters.
+						if ((key == '{') || (key == '}') || (key == '~') || (key == 124) || (key == '^') ||  (key == 95))
+							P8Shift = true;					
+					}
+				}
+				else //i.e. latin letters
+				{
+					if (GetCapsLockAllowed()  == false)
+					{
+						if (key == '{') keycode = '[';
+						if (key == '}') keycode = ']';
+						if (key == 124) 
+							keycode = 92;
+						/*if (key == 92) 
+							keycode = 124;*/
+					//Characters ` and ~ cannot be generated in 7bit character mode, so they are replaced with
+					}
+					else
+					{
+						if (key == '{') keycode = 91;
+						if (key == '}')	keycode = 93;
+						if (key == 124)	keycode = 92;					
+						if ((key == '[') || (key == ']') || (key == 92) || (key == '^') || (key == 95))
+							P8Shift= true; 
+						if (key == 96)	 //This line shall generate sth. else i.e. ` In fact. this character is not generateable by the pravets keyboard.
+						{
+							keycode = '^';
+							P8Shift= true;
+						}
+						if (key == 126)	keycode = '^';
+					}
+				}
+			}
 		}
 		else
 		{
-			if (key >= '`')
-				keycode = key - 32;
+			if (g_Apple2Type == A2TYPE_PRAVETS8A)
+			{
+			}
 			else
-				keycode = key;
+			{
+				if (key >= '`')
+					keycode = key - 32;
+				else
+					keycode = key;
+			}
 		}
 		lastvirtkey = LOBYTE(VkKeyScan(key));
-	}
-	else
+	} 
+	else //(bASCII != ASCII)
 	{
 		if ((key == VK_CANCEL) && (GetKeyState(VK_CONTROL) < 0))
 		{
 			// Ctrl+Reset
-			if (g_bApple2e)
+			if (!IS_APPLE2)
 				MemResetPaging();
 
 			DiskReset();
 			KeybReset();
-			if (g_bApple2e)
+			if (!IS_APPLE2)
 				VideoResetState();	// Switch Alternate char set off
 			MB_Reset();
 
@@ -202,7 +318,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 #endif
 
 			CpuReset();
-			bFreshReset = 1;
+			bFreshReset = true;
 			return;
 		}
 
@@ -213,10 +329,10 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			return;
 		}
 
-		if (!((key >= VK_LEFT) && (key <= VK_DELETE) && asciicode[g_bApple2e][key - VK_LEFT]))
+		if (!((key >= VK_LEFT) && (key <= VK_DELETE) && asciicode[IS_APPLE2 ? 0 : 1][key - VK_LEFT]))
 			return;
 
-		keycode = asciicode[g_bApple2e][key - VK_LEFT];		// Convert to Apple arrow keycode
+		keycode = asciicode[IS_APPLE2 ? 0 : 1][key - VK_LEFT];		// Convert to Apple arrow keycode
 		lastvirtkey = key;
 	}
 #ifdef KEY_OLD
@@ -314,7 +430,7 @@ static char ClipboardCurrChar(bool bIncPtr)
 
 //===========================================================================
 
-BYTE __stdcall KeybReadData (WORD, BYTE, BYTE, BYTE, ULONG)
+BYTE __stdcall KeybReadData (WORD, WORD, BYTE, BYTE, ULONG)
 {
 	keyboardqueries++;
 
@@ -352,7 +468,7 @@ BYTE __stdcall KeybReadData (WORD, BYTE, BYTE, BYTE, ULONG)
 
 //===========================================================================
 
-BYTE __stdcall KeybReadFlag (WORD, BYTE, BYTE, BYTE, ULONG)
+BYTE __stdcall KeybReadFlag (WORD, WORD, BYTE, BYTE, ULONG)
 {
 	keyboardqueries++;
 
@@ -389,11 +505,20 @@ BYTE __stdcall KeybReadFlag (WORD, BYTE, BYTE, BYTE, ULONG)
 //===========================================================================
 void KeybToggleCapsLock ()
 {
-	if (g_bApple2e)
+	if (!IS_APPLE2)
 	{
 		g_bCapsLock = (GetKeyState(VK_CAPITAL) & 1);
 		FrameRefreshStatus(DRAW_LEDS);
 	}
+}
+
+//===========================================================================
+void KeybToggleP8ACapsLock ()
+{
+	_ASSERT(g_Apple2Type == A2TYPE_PRAVETS8A);
+	P8CAPS_ON = !P8CAPS_ON;
+	FrameRefreshStatus(DRAW_LEDS);
+	// g_bP8CapsLock= g_bP8CapsLock?false:true; //The same as the upper, but slower
 }
 
 //===========================================================================

@@ -1,9 +1,18 @@
 #pragma once
 
-void    PrintDestroy();
-void    PrintLoadRom(LPBYTE);
-void    PrintReset();
-void    PrintUpdate(DWORD);
+void			PrintDestroy();
+void			PrintLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot);
+void			PrintReset();
+void			PrintUpdate(DWORD);
+void			Printer_SetFilename(char* pszFilename);
+char*			Printer_GetFilename();
+void			Printer_SetIdleLimit(unsigned int Duration);
+unsigned int	Printer_GetIdleLimit();
+extern bool		g_bDumpToPrinter;
+extern bool		g_bConvertEncoding;
+extern bool		g_bFilterUnprintable;
+extern bool		g_bPrinterAppend;
+extern int		g_iPrinterIdleLimit;
+extern bool       g_bFilterUnprintable;
+extern bool       g_bPrinterAppend;
 
-BYTE __stdcall PrintStatus (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall PrintTransmit (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);

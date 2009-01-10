@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="shift_jis"?>
+<?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
@@ -49,10 +49,16 @@
 				AdditionalOptions="/Zm200 "
 				Optimization="2"
 				InlineFunctionExpansion="2"
+				EnableIntrinsicFunctions="true"
+				FavorSizeOrSpeed="1"
+				OmitFramePointers="true"
+				WholeProgramOptimization="true"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
+				EnableEnhancedInstructionSet="2"
+				FloatingPointModel="2"
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderFile=".\Release/Applewin.pch"
 				AssemblerListingLocation=".\Release/"
@@ -75,12 +81,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib Ws2_32.lib"
 				OutputFile=".\Release/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ProgramDatabaseFile=".\Release/Applewin.pdb"
 				SubSystem="2"
+				LinkTimeCodeGeneration="1"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -168,7 +175,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib Ws2_32.lib"
 				OutputFile=".\Debug/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -210,6 +217,14 @@
 			Name="Source"
 			Filter=".cpp"
 			>
+			<File
+				RelativePath=".\source\6821.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\6821.h"
+				>
+			</File>
 			<File
 				RelativePath=".\source\Applewin.cpp"
 				>
@@ -287,6 +302,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\source\Log.h"
+				>
+			</File>
+			<File
 				RelativePath=".\source\Memory.cpp"
 				>
 			</File>
@@ -300,6 +319,14 @@
 			</File>
 			<File
 				RelativePath=".\source\Mockingboard.h"
+				>
+			</File>
+			<File
+				RelativePath=".\source\MouseInterface.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\MouseInterface.h"
 				>
 			</File>
 			<File
@@ -364,6 +391,14 @@
 			</File>
 			<File
 				RelativePath=".\source\Speaker.h"
+				>
+			</File>
+			<File
+				RelativePath=".\source\Tape.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\Tape.h"
 				>
 			</File>
 			<File
@@ -498,14 +533,50 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="Z80"
+				>
+				<File
+					RelativePath=".\source\Z80VICE\daa.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\daa.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\z80emu.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\z80emu.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80mem.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80mem.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80regs.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Docs"
 			>
-			<File
-				RelativePath=".\docs\Bugs.txt"
-				>
-			</File>
 			<File
 				RelativePath=".\docs\CodingConventions.txt"
 				>
@@ -528,15 +599,19 @@
 			Filter=".txt,.ico,.bmp,.rc"
 			>
 			<File
+				RelativePath=".\resource\Apple2.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Apple2_Plus.rom"
+				>
+			</File>
+			<File
 				RelativePath=".\resource\Apple2e.rom"
 				>
 			</File>
 			<File
-				RelativePath=".\resource\Apple2orig.rom"
-				>
-			</File>
-			<File
-				RelativePath=".\resource\Apple2plus.rom"
+				RelativePath=".\resource\Apple2e_Enhanced.rom"
 				>
 			</File>
 			<File
@@ -578,11 +653,39 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\CHARIDNICATOR_82.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CHARIDNICATOR_8C.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CHARIDNICATOR_APPLE.BMP"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\CHARSET4.BMP"
 				>
 			</File>
 			<File
+				RelativePath=".\resource\CHARSET82.bmp"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CHARSET8C.bmp"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\COLOR.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CYROFF.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\CYRON.BMP"
 				>
 			</File>
 			<File
@@ -643,6 +746,10 @@
 			</File>
 			<File
 				RelativePath="RESOURCE\RUN.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\RUNP.BMP"
 				>
 			</File>
 			<File

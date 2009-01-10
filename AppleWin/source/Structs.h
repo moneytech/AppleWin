@@ -147,6 +147,8 @@ enum SS_CARDTYPE
 	CT_GenericPrinter,
 	CT_GenericHDD,		// Hard disk
 	CT_GenericClock,
+	CT_MouseInterface,
+	CT_Z80,
 };
 
 /////////////////////////////////////////////////////////////////////////////////

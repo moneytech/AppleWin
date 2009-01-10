@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -116,7 +116,7 @@ void Snapshot_LoadState()
 		// Reset all sub-systems
 		MemReset();
 
-		if (g_bApple2e)
+		if (!IS_APPLE2)
 			MemResetPaging();
 
 		DiskReset();
@@ -129,7 +129,7 @@ void Snapshot_LoadState()
 		//
 
 		CpuSetSnapshot(&pSS->Apple2Unit.CPU6502);
-		CommSetSnapshot(&pSS->Apple2Unit.Comms);
+		sg_SSC.CommSetSnapshot(&pSS->Apple2Unit.Comms);
 		JoySetSnapshot(&pSS->Apple2Unit.Joystick);
 		KeybSetSnapshot(&pSS->Apple2Unit.Keyboard);
 		SpkrSetSnapshot(&pSS->Apple2Unit.Speaker);
@@ -186,7 +186,7 @@ void Snapshot_SaveState()
 	pSS->Apple2Unit.UnitHdr.dwVersion = MAKE_VERSION(1,0,0,0);
 
 	CpuGetSnapshot(&pSS->Apple2Unit.CPU6502);
-	CommGetSnapshot(&pSS->Apple2Unit.Comms);
+	sg_SSC.CommGetSnapshot(&pSS->Apple2Unit.Comms);
 	JoyGetSnapshot(&pSS->Apple2Unit.Joystick);
 	KeybGetSnapshot(&pSS->Apple2Unit.Keyboard);
 	SpkrGetSnapshot(&pSS->Apple2Unit.Speaker);

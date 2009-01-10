@@ -16,24 +16,34 @@
 #define IDC_SLIDER_CPU_SPEED            111
 #define IDD_PROPPAGE_SOUND              112
 #define IDC_DISKTYPE                    113
-#define IDD_PROPPAGE_SAVESTATE          114
 #define IDC_JOYSTICK1                   115
 #define IDD_PROPPAGE_DISK               116
 #define IDC_BENCHMARK                   117
 #define IDC_LOADSTATE                   118
-#define IDR_HDDRVR                      119
+#define IDR_HDDRVR_FW                   119
 #define IDC_0_5_MHz                     120
 #define IDB_APPLEWIN                    121
 #define IDC_1_0_MHz                     122
 #define IDC_2_0_MHz                     123
 #define IDC_MAX_MHz                     124
 #define IDR_MENU                        125
-#define IDR_APPLE2ORIG_ROM              126
-#define IDR_APPLE2PLUS_ROM              127
+#define IDR_APPLE2_ROM                  126
+#define IDR_APPLE2_PLUS_ROM             127
 #define IDR_APPLE2E_ROM                 128
+#define IDR_APPLE2E_ENHANCED_ROM        129
 #define IDC_MB_ENABLE                   130
 #define IDD_TFE_SETTINGS_DIALOG         131
-#define IDR_PRINTDRVR                   132
+#define IDR_PRINTDRVR_FW                132
+#define IDD_PROPPAGE_ADVANCED           132
+#define IDR_DISK2_FW                    133
+#define IDR_SSC_FW                      134
+#define IDR_MOCKINGBOARD_D_FW           135
+#define IDR_MOUSEINTERFACE_FW           136
+#define IDR_THUNDERCLOCKPLUS_FW         137
+#define IDR_FREEZES_F8_ROM              138
+#define IDR_PRAVETS_82_ROM              139
+#define IDR_PRAVETS_8M_ROM              140
+#define IDR_PRAVETS_8C_ROM              142
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -68,21 +78,39 @@
 #define IDS_OK                          1040
 #define IDS_CANCEL                      1041
 #define IDC_ETHERNET                    1042
+#define IDC_SCROLLLOCK_TOGGLE           1043
+#define IDC_MOUSE_IN_SLOT4              1044
+#define IDC_THE_FREEZES_F8_ROM_FW       1045
+#define IDC_MOUSE_CROSSHAIR             1046
+#define IDC_CLONETYPE                   1047
+#define IDC_MOUSE_RESTRICT_TO_WINDOW    1048
+#define IDC_CIDERPRESS_BROWSE           1049
+#define IDC_CIDERPRESS_FILENAME         1050
+#define IDC_Z80_IN_SLOT5                1051
+#define IDC_DUMPTOPRINTER               1052
+#define IDC_DUMP_FILENAME               1053
+#define IDC_DUMP_FILENAME_BROWSE        1054
+#define IDC_PRINTER_CONVERT_ENCODING    1055
+#define IDC_PRINTER_FILTER_UNPRINTABLE  1056
+#define IDC_PRINTER_APPEND				1057
+#define IDC_SPIN_PRINTER_IDLE           1058
+
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
 #define IDM_ABOUT                       40003
 #define ID_DISKMENU_EJECT               40004
 #define ID_DISKMENU_WRITEPROTECTION_ON  40005
 #define ID_DISKMENU_WRITEPROTECTION_OFF 40006
+#define ID_DISKMENU_SENDTO_CIDERPRESS	40007
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        134
-#define _APS_NEXT_COMMAND_VALUE         40007
-#define _APS_NEXT_CONTROL_VALUE         1043
+#define _APS_NEXT_RESOURCE_VALUE        141
+#define _APS_NEXT_COMMAND_VALUE         40008
+#define _APS_NEXT_CONTROL_VALUE         1052
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

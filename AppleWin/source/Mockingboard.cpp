@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -81,7 +81,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include <wchar.h>
 
-#include "ay8910.h"
+#include "AY8910.h"
 #include "SSI263Phonemes.h"
 
 
@@ -144,7 +144,9 @@ static SY6522_AY8910 g_MB[NUM_AY8910];
 
 // Timer vars
 static ULONG g_n6522TimerPeriod = 0;
-static USHORT g_nMBTimerDevice = 0;	// SY6522 device# which is generating timer IRQ
+static const UINT TIMERDEVICE_INVALID = -1;
+static UINT g_nMBTimerDevice = TIMERDEVICE_INVALID;	// SY6522 device# which is generating timer IRQ
+static UINT64 g_uLastCumulativeCycles = 0;
 
 // SSI263 vars:
 static USHORT g_nSSI263Device = 0;	// SSI263 device# which is generating phoneme-complete IRQ
@@ -158,7 +160,7 @@ static short* ppAYVoiceBuffer[NUM_VOICES] = {0};
 
 static unsigned __int64	g_nMB_InActiveCycleCount = 0;
 static bool g_bMB_RegAccessedFlag = false;
-static bool g_bMB_Active = true;
+static bool g_bMB_Active = false;
 
 static HANDLE g_hThread = NULL;
 
@@ -196,7 +198,9 @@ static const double g_f6522TimerPeriod_NoIRQ = CLK_6502 / 60.0;		// Constant wha
 
 // External global vars:
 bool g_bMBTimerIrqActive = false;
+#ifdef _DEBUG
 UINT32 g_uTimer1IrqCount = 0;	// DEBUG
+#endif
 
 //---------------------------------------------------------------------------
 
@@ -234,7 +238,7 @@ static void StopTimer(SY6522_AY8910* pMB)
 {
 	pMB->nTimerStatus = 0;
 	g_bMBTimerIrqActive = false;
-	g_nMBTimerDevice = 0;
+	g_nMBTimerDevice = TIMERDEVICE_INVALID;
 }
 
 //-----------------------------------------------------------------------------
@@ -253,6 +257,7 @@ static void ResetSY6522(SY6522_AY8910* pMB)
 
 static void AY8910_Write(BYTE nDevice, BYTE nReg, BYTE nValue, BYTE nAYDevice)
 {
+	g_bMB_RegAccessedFlag = true;
 	SY6522_AY8910* pMB = &g_MB[nDevice];
 
 	if((nValue & 4) == 0)
@@ -322,7 +327,6 @@ static void UpdateIFR(SY6522_AY8910* pMB)
 
 static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 {
-	g_bMB_RegAccessedFlag = true;
 	g_bMB_Active = true;
 
 	SY6522_AY8910* pMB = &g_MB[nDevice];
@@ -431,8 +435,6 @@ static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 				if(pMB->nTimerStatus == 0)
 					break;
 				
-				pMB->nTimerStatus = 0;
-				
 				// Stop timer
 				StopTimer(pMB);
 			}
@@ -454,7 +456,7 @@ static void SY6522_Write(BYTE nDevice, BYTE nReg, BYTE nValue)
 
 static BYTE SY6522_Read(BYTE nDevice, BYTE nReg)
 {
-	g_bMB_RegAccessedFlag = true;
+//	g_bMB_RegAccessedFlag = true;
 	g_bMB_Active = true;
 
 	SY6522_AY8910* pMB = &g_MB[nDevice];
@@ -508,7 +510,7 @@ static BYTE SY6522_Read(BYTE nDevice, BYTE nReg)
 			nValue = pMB->sy6522.IFR;
 			break;
 		case 0x0e:	// IER
-			nValue = 0x80;
+			nValue = 0x80;	// Datasheet says this is 0x80|IER
 			break;
 		case 0x0f:	// ORA_NO_HS
 			nValue = pMB->sy6522.ORA;
@@ -726,12 +728,28 @@ static void Votrax_Write(BYTE nDevice, BYTE nValue)
 
 static void MB_Update()
 {
-	if(!MockingboardVoice.bActive)
+	if (!MockingboardVoice.bActive)
 		return;
+
+	if (g_bFullSpeed)
+	{
+		// Keep AY reg writes relative to the current 'frame'
+		// - Required for Ultima3:
+		//   . Tune ends
+		//   . g_bFullSpeed:=true (disk-spinning) for ~50 frames
+		//   . U3 sets AY_ENABLE:=0xFF (as a side-effect, this sets g_bFullSpeed:=false)
+		//   o Without this, the write to AY_ENABLE gets ignored (since AY8910's /g_uLastCumulativeCycles/ was last set 50 frame ago)
+		AY8910UpdateSetCycles();
+
+		// TODO:
+		// If any AY regs have changed then push them out to the AY chip
+
+		return;
+	}
 
 	//
 
-	if(!g_bMB_RegAccessedFlag)
+	if (!g_bMB_RegAccessedFlag)
 	{
 		if(!g_nMB_InActiveCycleCount)
 		{
@@ -755,13 +773,11 @@ static void MB_Update()
 	static DWORD dwByteOffset = (DWORD)-1;
 	static int nNumSamplesError = 0;
 
+	const double n6522TimerPeriod = MB_GetFramePeriod();
 
-	int nNumSamples;
-	double n6522TimerPeriod = MB_GetFramePeriod();
-
-	double nIrqFreq = g_fCurrentCLK6502 / n6522TimerPeriod + 0.5;			// Round-up
-	int nNumSamplesPerPeriod = (int) ((double)SAMPLE_RATE / nIrqFreq);		// Eg. For 60Hz this is 735
-	nNumSamples = nNumSamplesPerPeriod + nNumSamplesError;					// Apply correction
+	const double nIrqFreq = g_fCurrentCLK6502 / n6522TimerPeriod + 0.5;			// Round-up
+	const int nNumSamplesPerPeriod = (int) ((double)SAMPLE_RATE / nIrqFreq);	// Eg. For 60Hz this is 735
+	int nNumSamples = nNumSamplesPerPeriod + nNumSamplesError;					// Apply correction
 	if(nNumSamples <= 0)
 		nNumSamples = 0;
 	if(nNumSamples > 2*nNumSamplesPerPeriod)
@@ -822,7 +838,7 @@ static void MB_Update()
 
 	//
 
-	double fAttenuation = g_bPhasorEnable ? 2.0/3.0 : 1.0;
+	const double fAttenuation = g_bPhasorEnable ? 2.0/3.0 : 1.0;
 
 	for(int i=0; i<nNumSamples; i++)
 	{
@@ -830,7 +846,7 @@ static void MB_Update()
 		// L = Address.b7=0, R = Address.b7=1
 		int nDataL = 0, nDataR = 0;
 
-		for(unsigned int j=0; j<NUM_VOICES_PER_AY8910; j++)
+		for(UINT j=0; j<NUM_VOICES_PER_AY8910; j++)
 		{
 			// Slot4
 			nDataL += (int) ((double)ppAYVoiceBuffer[0*NUM_VOICES_PER_AY8910+j][i] * fAttenuation);
@@ -870,7 +886,7 @@ static void MB_Update()
 
 	// Commit sound buffer
 	hr = MockingboardVoice.lpDSBvoice->Unlock((void*)pDSLockedBuffer0, dwDSLockedBufferSize0,
-										(void*)pDSLockedBuffer1, dwDSLockedBufferSize1);
+											  (void*)pDSLockedBuffer1, dwDSLockedBufferSize1);
 
 	dwByteOffset = (dwByteOffset + (DWORD)nNumSamples*sizeof(short)*g_nMB_NumChannels) % g_dwDSBufferSize;
 
@@ -1269,6 +1285,10 @@ static void MB_DSUninit()
 
 //=============================================================================
 
+static BYTE __stdcall PhasorIO (WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
+static BYTE __stdcall MB_Read(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
+static BYTE __stdcall MB_Write(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
+
 void MB_Initialize()
 {
 	if(g_bDisableDirectSound)
@@ -1300,6 +1320,28 @@ void MB_Initialize()
 	//
 
 	g_bMB_Active = (g_SoundcardType != SC_NONE);
+
+	//
+
+#ifdef SUPPORT_CPM
+	if (g_Slot4 == CT_Mockingboard)
+	{
+		const UINT uSlot4 = 4;
+		RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+
+		const UINT uSlot5 = 5;
+		RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+	}
+#else
+	if (g_Slot4 == CT_Mockingboard)
+	{
+		const UINT uSlot4 = 4;
+		RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+	}
+
+	const UINT uSlot5 = 5;
+	RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1334,14 +1376,20 @@ void MB_Reset()
 		AY8910_reset(i);
 	}
 
+	g_bMB_Active = (g_SoundcardType != SC_NONE);
 	g_nPhasorMode = 0;
 	MB_Reinitialize();	// Reset CLK for AY8910s
 }
 
 //-----------------------------------------------------------------------------
 
-BYTE MB_Read(WORD nAddr)
+static BYTE __stdcall MB_Read(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft)
 {
+	MB_UpdateCycles(nCyclesLeft);
+
+	if(!IS_APPLE2 && !MemCheckSLOTCXROM())
+		return mem[nAddr];
+
 	if(g_SoundcardType == SC_NONE)
 		return 0;
 
@@ -1385,10 +1433,15 @@ BYTE MB_Read(WORD nAddr)
 
 //-----------------------------------------------------------------------------
 
-void MB_Write(WORD nAddr, BYTE nValue)
+static BYTE __stdcall MB_Write(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft)
 {
+	MB_UpdateCycles(nCyclesLeft);
+
+	if(!IS_APPLE2 && !MemCheckSLOTCXROM())
+		return 0;
+
 	if(g_SoundcardType == SC_NONE)
-		return;
+		return 0;
 
 	BYTE nMB = (nAddr>>8)&0xf - SLOT4;
 	BYTE nOffset = nAddr&0xff;
@@ -1396,7 +1449,7 @@ void MB_Write(WORD nAddr, BYTE nValue)
 	if(g_bPhasorEnable)
 	{
 		if(nMB != 0)	// Slot4 only
-			return;
+			return 0;
 
 		int CS;
 
@@ -1414,7 +1467,7 @@ void MB_Write(WORD nAddr, BYTE nValue)
 		if((nOffset >= SSI263_Offset) && (nOffset <= (SSI263_Offset+0x05)))
 			SSI263_Write(nMB*2+1, nAddr&0xf, nValue);		// Second 6522 is used for speech chip
 
-		return;
+		return 0;
 	}
 
 	if(nOffset <= (SY6522A_Offset+0x0F))
@@ -1423,23 +1476,25 @@ void MB_Write(WORD nAddr, BYTE nValue)
 		SY6522_Write(nMB*NUM_DEVS_PER_MB + SY6522_DEVICE_B, nAddr&0xf, nValue);
 	else if((nOffset >= SSI263_Offset) && (nOffset <= (SSI263_Offset+0x05)))
 		SSI263_Write(nMB*2+1, nAddr&0xf, nValue);		// Second 6522 is used for speech chip
+
+	return 0;
 }
 
 //-----------------------------------------------------------------------------
 
-BYTE __stdcall PhasorIO (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+static BYTE __stdcall PhasorIO (WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft)
 {
 	if(!g_bPhasorEnable)
-		return 0;
+		return MemReadFloatingBus(nCyclesLeft);
 
 	if(g_nPhasorMode < 2)
-		g_nPhasorMode = addr & 1;
+		g_nPhasorMode = nAddr & 1;
 
-	double fCLK = (addr & 4) ? CLK_6502*2 : CLK_6502;
+	double fCLK = (nAddr & 4) ? CLK_6502*2 : CLK_6502;
 
 	AY8910_InitClock((int)fCLK);
 
-	return 0;
+	return MemReadFloatingBus(nCyclesLeft);
 }
 
 //-----------------------------------------------------------------------------
@@ -1478,24 +1533,35 @@ void MB_Demute()
 
 //-----------------------------------------------------------------------------
 
+// Called by CpuExecute() before doing CPU emulation
+void MB_StartOfCpuExecute()
+{
+	g_uLastCumulativeCycles = g_nCumulativeCycles;
+}
+
 // Called by ContinueExecution() at the end of every video frame
-void MB_EndOfFrame()
+void MB_EndOfVideoFrame()
 {
 	if(g_SoundcardType == SC_NONE)
 		return;
 
-	if(!g_bFullSpeed && !g_bMBTimerIrqActive && !(g_MB[0].sy6522.IFR & IxR_TIMER1))
+	if(!g_bMBTimerIrqActive)
 		MB_Update();
 }
 
 //-----------------------------------------------------------------------------
 
-// Called by InternalCpuExecute() after every opcode
-// OLD: Called by CpuExecute() & CpuCalcCycles()
-void MB_UpdateCycles(USHORT nClocks)
+// Called by CpuExecute() after every N opcodes (N = ~1000 @ 1MHz)
+void MB_UpdateCycles(ULONG uExecutedCycles)
 {
 	if(g_SoundcardType == SC_NONE)
 		return;
+
+	CpuCalcCycles(uExecutedCycles);
+	UINT64 uCycles = g_nCumulativeCycles - g_uLastCumulativeCycles;
+	g_uLastCumulativeCycles = g_nCumulativeCycles;
+	_ASSERT(uCycles < 0x10000);
+	USHORT nClocks = (USHORT) uCycles;
 
 	for(int i=0; i<NUM_SY6522; i++)
 	{
@@ -1513,7 +1579,9 @@ void MB_UpdateCycles(USHORT nClocks)
 
 		if( bTimer1Underflow && (g_nMBTimerDevice == i) && g_bMBTimerIrqActive )
 		{
+#ifdef _DEBUG
 			g_uTimer1IrqCount++;	// DEBUG
+#endif
 
 			pMB->sy6522.IFR |= IxR_TIMER1;
 			UpdateIFR(pMB);
@@ -1521,7 +1589,9 @@ void MB_UpdateCycles(USHORT nClocks)
 			if((pMB->sy6522.ACR & RUNMODE) == RM_ONESHOT)
 			{
 				// One-shot mode
-				StopTimer(pMB);		// Phasor's playback code uses one-shot mode
+				// - Phasor's playback code uses one-shot mode
+				// - Willy Byte sets to one-shot to stop the timer IRQ
+				StopTimer(pMB);
 			}
 			else
 			{
@@ -1531,8 +1601,17 @@ void MB_UpdateCycles(USHORT nClocks)
 				StartTimer(pMB);
 			}
 
-			if(!g_bFullSpeed)
-				MB_Update();
+			MB_Update();
+		}
+		else if ( bTimer1Underflow
+					&& !g_bMBTimerIrqActive								// StopTimer() has been called
+					&& (pMB->sy6522.IFR & IxR_TIMER1)					// IRQ
+					&& ((pMB->sy6522.ACR & RUNMODE) == RM_ONESHOT) )	// One-shot mode
+		{
+			// Fix for Willy Byte - need to confirm that 6522 really does this!
+			// . It never accesses IER/IFR/TIMER1 regs to clear IRQ
+			pMB->sy6522.IFR &= ~IxR_TIMER1;		// Deassert the TIMER IRQ
+			UpdateIFR(pMB);
 		}
 	}
 }

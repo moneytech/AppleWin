@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,19 +28,40 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "..\resource\resource.h"
 
-#define LOG_DISK_ENABLED 1
+static BYTE __stdcall DiskControlMotor (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskControlStepper (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskEnable (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskReadWrite (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskSetLatchValue (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskSetReadMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
-#if LOG_DISK_ENABLED
-    #define LOG_DISK(format, ...) LOG(format, __VA_ARGS__)
+#define LOG_DISK_ENABLED 0
+
+// __VA_ARGS__ not supported on MSVC++ .NET 7.x
+#if (LOG_DISK_ENABLED)
+	#if !defined(_VC71)
+		#define LOG_DISK(format, ...) LOG(format, __VA_ARGS__)
+	#else
+		#define LOG_DISK	 LogOutput
+	#endif
 #else
-    #define LOG_DISK(...)
+	#if !defined(_VC71)
+		#define LOG_DISK(...)
+	#else
+		#define LOG_DISK(x)
+	#endif
 #endif
 
 // Public _________________________________________________________________________________________
 
 	BOOL      enhancedisk     = 1;
-
+	// dynamic array of strings
+	string DiskPathFilename[];
+	bool bSaveDiskImage = true;
+	
 // Private ________________________________________________________________________________________
 
 	const int MAX_DISK_IMAGE_NAME = 15;
@@ -77,6 +98,49 @@ static bool IsDriveValid( const int iDrive );
 static void ReadTrack (int drive);
 static void RemoveDisk (int drive);
 static void WriteTrack (int drive);
+
+// ________________________________________________________________________________________________
+
+//===========================================================================
+void Disk_LoadLastDiskImage( int iDrive )
+{
+	char sFilePath[ MAX_PATH + 1];
+	sFilePath[0] = 0;
+
+	char *pRegKey = (!iDrive)
+		? REGVALUE_PREF_LAST_DISK_1
+		: REGVALUE_PREF_LAST_DISK_2;
+	if( RegLoadString(TEXT(REG_PREFS),pRegKey,1,sFilePath,MAX_PATH) )
+	{
+		sFilePath[ MAX_PATH ] = 0;
+		DiskPathFilename[ iDrive ] = sFilePath;
+		const char *pFileName = DiskPathFilename[iDrive].c_str();
+
+#if _DEBUG
+//		MessageBox(NULL,pFileName,pRegKey,MB_OK);
+#endif
+
+		//	_tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
+		bSaveDiskImage = false;
+		DiskInsert(iDrive,pFileName,0,0);
+		bSaveDiskImage = true;
+	}
+	//else MessageBox(NULL,"Reg Key/Value not found",pRegKey,MB_OK);
+}
+
+//===========================================================================
+void Disk_SaveLastDiskImage( int iDrive )
+{
+	const char *pFileName = DiskPathFilename[iDrive].c_str();
+
+	if( bSaveDiskImage )
+	{
+		if( !iDrive )
+			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_1,1,pFileName );
+		else
+			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_2,1,pFileName );
+	}
+}
 
 //===========================================================================
 void CheckSpinning () {
@@ -196,7 +260,8 @@ static void ReadTrack (int iDrive)
 
 	if (pFloppy->trackimage && pFloppy->imagehandle)
 	{
-        LOG_DISK("read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
+		LOG_DISK("read track %2X%s\r", pFloppy->track, (pFloppy->phase & 1) ? ".5" : "");
+
 		ImageReadTrack(
 			pFloppy->imagehandle,
 			pFloppy->track,
@@ -232,6 +297,10 @@ static void RemoveDisk (int iDrive)
 
 	memset( pFloppy->imagename, 0, MAX_DISK_IMAGE_NAME+1 );
 	memset( pFloppy->fullname , 0, MAX_DISK_FULL_NAME +1 );
+	DiskPathFilename[iDrive] = "";
+
+	Disk_SaveLastDiskImage( iDrive );
+	Video_ResetScreenshotCounter( NULL );
 }
 
 //===========================================================================
@@ -271,14 +340,14 @@ void DiskBoot () {
 }
 
 //===========================================================================
-BYTE __stdcall DiskControlMotor (WORD, BYTE address, BYTE, BYTE, ULONG) {
+static BYTE __stdcall DiskControlMotor (WORD, WORD address, BYTE, BYTE, ULONG) {
   floppymotoron = address & 1;
   CheckSpinning();
   return MemReturnRandomData(1);
 }
 
 //===========================================================================
-BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
+static BYTE __stdcall DiskControlStepper (WORD, WORD address, BYTE, BYTE, ULONG)
 {
   Disk_t * fptr = &g_aFloppyDisk[currdrive];
   int phase     = (address >> 1) & 3;
@@ -304,13 +373,10 @@ BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
   // - do not move if both adjacent magnets are on
   // momentum and timing are not accounted for ... maybe one day!
   int direction = 0;
-  if ((phases & (1 << fptr->phase)) == 0)
-  {
-    if (phases & (1 << ((fptr->phase + 1) & 3)))
-      direction += 1;
-    if (phases & (1 << ((fptr->phase + 3) & 3)))
-      direction -= 1;
-  }
+  if (phases & (1 << ((fptr->phase + 1) & 3)))
+    direction += 1;
+  if (phases & (1 << ((fptr->phase + 3) & 3)))
+    direction -= 1;
 
   // apply magnet step, if any
   if (direction)
@@ -334,12 +400,17 @@ BYTE __stdcall DiskControlStepper (WORD, BYTE address, BYTE, BYTE, ULONG)
 //===========================================================================
 void DiskDestroy ()
 {
+	bSaveDiskImage = false;
 	RemoveDisk(0);
+
+	bSaveDiskImage = false;
 	RemoveDisk(1);
+
+	bSaveDiskImage = true;
 }
 
 //===========================================================================
-BYTE __stdcall DiskEnable (WORD, BYTE address, BYTE, BYTE, ULONG) {
+static BYTE __stdcall DiskEnable (WORD, WORD address, BYTE, BYTE, ULONG) {
   currdrive = address & 1;
   g_aFloppyDisk[!currdrive].spinning   = 0;
   g_aFloppyDisk[!currdrive].writelight = 0;
@@ -364,6 +435,7 @@ LPCTSTR DiskGetFullName (int drive) {
 }
 
 
+
 //===========================================================================
 void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 {
@@ -381,31 +453,54 @@ LPCTSTR DiskGetName (int drive) {
   return g_aFloppyDisk[drive].imagename;
 }
 
+
 //===========================================================================
-void DiskInitialize () {
-  int loop = DRIVES;
-  while (loop--)
-    ZeroMemory(&g_aFloppyDisk[loop],sizeof(Disk_t ));
-  TCHAR imagefilename[MAX_PATH];
-  _tcscpy(imagefilename,g_sProgramDir);
-  _tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
-  DiskInsert(0,imagefilename,0,0);
+
+BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
+void DiskInitialize ()
+{
+	int loop = DRIVES;
+	while (loop--)
+		ZeroMemory(&g_aFloppyDisk[loop],sizeof(Disk_t ));
+
+	TCHAR imagefilename[MAX_PATH];
+	_tcscpy(imagefilename,g_sProgramDir);
 }
 
 //===========================================================================
-int DiskInsert (int drive, LPCTSTR imagefilename, BOOL writeprotected, BOOL createifnecessary) {
-  Disk_t * fptr = &g_aFloppyDisk[drive];
-  if (fptr->imagehandle)
-    RemoveDisk(drive);
-  ZeroMemory(fptr,sizeof(Disk_t ));
-  fptr->writeprotected = writeprotected;
-  int error = ImageOpen(imagefilename,
-                        &fptr->imagehandle,
-                        &fptr->writeprotected,
-                        createifnecessary);
-  if (error == IMAGE_ERROR_NONE)
-    GetImageTitle(imagefilename,fptr);
-  return error;
+
+int DiskInsert (int iDrive, LPCTSTR imagefilename, BOOL writeprotected, BOOL createifnecessary)
+{
+	Disk_t * fptr = &g_aFloppyDisk[iDrive];
+	if (fptr->imagehandle)
+		RemoveDisk(iDrive);
+
+	ZeroMemory(fptr,sizeof(Disk_t ));
+	fptr->writeprotected = writeprotected;
+
+	int error = ImageOpen(imagefilename,
+		&fptr->imagehandle,
+		&fptr->writeprotected,
+		createifnecessary);
+
+	if (error == IMAGE_ERROR_NONE)
+	{
+		GetImageTitle(imagefilename,fptr);
+		DiskPathFilename[iDrive]= imagefilename;
+
+		//MessageBox( NULL, imagefilename, fptr->imagename, MB_OK );
+		Video_ResetScreenshotCounter( fptr->imagename );
+	}
+	else
+	{
+		Video_ResetScreenshotCounter( NULL );
+	}
+
+	Disk_SaveLastDiskImage( iDrive );
+	
+	return error;
 }
 
 //===========================================================================
@@ -475,7 +570,7 @@ void DiskSetProtect( const int iDrive, const bool bWriteProtect )
 
 
 //===========================================================================
-BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
+static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULONG) {
   Disk_t * fptr = &g_aFloppyDisk[currdrive];
   diskaccessed = 1;
   if ((!fptr->trackimagedata) && fptr->imagehandle)
@@ -493,21 +588,21 @@ BYTE __stdcall DiskReadWrite (WORD programcounter, BYTE, BYTE, BYTE, ULONG) {
         return 0;
     else
       result = *(fptr->trackimage+fptr->byte);
-#if LOG_DISK_ENABLED
   if (0)
   {
     LOG_DISK("nib %4X = %2X\r", fptr->byte, result);
   }
-#endif
   if (++fptr->byte >= fptr->nibbles)
     fptr->byte = 0;
   return result;
 }
 
 //===========================================================================
-void DiskReset () {
-  floppymotoron = 0;
-  phases = 0;
+
+void DiskReset()
+{
+	floppymotoron = 0;
+	phases = 0;
 }
 
 //===========================================================================
@@ -537,23 +632,26 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   ofn.Flags           = OFN_PATHMUSTEXIST;
   ofn.lpstrTitle      = title;
 
-  if (GetOpenFileName(&ofn))
-  {
-    if ((!ofn.nFileExtension) || !filename[ofn.nFileExtension])
-      _tcscat(filename,TEXT(".DSK"));
+	if (GetOpenFileName(&ofn))
+	{
+		if ((!ofn.nFileExtension) || !filename[ofn.nFileExtension])
+			_tcscat(filename,TEXT(".DSK"));
 
-    int error = DiskInsert(drive,filename,ofn.Flags & OFN_READONLY,1);
-    if (!error)
-	{
-      filename[ofn.nFileOffset] = 0;
-      if (_tcsicmp(directory,filename))
-        RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,filename);
-    }
-    else
-	{
-      DiskNotifyInvalidImage(filename,error);
+		int error = DiskInsert(drive,filename,ofn.Flags & OFN_READONLY,1);
+		if (!error)
+		{
+			DiskPathFilename[drive] = filename; 
+			filename[ofn.nFileOffset] = 0;
+			if (_tcsicmp(directory,filename))
+			{
+				RegSaveString(TEXT(REG_PREFS),TEXT(REGVALUE_PREF_START_DIR),1,filename);
+			}
+		}
+		else
+		{
+			DiskNotifyInvalidImage(filename,error);
+		}
 	}
-  }
 }
 
 //===========================================================================
@@ -563,20 +661,21 @@ void DiskSelect (int drive)
 }
 
 //===========================================================================
-BYTE __stdcall DiskSetLatchValue (WORD, BYTE, BYTE write, BYTE value, ULONG) {
+
+static BYTE __stdcall DiskSetLatchValue (WORD, WORD, BYTE write, BYTE value, ULONG) {
   if (write)
     floppylatch = value;
   return floppylatch;
 }
 
 //===========================================================================
-BYTE __stdcall DiskSetReadMode (WORD, BYTE, BYTE, BYTE, ULONG) {
+static BYTE __stdcall DiskSetReadMode (WORD, WORD, BYTE, BYTE, ULONG) {
   floppywritemode = 0;
   return MemReturnRandomData(g_aFloppyDisk[currdrive].writeprotected);
 }
 
 //===========================================================================
-BYTE __stdcall DiskSetWriteMode (WORD, BYTE, BYTE, BYTE, ULONG) {
+static BYTE __stdcall DiskSetWriteMode (WORD, WORD, BYTE, BYTE, ULONG) {
   floppywritemode = 1;
   BOOL modechange = !g_aFloppyDisk[currdrive].writelight;
   g_aFloppyDisk[currdrive].writelight = 20000;
@@ -630,6 +729,100 @@ bool DiskDriveSwap()
 	FrameRefreshStatus(DRAW_LEDS | DRAW_BUTTON_DRIVES);
 
 	return true;
+}
+
+//===========================================================================
+
+static BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
+// TODO: LoadRom_Disk_Floppy()
+void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
+{
+	const UINT DISK2_FW_SIZE = APPLE_SLOT_SIZE;
+
+	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_DISK2_FW), "FIRMWARE");
+	if(hResInfo == NULL)
+		return;
+
+	DWORD dwResSize = SizeofResource(NULL, hResInfo);
+	if(dwResSize != DISK2_FW_SIZE)
+		return;
+
+	HGLOBAL hResData = LoadResource(NULL, hResInfo);
+	if(hResData == NULL)
+		return;
+
+	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+	if(pData == NULL)
+		return;
+
+	memcpy(pCxRomPeripheral + uSlot*256, pData, DISK2_FW_SIZE);
+
+	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
+	*(pCxRomPeripheral + (uSlot*256) + 0x4C) = 0xA9;
+	*(pCxRomPeripheral + (uSlot*256) + 0x4D) = 0x00;
+	*(pCxRomPeripheral + (uSlot*256) + 0x4E) = 0xEA;
+
+	//
+
+	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL, NULL);
+}
+
+//===========================================================================
+
+static BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	addr &= 0xFF;
+
+	switch (addr & 0xf)
+	{
+	case 0x0:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return DiskControlMotor(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return DiskControlMotor(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return DiskEnable(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return DiskEnable(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return DiskReadWrite(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return DiskSetLatchValue(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return DiskSetReadMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return DiskSetWriteMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
+}
+
+static BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+{
+	addr &= 0xFF;
+
+	switch (addr & 0xf)
+	{
+	case 0x0:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x1:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x2:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x3:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x4:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x5:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x6:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x7:	return DiskControlStepper(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x8:	return DiskControlMotor(pc, addr, bWrite, d, nCyclesLeft);
+	case 0x9:	return DiskControlMotor(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xA:	return DiskEnable(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xB:	return DiskEnable(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xC:	return DiskReadWrite(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return DiskSetLatchValue(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xE:	return DiskSetReadMode(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xF:	return DiskSetWriteMode(pc, addr, bWrite, d, nCyclesLeft);
+	}
+
+	return 0;
 }
 
 //===========================================================================

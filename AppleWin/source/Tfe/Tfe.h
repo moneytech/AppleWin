@@ -27,7 +27,7 @@
 #ifndef _TFE_H
 #define _TFE_H
 
-#include "types.h"
+#include "..\CommonVICE\types.h"
 #include <stdio.h>
 
 /* define this only if VICE should write each and every frame received
@@ -52,7 +52,6 @@ extern BYTE REGPARM1 tfe_read(WORD addr);
 extern void REGPARM2 tfe_store(WORD addr, BYTE byte);
 extern int tfe_read_snapshot_module(struct snapshot_s *s);
 extern int tfe_write_snapshot_module(struct snapshot_s *s);
-extern BYTE __stdcall TfeIo (WORD programcounter, BYTE address, BYTE write, BYTE value, ULONG nCycles);
 
 /*
  These functions let the UI enumerate the available interfaces.

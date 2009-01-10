@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,13 +28,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include <objbase.h>
+#include "MouseInterface.h"
 
-char VERSIONSTRING[] = "xx.yy.zz.ww";
+char VERSIONSTRING[16] = "xx.yy.zz.ww";
 
-TCHAR *g_pAppTitle = TITLE_APPLE_2_E;
+TCHAR *g_pAppTitle = TITLE_APPLE_2E_ENHANCED;
 
-bool      g_bApple2e           = true;
-bool      g_bApple2plus        = true;
+eApple2Type	g_Apple2Type	= A2TYPE_APPLE2EEHANCED;
 
 BOOL      behind            = 0;			// Redundant
 DWORD     cumulativecycles  = 0;			// Wraps after ~1hr 9mins
@@ -42,6 +43,11 @@ DWORD     cyclenum          = 0;			// Used by SpkrToggle() for non-wave sound
 DWORD     emulmsec          = 0;
 static DWORD emulmsec_frac  = 0;
 bool      g_bFullSpeed      = false;
+
+//Pravets 8A/C variables
+bool P8CAPS_ON = false;
+bool P8Shift = false;
+//=================================================
 
 // Win32
 HINSTANCE g_hInstance          = (HINSTANCE)0;
@@ -64,6 +70,20 @@ DWORD       g_dwCyclesThisFrame = 0;
 
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
+
+CSuperSerialCard	sg_SSC;
+CMouseInterface		sg_Mouse;
+
+#ifdef SUPPORT_CPM
+UINT		g_Slot4 = CT_Empty;
+#else
+UINT		g_Slot4 = CT_Mockingboard;		// CT_Mockingboard or CT_MouseInterface
+#endif
+
+eCPU		g_ActiveCPU = CPU_6502;
+
+HANDLE		g_hCustomRomF8 = INVALID_HANDLE_VALUE;	// Cmd-line specified custom ROM at $F800..$FFFF
+static bool	g_bCustomRomF8Failed = false;			// Set if custom ROM file failed
 
 //===========================================================================
 
@@ -94,8 +114,12 @@ void ContinueExecution()
 
 	//
 
+	bool bScrollLock_FullSpeed = g_uScrollLockToggle
+									? g_bScrollLock_FullSpeed
+									: (GetKeyState(VK_SCROLL) < 0);
+
 	g_bFullSpeed = ( (g_dwSpeed == SPEED_MAX) || 
-					 (GetKeyState(VK_SCROLL) < 0) ||
+					 bScrollLock_FullSpeed ||
 					 (DiskIsSpinning() && enhancedisk && !Spkr_IsActive() && !MB_IsActive()) );
 
 	if(g_bFullSpeed)
@@ -132,7 +156,7 @@ void ContinueExecution()
 	VideoUpdateVbl(g_dwCyclesThisFrame);
 
 	SpkrUpdate(cyclenum);
-	CommUpdate(cyclenum);
+	sg_SSC.CommUpdate(cyclenum);
 	PrintUpdate(cyclenum);
 
 	//
@@ -197,7 +221,7 @@ void ContinueExecution()
 				pageflipping--;
 		}
 
-		MB_EndOfFrame();
+		MB_EndOfVideoFrame();
 	}
 
 	//
@@ -288,51 +312,48 @@ void EnterMessageLoop ()
 {
 	MSG message;
 
-	PeekMessage( &message, NULL, 0, 0, PM_NOREMOVE);
+	PeekMessage(&message, NULL, 0, 0, PM_NOREMOVE);
 
 	while (message.message!=WM_QUIT)
 	{
-// 	while (GetMessage(&message,0,0,0))
-	if (PeekMessage( &message, NULL, 0, 0, PM_REMOVE))
-	{
-		TranslateMessage(&message);
-		DispatchMessage(&message);
-
-		while ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))
+		if (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 		{
-			if (PeekMessage(&message,0,0,0,PM_REMOVE))
+			TranslateMessage(&message);
+			DispatchMessage(&message);
+
+			while ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))
 			{
-				if (message.message == WM_QUIT)
-					return;
-				TranslateMessage(&message);
-				DispatchMessage(&message);
+				if (PeekMessage(&message,0,0,0,PM_REMOVE))
+				{
+					if (message.message == WM_QUIT)
+						return;
+
+					TranslateMessage(&message);
+					DispatchMessage(&message);
+				}
+				else if (g_nAppMode == MODE_STEPPING)
+				{
+					DebugContinueStepping();
+				}
+				else
+				{
+					ContinueExecution();
+					if (g_nAppMode != MODE_DEBUG)
+					{
+						if (g_bFullSpeed)
+							ContinueExecution();
+					}
+				}
 			}
-			else if (g_nAppMode == MODE_STEPPING)
-				DebugContinueStepping();
-			else
-			{
-				ContinueExecution();
-				if (g_nAppMode != MODE_DEBUG)
-					if (g_bFullSpeed)
-						ContinueExecution();
-			}
+		}
+		else
+		{
+			if (g_nAppMode == MODE_DEBUG)
+				DebuggerUpdate();
+			else if (g_nAppMode == MODE_LOGO)
+				Sleep(100);		// Stop process hogging CPU
 		}
 	}
-	else
-	{
-		if (g_nAppMode == MODE_DEBUG)
-		{
-			DebuggerUpdate();
-		}
-		else if (g_nAppMode == MODE_LOGO)
-		{
-			Sleep(100);		// Stop process hogging CPU
-		}
-	}
-}
-
-//	while (PeekMessage(&message,0,0,0,PM_REMOVE))
-//		; // intentional null statement
 }
 
 //===========================================================================
@@ -349,20 +370,70 @@ void GetProgramDirectory () {
 }
 
 //===========================================================================
-void LoadConfiguration () {
-  DWORD comptype;
-  LOAD(TEXT("Computer Emulation"),&comptype);
-  g_bApple2e = (comptype == 2);
-  g_bApple2plus = (comptype == 1);
-  LOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
-  LOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
-  LOAD(TEXT("Sound Emulation")   ,&soundtype);
-  LOAD(TEXT("Serial Port")       ,&serialport);
-  LOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
-  LOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
-  LOAD(TEXT("Video Emulation")   ,&videotype);
-  LOAD(TEXT("Monochrome Color")  ,&monochrome);
-  LOAD(TEXT("Uthernet Active")  ,(DWORD *)&tfe_enabled);
+//Reads configuration from the registry entries
+void LoadConfiguration ()
+{
+  DWORD dwComputerType;
+
+  if (REGLOAD(TEXT(REGVALUE_APPLE2_TYPE),&dwComputerType))
+  {
+	REGLOAD(TEXT(REGVALUE_CLONETYPE),&g_uCloneType);
+	if ((dwComputerType >= A2TYPE_MAX) || (dwComputerType >= A2TYPE_UNDEFINED && dwComputerType < A2TYPE_CLONE))
+		dwComputerType = A2TYPE_APPLE2EEHANCED;
+
+	if (dwComputerType == A2TYPE_CLONE)
+	  {
+		switch (g_uCloneType)
+		{
+		case 0:	g_Apple2Type = A2TYPE_PRAVETS82; break;
+		case 1:	g_Apple2Type = A2TYPE_PRAVETS8M; break;
+		case 2:	g_Apple2Type = A2TYPE_PRAVETS8A; break;
+		default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED; break;
+		}
+	  }	
+	else
+	{
+		g_Apple2Type = (eApple2Type) dwComputerType;
+	}
+  }
+  else	// Support older AppleWin registry entries
+  {
+	  REGLOAD(TEXT("Computer Emulation"),&dwComputerType);
+	  switch (dwComputerType)
+	  {
+      // NB. No A2TYPE_APPLE2E (this is correct)
+	  case 0:	g_Apple2Type = A2TYPE_APPLE2;
+	  case 1:	g_Apple2Type = A2TYPE_APPLE2PLUS;
+	  case 2:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
+	  default:	g_Apple2Type = A2TYPE_APPLE2EEHANCED;
+	  }
+  }
+
+	switch (g_Apple2Type) //Sets the character set for the Apple model/clone
+	{
+	case A2TYPE_APPLE2:			g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2PLUS:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2E:		g_nCharsetType  = 0; break; 
+	case A2TYPE_APPLE2EEHANCED:	g_nCharsetType  = 0; break; 
+	case A2TYPE_PRAVETS82:	    g_nCharsetType  = 1; break; 
+	case A2TYPE_PRAVETS8A:	    g_nCharsetType  = 2; break; 
+	case A2TYPE_PRAVETS8M:	    g_nCharsetType  = 3; break; //This charset has a very small difference with the PRAVETS82 one an probably has some misplaced characters. Still the Pravets82 charset is used, because settiong charset to 3 results in some problems.
+	}
+
+
+  REGLOAD(TEXT("Joystick 0 Emulation"),&joytype[0]);
+  REGLOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
+  REGLOAD(TEXT("Sound Emulation")     ,&soundtype);
+
+  DWORD dwSerialPort;
+  if (REGLOAD(TEXT("Serial Port"),&dwSerialPort))
+	sg_SSC.SetSerialPort(dwSerialPort);
+
+  REGLOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
+  REGLOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
+  REGLOAD(TEXT("Video Emulation")   ,&videotype);
+  REGLOAD(TEXT("Monochrome Color")  ,&monochrome);
+  REGLOAD(TEXT("Uthernet Active")   ,(DWORD *)&tfe_enabled);
 
   SetCurrentCLK6502();
 
@@ -370,47 +441,104 @@ void LoadConfiguration () {
 
   DWORD dwTmp;
 
-  if(LOAD(TEXT(REGVALUE_SPKR_VOLUME), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_THE_FREEZES_F8_ROM), &dwTmp))
+	  g_uTheFreezesF8Rom = dwTmp;
+
+  if(REGLOAD(TEXT(REGVALUE_SPKR_VOLUME), &dwTmp))
       SpkrSetVolume(dwTmp, PSP_GetVolumeMax());
 
-  if(LOAD(TEXT(REGVALUE_MB_VOLUME), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_MB_VOLUME), &dwTmp))
       MB_SetVolume(dwTmp, PSP_GetVolumeMax());
 
-  if(LOAD(TEXT(REGVALUE_SOUNDCARD_TYPE), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_SOUNDCARD_TYPE), &dwTmp))
 	  MB_SetSoundcardType((eSOUNDCARDTYPE)dwTmp);
 
-  if(LOAD(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), &dwTmp))
 	  g_bSaveStateOnExit = dwTmp ? true : false;
 
-  if(LOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
+
+  if(REGLOAD(TEXT(REGVALUE_DUMP_TO_PRINTER), &dwTmp))
+	g_bDumpToPrinter = dwTmp ? true : false;
+
+  if(REGLOAD(TEXT(REGVALUE_CONVERT_ENCODING), &dwTmp))
+    g_bConvertEncoding = dwTmp ? true : false;
+
+  if(REGLOAD(TEXT(REGVALUE_FILTER_UNPRINTABLE), &dwTmp))
+    g_bFilterUnprintable = dwTmp ? true : false;
+
+  if(REGLOAD(TEXT(REGVALUE_PRINTER_APPEND), &dwTmp))
+    g_bPrinterAppend = dwTmp ? true : false;
+
+
+  if(REGLOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
 	  HD_SetEnabled(dwTmp ? true : false);
 
   char szHDFilename[MAX_PATH] = {0};
-  if(RegLoadString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
+  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
 	  HD_InsertDisk2(0, szHDFilename);
-  if(RegLoadString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE2), 1, szHDFilename, sizeof(szHDFilename)))
+  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE2), 1, szHDFilename, sizeof(szHDFilename)))
 	  HD_InsertDisk2(1, szHDFilename);
 
-  if(LOAD(TEXT(REGVALUE_PDL_XTRIM), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_PDL_XTRIM), &dwTmp))
       JoySetTrim((short)dwTmp, true);
-  if(LOAD(TEXT(REGVALUE_PDL_YTRIM), &dwTmp))
+  if(REGLOAD(TEXT(REGVALUE_PDL_YTRIM), &dwTmp))
       JoySetTrim((short)dwTmp, false);
+
+  if(REGLOAD(TEXT(REGVALUE_SCROLLLOCK_TOGGLE), &dwTmp))
+	  g_uScrollLockToggle = dwTmp;
+
+  if(REGLOAD(TEXT(REGVALUE_MOUSE_IN_SLOT4), &dwTmp))
+	  g_uMouseInSlot4 = dwTmp;
+  if(REGLOAD(TEXT(REGVALUE_MOUSE_CROSSHAIR), &dwTmp))
+	  g_uMouseShowCrosshair = dwTmp;
+  if(REGLOAD(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW), &dwTmp))
+	  g_uMouseRestrictToWindow = dwTmp;
+
+#ifdef SUPPORT_CPM
+  if(REGLOAD(TEXT(REGVALUE_Z80_IN_SLOT5), &dwTmp))
+	  g_uZ80InSlot5 = dwTmp;
+
+  if (g_uZ80InSlot5)
+	  MB_SetSoundcardType(SC_NONE);
+
+  g_Slot4 = g_uMouseInSlot4	? CT_MouseInterface
+							: g_uZ80InSlot5	? CT_Empty
+											: CT_Mockingboard;
+#else
+  g_Slot4 = g_uMouseInSlot4 ? CT_MouseInterface : CT_Mockingboard;
+#endif
 
   //
 
-  char szFilename[MAX_PATH] = {0};
+	char szFilename[MAX_PATH] = {0};
+	RegLoadString(TEXT(REG_CONFIG),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
+	Snapshot_SetFilename(szFilename);	// If not in Registry than default will be used
 
-  RegLoadString(TEXT("Configuration"),TEXT(REGVALUE_SAVESTATE_FILENAME),1,szFilename,sizeof(szFilename));
-  Snapshot_SetFilename(szFilename);	// If not in Registry than default will be used
+	szFilename[0] = 0;
+	RegLoadString(TEXT(REG_CONFIG),TEXT(REGVALUE_PRINTER_FILENAME),1,szFilename,sizeof(szFilename));
+	Printer_SetFilename(szFilename);	// If not in Registry than default will be used
 
-  // Current/Starting Dir is the "root" of where the user keeps his disk images
-  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_sCurrentDir,MAX_PATH);
-  SetCurrentDirectory(g_sCurrentDir);
-  
-  char szUthernetInt[MAX_PATH] = {0};
-  RegLoadString(TEXT("Configuration"),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
-  update_tfe_interface(szUthernetInt,NULL);
+	// Current/Starting Dir is the "root" of where the user keeps his disk images
+	RegLoadString(TEXT(REG_PREFS),TEXT(REGVALUE_PREF_START_DIR),1,g_sCurrentDir,MAX_PATH);
+	SetCurrentImageDir();
 
+	Disk_LoadLastDiskImage(0);
+	Disk_LoadLastDiskImage(1);
+
+	dwTmp = 10;
+	REGLOAD(TEXT(REGVALUE_PRINTER_IDLE_LIMIT), &dwTmp);
+	Printer_SetIdleLimit(dwTmp);
+
+	char szUthernetInt[MAX_PATH] = {0};
+	RegLoadString(TEXT(REG_CONFIG),TEXT("Uthernet Interface"),1,szUthernetInt,MAX_PATH);  
+	update_tfe_interface(szUthernetInt,NULL);
+}
+
+//===========================================================================
+
+void SetCurrentImageDir()
+{
+	SetCurrentDirectory(g_sCurrentDir);
 }
 
 //===========================================================================
@@ -461,6 +589,39 @@ void RegisterExtensions ()
 }
 
 //===========================================================================
+void AppleWin_RegisterHotKeys()
+{
+	BOOL bStatus = true;
+	
+	bStatus &= RegisterHotKey(      
+		g_hFrameWindow	, // HWND hWnd
+		VK_SNAPSHOT_560	, // int id (user/custom id)
+		0					, // UINT fsModifiers
+		VK_SNAPSHOT		  // UINT vk = PrintScreen
+	);
+
+	bStatus &= RegisterHotKey(      
+		g_hFrameWindow	, // HWND hWnd
+		VK_SNAPSHOT_280, // int id (user/custom id)
+		MOD_SHIFT		, // UINT fsModifiers
+		VK_SNAPSHOT		  // UINT vk = PrintScreen
+	);
+
+	if (! bStatus)
+	{
+		MessageBox( g_hFrameWindow, "Unable to capture PrintScreen key", "Warning", MB_OK );
+	}
+}
+
+//===========================================================================
+
+LPSTR GetCurrArg(LPSTR lpCmdLine)
+{
+	if(*lpCmdLine == '\"')
+		lpCmdLine++;
+
+	return lpCmdLine;
+}
 
 LPSTR GetNextArg(LPSTR lpCmdLine)
 {
@@ -520,19 +681,15 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 		if(strcmp(lpCmdLine, "-d1") == 0)
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			szImageName_drive1 = lpCmdLine;
-			if(*szImageName_drive1 == '\"')
-				szImageName_drive1++;
 		}
 		else if(strcmp(lpCmdLine, "-d2") == 0)
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			szImageName_drive2 = lpCmdLine;
-			if(*szImageName_drive2 == '\"')
-				szImageName_drive2++;
 		}
 		else if(strcmp(lpCmdLine, "-f") == 0)
 		{
@@ -553,8 +710,8 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 #ifdef RAMWORKS
 		else if(strcmp(lpCmdLine, "-r") == 0)		// RamWorks size [1..127]
 		{
-			lpCmdLine = lpNextArg;
-			lpNextArg = GetNextArg(lpCmdLine);
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
 			g_uMaxExPages = atoi(lpCmdLine);
 			if (g_uMaxExPages > 127)
 				g_uMaxExPages = 128;
@@ -562,6 +719,18 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 				g_uMaxExPages = 1;
 		}
 #endif
+		else if(strcmp(lpCmdLine, "-f8rom") == 0)		// Use custom 2K ROM at [$F800..$FFFF]
+		{
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
+			g_hCustomRomF8 = CreateFile(lpCmdLine, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+			if ((g_hCustomRomF8 == INVALID_HANDLE_VALUE) || (GetFileSize(g_hCustomRomF8, NULL) != 0x800))
+				g_bCustomRomF8Failed = true;
+		}
+		else if(strcmp(lpCmdLine, "-printscreen") == 0)		// turn on dispay of the last filename print screen was saved to
+		{
+			g_bDisplayPrintScreenFileName = true;
+		}
 
 		lpCmdLine = lpNextArg;
 	}
@@ -607,7 +776,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
             unsigned long fix       = pFixedFileInfo->dwFileVersionLS >> 16;
 			unsigned long fix_minor = pFixedFileInfo->dwFileVersionLS & 0xffff;
 
-            sprintf(VERSIONSTRING, "%d.%d.%d.%d", major, minor, fix, fix_minor);
+            sprintf(VERSIONSTRING, "%d.%d.%d.%d", major, minor, fix, fix_minor); // potential buffer overflow
         }
     }
 
@@ -618,13 +787,14 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 	//-----
 
-	// Initialize COM
-	CoInitialize( NULL );
-	SysClk_InitTimer();
-//	DSInit();	// Done when g_hFrameWindow is created (WM_CREATE)
+	// Initialize COM - so we can use CoCreateInstance
+	// . NB. DSInit() & DIMouse::DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
+	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+	bool bSysClkOK = SysClk_InitTimer();
 
 	// DO ONE-TIME INITIALIZATION
 	g_hInstance = passinstance;
+	MemPreInitialize();		// Call before any of the slot devices are initialized
 	GdiSetBatchLimit(512);
 	GetProgramDirectory();
 	RegisterExtensions();
@@ -652,14 +822,32 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	{
 		// DO INITIALIZATION THAT MUST BE REPEATED FOR A RESTART
 		restart = 0;
-		g_nAppMode    = MODE_LOGO;
+		g_nAppMode = MODE_LOGO;
 		LoadConfiguration();
 		DebugInitialize();
 		JoyInitialize();
 		MemInitialize();
 		VideoInitialize();
 		FrameCreateWindow();
-	   tfe_init();
+		// PrintScrn support
+		AppleWin_RegisterHotKeys(); // needs valid g_hFrameWindow
+
+		// Need to test if it's safe to call ResetMachineState(). In the meantime, just call DiskReset():
+		DiskReset();	// Switch from a booting A][+ to a non-autostart A][, so need to turn off floppy motor
+
+		if (!bSysClkOK)
+		{
+			MessageBox(g_hFrameWindow, "DirectX failed to create SystemClock instance", TEXT("AppleWin Error"), MB_OK);
+			PostMessage(g_hFrameWindow, WM_DESTROY, 0, 0);	// Close everything down
+		}
+
+		if (g_bCustomRomF8Failed)
+		{
+			MessageBox(g_hFrameWindow, "Failed to load custom F8 rom (not found or not exactly 2KB)", TEXT("AppleWin Error"), MB_OK);
+			PostMessage(g_hFrameWindow, WM_DESTROY, 0, 0);	// Close everything down
+		}
+
+		tfe_init();
         Snapshot_Startup();		// Do this after everything has been init'ed
     
 		if(bSetFullScreen)
@@ -678,7 +866,9 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 		// ENTER THE MAIN MESSAGE LOOP
 		EnterMessageLoop();
+
 		MB_Reset();
+		sg_Mouse.Uninitialize();	// Maybe restarting due to switching slot-4 card from mouse to MB
 	}
 	while (restart);
 	
@@ -689,13 +879,16 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	
 	tfe_shutdown();
 	
-	if(g_fh)
+	if	(g_fh)
 	{
 		fprintf(g_fh,"*** Logging ended\n\n");
 		fclose(g_fh);
 	}
 
 	RiffFinishWriteFile();
+
+	if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
+		CloseHandle(g_hCustomRomF8);
 
 	return 0;
 }

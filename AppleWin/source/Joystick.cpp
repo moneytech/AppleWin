@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 
 #define  BUTTONTIME       5000
 
@@ -52,10 +53,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #define  MODE_CENTERING   2
 #define  MODE_SMOOTH      3
 
-typedef struct _joyinforec {
+typedef struct
+{
     int device;
     int mode;
-} joyinforec, *joyinfoptr;
+} joyinforec;
 
 static const joyinforec joyinfo[5] = {{DEVICE_NONE,MODE_NONE},
                            {DEVICE_JOYSTICK,MODE_STANDARD},
@@ -110,7 +112,7 @@ static short g_nPdlTrimX = 0;
 static short g_nPdlTrimY = 0;
 
 //===========================================================================
-void CheckJoystick0 ()
+void CheckJoystick0()
 {
   static DWORD lastcheck = 0;
   DWORD currtime = GetTickCount();
@@ -140,7 +142,7 @@ void CheckJoystick0 ()
   }
 }
 
-void CheckJoystick1 ()
+void CheckJoystick1()
 {
   static DWORD lastcheck = 0;
   DWORD currtime = GetTickCount();
@@ -176,7 +178,7 @@ void CheckJoystick1 ()
 //
 
 //===========================================================================
-void JoyInitialize ()
+void JoyInitialize()
 {
   // Emulated joystick #0 can only use JOYSTICKID1 (if no joystick, then use mouse)
   // Emulated joystick #1 can only use JOYSTICKID2 (if no joystick, then disable)
@@ -248,7 +250,7 @@ void JoyInitialize ()
 
 //===========================================================================
 
-BOOL JoyProcessKey (int virtkey, BOOL extended, BOOL down, BOOL autorep)
+BOOL JoyProcessKey(int virtkey, BOOL extended, BOOL down, BOOL autorep)
 {
   if( (joyinfo[joytype[0]].device != DEVICE_KEYBOARD) &&
 	  (joyinfo[joytype[1]].device != DEVICE_KEYBOARD) &&
@@ -365,8 +367,10 @@ BOOL JoyProcessKey (int virtkey, BOOL extended, BOOL down, BOOL autorep)
 
 //===========================================================================
 
-BYTE __stdcall JoyReadButton (WORD, BYTE address, BYTE, BYTE, ULONG)
+BYTE __stdcall JoyReadButton(WORD, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
 {
+  address &= 0xFF;
+
   if(joyinfo[joytype[0]].device == DEVICE_JOYSTICK)
     CheckJoystick0();
   if(joyinfo[joytype[1]].device == DEVICE_JOYSTICK)
@@ -395,7 +399,7 @@ BYTE __stdcall JoyReadButton (WORD, BYTE address, BYTE, BYTE, ULONG)
       break;
 
   }
-  return MemReadFloatingBus(pressed);
+  return MemReadFloatingBus(pressed, nCyclesLeft);
 }
 
 //===========================================================================
@@ -417,7 +421,7 @@ BYTE __stdcall JoyReadButton (WORD, BYTE address, BYTE, BYTE, ULONG)
 
 static const double PDL_CNTR_INTERVAL = 2816.0 / 255.0;	// 11.04 (From KEGS)
 
-BYTE __stdcall JoyReadPosition (WORD programcounter, BYTE address, BYTE, BYTE, ULONG nCyclesLeft)
+BYTE __stdcall JoyReadPosition(WORD programcounter, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
 {
 	int nJoyNum = (address & 2) ? 1 : 0;	// $C064..$C067
 
@@ -431,11 +435,11 @@ BYTE __stdcall JoyReadPosition (WORD programcounter, BYTE address, BYTE, BYTE, U
 
 	BOOL nPdlCntrActive = g_nCumulativeCycles <= (g_nJoyCntrResetCycle + (unsigned __int64) ((double)nPdlPos * PDL_CNTR_INTERVAL));
 
-	return MemReadFloatingBus(nPdlCntrActive);
+	return MemReadFloatingBus(nPdlCntrActive, nCyclesLeft);
 }
 
 //===========================================================================
-void JoyReset ()
+void JoyReset()
 {
   int loop = 0;
   while (loop < JK_MAX)
@@ -443,7 +447,7 @@ void JoyReset ()
 }
 
 //===========================================================================
-BYTE __stdcall JoyResetPosition (WORD, BYTE, BYTE, BYTE, ULONG nCyclesLeft)
+BYTE __stdcall JoyResetPosition(WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
 {
 	CpuCalcCycles(nCyclesLeft);
 	g_nJoyCntrResetCycle = g_nCumulativeCycles;
@@ -453,13 +457,13 @@ BYTE __stdcall JoyResetPosition (WORD, BYTE, BYTE, BYTE, ULONG nCyclesLeft)
 	if(joyinfo[joytype[1]].device == DEVICE_JOYSTICK)
 		CheckJoystick1();
 
-	return MemReadFloatingBus();
+	return MemReadFloatingBus(nCyclesLeft);
 }
 
 //===========================================================================
 
 // Called when mouse is being used as a joystick && mouse button changes
-void JoySetButton (int number, BOOL down)
+void JoySetButton(eBUTTON number, eBUTTONSTATE down)
 {
   if (number > 1)	// Sanity check on mouse button #
     return;
@@ -471,7 +475,7 @@ void JoySetButton (int number, BOOL down)
   // If it is 2nd joystick that is being emulated with mouse, then re-map button #
   if(joyinfo[joytype[1]].device == DEVICE_MOUSE)
   {
-	number = 1;	// 2nd joystick controls Apple button #1
+	number = BUTTON1;	// 2nd joystick controls Apple button #1
   }
 
   setbutton[number] = down;
@@ -481,7 +485,7 @@ void JoySetButton (int number, BOOL down)
 }
 
 //===========================================================================
-BOOL JoySetEmulationType (HWND window, DWORD newtype, int nJoystickNumber)
+BOOL JoySetEmulationType(HWND window, DWORD newtype, int nJoystickNumber)
 {
   if(joytype[nJoystickNumber] == newtype)
 	  return 1;	// Already set to this type. Return OK.
@@ -505,6 +509,15 @@ BOOL JoySetEmulationType (HWND window, DWORD newtype, int nJoystickNumber)
   else if ((joyinfo[newtype].device == DEVICE_MOUSE) &&
            (joyinfo[joytype[nJoystickNumber]].device != DEVICE_MOUSE))
   {
+	if (sg_Mouse.IsActive())
+	{
+	  MessageBox(window,
+				 TEXT("Mouse interface card is enabled - unable to use mouse for joystick emulation."),
+				 TEXT("Configuration"),
+				 MB_ICONEXCLAMATION | MB_SETFOREGROUND);
+	  return 0;
+	}
+
     MessageBox(window,
                TEXT("To begin emulating a joystick with your mouse, move ")
                TEXT("the mouse cursor over the emulated screen of a running ")
@@ -527,7 +540,7 @@ BOOL JoySetEmulationType (HWND window, DWORD newtype, int nJoystickNumber)
 //===========================================================================
 
 // Called when mouse is being used as a joystick && mouse position changes
-void JoySetPosition (int xvalue, int xrange, int yvalue, int yrange)
+void JoySetPosition(int xvalue, int xrange, int yvalue, int yrange)
 {
   int nJoyNum = (joyinfo[joytype[0]].device == DEVICE_MOUSE) ? 0 : 1;
   xpos[nJoyNum] = (xvalue*255)/xrange;
@@ -535,7 +548,7 @@ void JoySetPosition (int xvalue, int xrange, int yvalue, int yrange)
 }
  
 //===========================================================================
-void JoyUpdatePosition ()
+void JoyUpdatePosition()
 {
 	if (buttonlatch[0]) --buttonlatch[0];
 	if (buttonlatch[1]) --buttonlatch[1];
@@ -543,9 +556,20 @@ void JoyUpdatePosition ()
 }
 
 //===========================================================================
-BOOL JoyUsingMouse ()
+BOOL JoyUsingMouse()
 {
   return (joyinfo[joytype[0]].device == DEVICE_MOUSE) || (joyinfo[joytype[1]].device == DEVICE_MOUSE);
+}
+
+//===========================================================================
+
+void JoyDisableUsingMouse()
+{
+	if (joyinfo[joytype[0]].device == DEVICE_MOUSE)
+		joytype[0] = DEVICE_NONE;
+
+	if (joyinfo[joytype[1]].device == DEVICE_MOUSE)
+		joytype[1] = DEVICE_NONE;
 }
 
 //===========================================================================

@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // . The exception is, what he calls "SKB" and "SKW" I call "NOP",
 // . for consistency's sake. Several other naming conventions exist.
 // . Of course, only the 6502 has illegal opcodes, the 65C02 doesn't.
-// . Thus they're not emulated in Enhanced //e g_nAppMode. Games relying on them
+// . Thus they're not emulated in Enhanced //e mode. Games relying on them
 // . don't run on a real Enhanced //e either. The old mixture of 65C02
 // . emulation and skipping the right number of bytes for illegal 6502
 // . opcodes, while working surprisingly well in practice, was IMHO
@@ -71,7 +71,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 // NB2. bSlowerOnPagecross can't be used for r/w detection, as these
 // .    opcodes don't init this flag:
-// . $EC CPX ABS (since there's no addressing g_nAppMode of CPY which has variable cycle number)
+// . $EC CPX ABS (since there's no addressing mode of CPY which has variable cycle number)
 // . $CC CPY ABS (same)
 //
 // 65C02 info:
@@ -86,6 +86,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma	 hdrstop
+#include "MouseInterface.h"
+
+#ifdef SUPPORT_CPM
+#include "z80emu.h"
+#include "Z80VICE\z80.h"
+#include "Z80VICE\z80mem.h"
+#endif
 
 #define	 AF_SIGN       0x80
 #define	 AF_OVERFLOW   0x40
@@ -112,7 +119,11 @@ unsigned __int64 g_nCumulativeCycles = 0;
 static ULONG g_nCyclesSubmitted;	// Number of cycles submitted to CpuExecute()
 static ULONG g_nCyclesExecuted;
 
-static signed long g_uInternalExecutedCycles;
+//static signed long g_uInternalExecutedCycles;
+// TODO: Use IRQ_CHECK_TIMEOUT=128 when running at full-speed else with IRQ_CHECK_TIMEOUT=1
+// - What about when running benchmark?
+static const int IRQ_CHECK_TIMEOUT = 128;
+static signed int g_nIrqCheckTimeout = IRQ_CHECK_TIMEOUT;
 
 //
 
@@ -143,19 +154,15 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 			      | (flagz ? AF_ZERO     : 0)		    \
 			      | AF_RESERVED | AF_BREAK;
 // CYC(a): This can be optimised, as only certain opcodes will affect uExtraCycles
-#define CYC(a)	 uExecutedCycles += (a)+uExtraCycles; MB_UpdateCycles((a)+uExtraCycles);
+#define CYC(a)	 uExecutedCycles += (a)+uExtraCycles; g_nIrqCheckTimeout -= (a)+uExtraCycles;
 #define POP	 (*(mem+((regs.sp >= 0x1FF) ? (regs.sp = 0x100) : ++regs.sp)))
 #define PUSH(a)	 *(mem+regs.sp--) = (a);				    \
 		 if (regs.sp < 0x100)					    \
 		   regs.sp = 0x1FF;
 #define READ	 (							    \
-		    ((addr & 0xFF00) == 0xC000)				    \
-		    ? ioread[addr & 0xFF](regs.pc,(BYTE)addr,0,0,uExecutedCycles) \
-		    : (							    \
-			(((addr & 0xFF00) == 0xC400) || ((addr & 0xFF00) == 0xC500)) \
-			? CxReadFunc(regs.pc, addr, 0, 0, uExecutedCycles) \
+		    ((addr & 0xF000) == 0xC000)				    \
+		    ? IORead[(addr>>4) & 0xFF](regs.pc,addr,0,0,uExecutedCycles) \
 			: *(mem+addr)					    \
-		      )							    \
 		 )
 #define SETNZ(a) {							    \
 		   flagn = ((a) & 0x80);				    \
@@ -164,13 +171,11 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 #define SETZ(a)	 flagz = !((a) & 0xFF);
 #define WRITE(a) {							    \
 		   memdirty[addr >> 8] = 0xFF;				    \
-		   LPBYTE page = memwrite[0][addr >> 8];		    \
+		   LPBYTE page = memwrite[addr >> 8];		    \
 		   if (page)						    \
 		     *(page+(addr & 0xFF)) = (BYTE)(a);			    \
-		   else if ((addr & 0xFF00) == 0xC000)			    \
-		     iowrite[addr & 0xFF](regs.pc,(BYTE)addr,1,(BYTE)(a),uExecutedCycles); \
-		   else if(((addr & 0xFF00) == 0xC400) || ((addr & 0xFF00) == 0xC500)) \
-		     CxWriteFunc(regs.pc, addr, 1, (BYTE)(a), uExecutedCycles); \
+		   else if ((addr & 0xF000) == 0xC000)			    \
+		     IOWrite[(addr>>4) & 0xFF](regs.pc,addr,1,(BYTE)(a),uExecutedCycles); \
 		 }
 
 //
@@ -233,6 +238,10 @@ static volatile BOOL g_bNmiFlank = FALSE; // Positive going flank on NMI line
 		 else                                                \
 		     addr = *(LPWORD)(mem+base);
 #define REL	 addr = (signed char)*(mem+regs.pc++);
+
+// Optimiation note:
+// . Opcodes that generate zero-page addresses can't be accessing $C000..$CFFF
+//   so they could be paired with special READZP/WRITEZP macros (instead of READ/WRITE)
 #define ZPG	 addr = *(mem+regs.pc++);
 #define ZPGX	 addr = ((*(mem+regs.pc++))+regs.x) & 0xFF;
 #define ZPGY	 addr = ((*(mem+regs.pc++))+regs.y) & 0xFF;
@@ -789,7 +798,7 @@ UINT g_nMean = 0;
 UINT g_nMin = 0xFFFFFFFF;
 UINT g_nMax = 0;
 
-static inline void DoIrqProfiling(DWORD uCycles)
+static __forceinline void DoIrqProfiling(DWORD uCycles)
 {
 #ifdef _DEBUG
 	if(regs.ps & AF_INTERRUPT)
@@ -820,8 +829,87 @@ static inline void DoIrqProfiling(DWORD uCycles)
 
 //===========================================================================
 
+BYTE CpuRead(USHORT addr, ULONG uExecutedCycles)
+{
+	return READ;
+}
+
+void CpuWrite(USHORT addr, BYTE a, ULONG uExecutedCycles)
+{
+	WRITE(a);
+}
+
+//===========================================================================
+
+static __forceinline int Fetch(BYTE& iOpcode, ULONG uExecutedCycles)
+{
+		//g_uInternalExecutedCycles = uExecutedCycles;
+
+//		iOpcode = *(mem+regs.pc);
+		iOpcode = ((regs.pc & 0xF000) == 0xC000)
+		    ? IORead[(regs.pc>>4) & 0xFF](regs.pc,regs.pc,0,0,uExecutedCycles)	// Fetch opcode from I/O memory, but params are still from mem[]
+			: *(mem+regs.pc);
+
+		if (CheckDebugBreak( iOpcode ))
+			return 0;
+
+		regs.pc++;
+		return 1;
+}
+
+//#define ENABLE_NMI_SUPPORT	// Not used - so don't enable
+static __forceinline void NMI(ULONG& uExecutedCycles, UINT& uExtraCycles, BOOL& flagc, BOOL& flagn, BOOL& flagv, BOOL& flagz)
+{
+#ifdef ENABLE_NMI_SUPPORT
+	if(g_bNmiFlank)
+	{
+		// NMI signals are only serviced once
+		g_bNmiFlank = FALSE;
+		g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
+		PUSH(regs.pc >> 8)
+		PUSH(regs.pc & 0xFF)
+		EF_TO_AF
+		PUSH(regs.ps & ~AF_BREAK)
+		regs.ps = regs.ps | AF_INTERRUPT & ~AF_DECIMAL;
+		regs.pc = * (WORD*) (mem+0xFFFA);
+		CYC(7)
+	}
+#endif
+}
+
+static __forceinline void IRQ(ULONG& uExecutedCycles, UINT& uExtraCycles, BOOL& flagc, BOOL& flagn, BOOL& flagv, BOOL& flagz)
+{
+	if(g_bmIRQ && !(regs.ps & AF_INTERRUPT))
+	{
+		// IRQ signals are deasserted when a specific r/w operation is done on device
+		g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
+		PUSH(regs.pc >> 8)
+		PUSH(regs.pc & 0xFF)
+		EF_TO_AF
+		PUSH(regs.ps & ~AF_BREAK)
+		regs.ps = regs.ps | AF_INTERRUPT & ~AF_DECIMAL;
+		regs.pc = * (WORD*) (mem+0xFFFE);
+		CYC(7)
+	}
+}
+
+static __forceinline void CheckInterruptSources(ULONG uExecutedCycles)
+{
+	if (g_nIrqCheckTimeout < 0)
+	{
+		MB_UpdateCycles(uExecutedCycles);
+		sg_Mouse.SetVBlank(VideoGetVbl(uExecutedCycles));
+		g_nIrqCheckTimeout = IRQ_CHECK_TIMEOUT;
+	}
+}
+
+//===========================================================================
+
 static DWORD Cpu65C02 (DWORD uTotalCycles)
 {
+	// Optimisation:
+	// . Copy the global /regs/ vars to stack-based local vars
+	//   (Oliver Schmidt says this gives a performance gain, see email - The real deal: "1.10.5")
 	WORD addr;
 	BOOL flagc; // must always be 0 or 1, no other values allowed
 	BOOL flagn; // must always be 0 or 0x80.
@@ -831,21 +919,26 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 	WORD temp2;
 	WORD val;
 	AF_TO_EF
-	DWORD uExecutedCycles = 0;
+	ULONG uExecutedCycles = 0;
 	BOOL bSlowerOnPagecross;		// Set if opcode writes to memory (eg. ASL, STA)
 	WORD base;
-	bool bBreakOnInvalid = false;  
+	bool bBreakOnInvalid = false;
 
 	do
 	{
-		g_uInternalExecutedCycles = uExecutedCycles;
-		USHORT uExtraCycles = 0;
+		UINT uExtraCycles = 0;
+		BYTE iOpcode;
 
-		BYTE iOpcode = *(mem+regs.pc);
-		if (CheckDebugBreak( iOpcode ))
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{
+			const UINT uZ80Cycles = z80_mainloop(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
+		}
+		else
+#endif
+		{
+		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
-
-		regs.pc++;
 
 		switch (iOpcode)
 		{
@@ -1106,33 +1199,11 @@ static DWORD Cpu65C02 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_CMOS CYC(6)  break;
 		case 0xFF:   INV NOP	     CYC(2)  break;
 		}
-
-		if(g_bNmiFlank)
-		{
-			// NMI signals are only serviced once
-			g_bNmiFlank = FALSE;
-			g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
-			PUSH(regs.pc >> 8)
-			PUSH(regs.pc & 0xFF)
-			EF_TO_AF
-			PUSH(regs.ps & ~AF_BREAK)
-			regs.ps = regs.ps | AF_INTERRUPT & ~AF_DECIMAL;
-			regs.pc = * (WORD*) (mem+0xFFFA);
-			CYC(7)
 		}
 
-		if(g_bmIRQ && !(regs.ps & AF_INTERRUPT))
-		{
-			// IRQ signals are deasserted when a specific r/w operation is done on device
-			g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
-			PUSH(regs.pc >> 8)
-			PUSH(regs.pc & 0xFF)
-			EF_TO_AF
-			PUSH(regs.ps & ~AF_BREAK)
-			regs.ps = regs.ps | AF_INTERRUPT & ~AF_DECIMAL;
-			regs.pc = * (WORD*) (mem+0xFFFE);
-			CYC(7)
-		}
+		CheckInterruptSources(uExecutedCycles);
+		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
+		IRQ(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
 
 		if (bBreakOnInvalid)
 			break;
@@ -1156,21 +1227,26 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 	WORD temp2;
 	WORD val;
 	AF_TO_EF
-	DWORD uExecutedCycles = 0;
+	ULONG uExecutedCycles = 0;
 	BOOL bSlowerOnPagecross;		// Set if opcode writes to memory (eg. ASL, STA)
 	WORD base;
 	bool bBreakOnInvalid = false;  
 
 	do
 	{
-		g_uInternalExecutedCycles = uExecutedCycles;
-		USHORT uExtraCycles = 0;
+		UINT uExtraCycles = 0;
+		BYTE iOpcode;
 
-		BYTE iOpcode = *(mem+regs.pc);
-		if (CheckDebugBreak( iOpcode ))
+#ifdef SUPPORT_CPM
+		if (g_ActiveCPU == CPU_Z80)
+		{
+			const UINT uZ80Cycles = z80_mainloop(uTotalCycles, uExecutedCycles); CYC(uZ80Cycles)
+		}
+		else
+#endif
+		{
+		if (!Fetch(iOpcode, uExecutedCycles))
 			break;
-
-		regs.pc++;
 
 		switch (iOpcode)
 		{	
@@ -1431,33 +1507,11 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 		case 0xFE:       ABSX INC_NMOS CYC(6)  break;
 		case 0xFF:   INV ABSX INS	     CYC(7)  break;
 		}
-
-		if(g_bNmiFlank && !regs.bJammed)
-		{
-			// NMI signals are only serviced once
-			g_bNmiFlank = FALSE;
-			g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
-			PUSH(regs.pc >> 8)
-			PUSH(regs.pc & 0xFF)
-			EF_TO_AF
-			PUSH(regs.ps & ~AF_BREAK)
-			regs.ps = regs.ps | AF_INTERRUPT;
-			regs.pc = * (WORD*) (mem+0xFFFA);
-			CYC(7)
 		}
 
-		if(g_bmIRQ && !(regs.ps & AF_INTERRUPT) && !regs.bJammed)
-		{
-			// IRQ signals are deasserted when a specific r/w operation is done on device
-			g_nCycleIrqStart = g_nCumulativeCycles + uExecutedCycles;
-			PUSH(regs.pc >> 8)
-			PUSH(regs.pc & 0xFF)
-			EF_TO_AF
-			PUSH(regs.ps & ~AF_BREAK)
-			regs.ps = regs.ps | AF_INTERRUPT;
-			regs.pc = * (WORD*) (mem+0xFFFE);
-			CYC(7)
-		}
+		CheckInterruptSources(uExecutedCycles);
+		NMI(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
+		IRQ(uExecutedCycles, uExtraCycles, flagc, flagn, flagv, flagz);
 
 		if (bBreakOnInvalid)
 			break;
@@ -1472,10 +1526,10 @@ static DWORD Cpu6502 (DWORD uTotalCycles)
 
 static DWORD InternalCpuExecute (DWORD uTotalCycles)
 {
-	if (g_bApple2e)
-		return Cpu65C02(uTotalCycles);
-	else // Apple ][
-		return Cpu6502(uTotalCycles);
+	if (IS_APPLE2 || (g_Apple2Type == A2TYPE_APPLE2E))
+		return Cpu6502(uTotalCycles);	// Apple ][, ][+, //e
+	else
+		return Cpu65C02(uTotalCycles);	// Enhanced Apple //e
 }
 
 //
@@ -1500,10 +1554,11 @@ void CpuDestroy ()
 //	g_nCyclesExecuted
 //	g_nCumulativeCycles
 //
-void CpuCalcCycles(ULONG nCyclesExecuted)
+void CpuCalcCycles(ULONG nExecutedCycles)
 {
 	// Calc # of cycles executed since this func was last called
-	ULONG nCycles = nCyclesExecuted - g_nCyclesExecuted;
+	ULONG nCycles = nExecutedCycles - g_nCyclesExecuted;
+	_ASSERT( (LONG)nCycles >= 0 );
 
 	g_nCyclesExecuted += nCycles;
 	g_nCumulativeCycles += nCycles;
@@ -1511,11 +1566,26 @@ void CpuCalcCycles(ULONG nCyclesExecuted)
 
 //===========================================================================
 
-ULONG CpuGetCyclesThisFrame()
+// Old method with g_uInternalExecutedCycles runs faster!
+//        Old     vs    New
+// - 68.0,69.0MHz vs  66.7, 67.2MHz  (with check for VBL IRQ every opcode)
+// - 89.6,88.9MHz vs  87.2, 87.9MHz  (without check for VBL IRQ)
+// -                  75.9, 78.5MHz  (with check for VBL IRQ every 128 cycles)
+// -                 137.9,135.6MHz  (with check for VBL IRQ & MB_Update every 128 cycles)
+
+#if 0	// TODO: Measure perf increase by using this new method
+ULONG CpuGetCyclesThisFrame(ULONG)	// Old func using g_uInternalExecutedCycles
 {
 	CpuCalcCycles(g_uInternalExecutedCycles);
 	return g_dwCyclesThisFrame + g_nCyclesExecuted;
 }
+#else
+ULONG CpuGetCyclesThisFrame(ULONG nExecutedCycles)
+{
+	CpuCalcCycles(nExecutedCycles);
+	return g_dwCyclesThisFrame + g_nCyclesExecuted;
+}
+#endif
 
 //===========================================================================
 
@@ -1526,10 +1596,18 @@ DWORD CpuExecute (DWORD uCycles)
 	g_nCyclesSubmitted = uCycles;
 	g_nCyclesExecuted =	0;
 
+	//
+
+	MB_StartOfCpuExecute();
+
 	if (uCycles	== 0)	// Do single step
 		uExecutedCycles	= InternalCpuExecute(0);
 	else				// Do multi-opcode emulation
 		uExecutedCycles	= InternalCpuExecute(uCycles);
+
+	MB_UpdateCycles(uExecutedCycles);	// Update 6522s (NB. Do this before updating g_nCumulativeCycles below)
+
+	//
 
 	UINT nRemainingCycles =	uExecutedCycles	- g_nCyclesExecuted;
 	g_nCumulativeCycles	+= nRemainingCycles;
@@ -1550,6 +1628,11 @@ void CpuInitialize ()
 	g_bCritSectionValid = true;
 	CpuIrqReset();
 	CpuNmiReset();
+
+#ifdef SUPPORT_CPM
+	z80mem_initialize();
+	z80_reset();
+#endif
 }
 
 //===========================================================================
@@ -1651,6 +1734,11 @@ void CpuReset()
 	regs.sp = 0x0100 | ((regs.sp - 3) & 0xFF);
 
 	regs.bJammed = 0;
+
+#ifdef SUPPORT_CPM
+	g_ActiveCPU = CPU_6502;
+	z80_reset();
+#endif
 }
 
 //===========================================================================

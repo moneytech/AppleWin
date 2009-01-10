@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,33 +28,40 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #pragma  hdrstop
+#include "MouseInterface.h"
 #include "..\resource\resource.h"
+#include <sys/stat.h>
 
-#define ENABLE_MENU 0
+//#define ENABLE_MENU 0
 
-#define  VIEWPORTCX  560
-#if ENABLE_MENU
-#define  VIEWPORTCY  400
-#else
-#define  VIEWPORTCY  384
-#endif
-#define  BUTTONX     (VIEWPORTCX+(VIEWPORTX<<1))
+// Magic numbers (used by FrameCreateWindow to calc width/height):
+#define MAGICX 5	// 3D border between Apple window & Emulator's RHS buttons
+#define MAGICY 5	// 3D border between Apple window & Title bar
+
+#define VIEWPORTCX FRAMEBUFFER_W
+#define VIEWPORTCY FRAMEBUFFER_H
+
+#define  BUTTONX     (VIEWPORTCX + VIEWPORTX*2)
 #define  BUTTONY     0
 #define  BUTTONCX    45
 #define  BUTTONCY    45
-#define  FSVIEWPORTX (640-BUTTONCX-5-VIEWPORTCX)
-#define  FSVIEWPORTY ((480-VIEWPORTCY)>>1)
+// NB. FSxxx = FullScreen xxx
+#define  FSVIEWPORTX (640-BUTTONCX-MAGICX-VIEWPORTCX)
+#define  FSVIEWPORTY ((480-VIEWPORTCY)/2)
 #define  FSBUTTONX   (640-BUTTONCX)
-#define  FSBUTTONY   (((480-VIEWPORTCY)>>1)-1)
+#define  FSBUTTONY   (((480-VIEWPORTCY)/2)-1)
 #define  BUTTONS     8
 
-
 static HBITMAP capsbitmap[2];
+//Pravets8 only
+static HBITMAP capsbitmapP8[2];
+static HBITMAP latbitmap[2];
+//static HBITMAP charsetbitmap [4]; //The idea was to add a charset indicator on the front panel, but it was given up. All charsetbitmap occurences must be REMOVED!
+//===========================
 static HBITMAP diskbitmap[ NUM_DISK_STATUS ];
 
 static HBITMAP buttonbitmap[BUTTONS];
 
-//static BOOL    active          = 0;
 static bool    g_bAppActive = false;
 static HBRUSH  btnfacebrush    = (HBRUSH)0;
 static HPEN    btnfacepen      = (HPEN)0;
@@ -71,15 +78,19 @@ static RECT    framerect       = {0,0,0,0};
 HWND    g_hFrameWindow     = (HWND)0;
 BOOL    fullscreen      = 0;
 static BOOL    helpquit        = 0;
-static BOOL    painting        = 0;
+static BOOL    g_bPaintingWindow        = 0;
 static HFONT   smallfont       = (HFONT)0;
 static HWND    tooltipwindow   = (HWND)0;
-static BOOL    usingcursor     = 0;
-static int     viewportx       = VIEWPORTX;
-static int     viewporty       = VIEWPORTY;
+static BOOL    g_bUsingCursor	= 0;		// 1=AppleWin is using (hiding) the mouse-cursor
+static int     viewportx       = VIEWPORTX;	// Default to Normal (non-FullScreen) mode
+static int     viewporty       = VIEWPORTY;	// Default to Normal (non-FullScreen) mode
+int g_nCharsetType = 0;
 
 static LPDIRECTDRAW        directdraw = (LPDIRECTDRAW)0;
 static LPDIRECTDRAWSURFACE surface    = (LPDIRECTDRAWSURFACE)0;
+
+static bool g_bShowingCursor = true;
+static bool g_bLastCursorInAppleViewport = false;
 
 void    DrawStatusArea (HDC passdc, BOOL drawflags);
 void    ProcessButtonClick (int button);
@@ -89,9 +100,67 @@ void    ResetMachineState ();
 void    SetFullScreenMode ();
 void    SetNormalMode ();
 void    SetUsingCursor (BOOL);
+static bool FileExists(string strFilename);
+
+bool	g_bScrollLock_FullSpeed = false;
+
+// Prototypes:
+static void DrawCrosshairs (int x, int y);
+static void FrameSetCursorPosByMousePos(int x, int y, int dx, int dy, bool bLeavingAppleScreen);
+static void DrawCrosshairsMouse();
+static void UpdateMouseInAppleViewport(int iOutOfBoundsX, int iOutOfBoundsY, int x=0, int y=0);
 
 //===========================================================================
-void CreateGdiObjects () {
+
+static void FrameShowCursor(BOOL bShow)
+{
+	int nCount;
+
+	if (bShow)
+	{
+		do
+		{
+			nCount = ShowCursor(bShow);
+		}
+		while(nCount < 0);
+		g_bShowingCursor = true;
+	}
+	else
+	{
+		do
+		{
+			nCount = ShowCursor(bShow);
+		}
+		while(nCount >= 0);
+		g_bShowingCursor = false;
+	}
+}
+
+// Called when:
+// . Ctrl-Left mouse button
+// . PAUSE pressed (when MODE_RUNNING)
+// . AppleWin's main window is deactivated
+static void RevealCursor()
+{
+	if (!sg_Mouse.IsActiveAndEnabled())
+		return;
+
+	sg_Mouse.SetEnabled(false);
+
+	FrameShowCursor(TRUE);
+
+	if (g_uMouseShowCrosshair)	// Erase crosshairs if they are being drawn
+		DrawCrosshairs(0,0);
+
+	if (g_uMouseRestrictToWindow)
+		SetUsingCursor(FALSE);
+
+	g_bLastCursorInAppleViewport = false;
+}
+
+//===========================================================================
+
+static void CreateGdiObjects () {
   ZeroMemory(buttonbitmap,BUTTONS*sizeof(HBITMAP));
 #define LOADBUTTONBITMAP(bitmapname)  LoadImage(g_hInstance,bitmapname,   \
                                                 IMAGE_BITMAP,0,0,      \
@@ -100,15 +169,37 @@ void CreateGdiObjects () {
                                                 LR_LOADTRANSPARENT);
   buttonbitmap[BTN_HELP   ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("HELP_BUTTON"));
   buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON"));
+switch (g_Apple2Type)
+			{
+			case A2TYPE_APPLE2:			buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
+			case A2TYPE_APPLE2PLUS:		buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
+			case A2TYPE_APPLE2E:		buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
+			case A2TYPE_APPLE2EEHANCED:	buttonbitmap[BTN_RUN    ] =(HBITMAP)LOADBUTTONBITMAP(TEXT("RUN_BUTTON")); break; 
+			case A2TYPE_PRAVETS82:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
+			case A2TYPE_PRAVETS8M:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
+			case A2TYPE_PRAVETS8A:		buttonbitmap[BTN_RUN    ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("RUNP_BUTTON")); break; 
+			}
+
   buttonbitmap[BTN_DRIVE1 ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DRIVE1_BUTTON"));
   buttonbitmap[BTN_DRIVE2 ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DRIVE2_BUTTON"));
   buttonbitmap[BTN_DRIVESWAP] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DRIVESWAP_BUTTON"));
   buttonbitmap[BTN_FULLSCR] = (HBITMAP)LOADBUTTONBITMAP(TEXT("FULLSCR_BUTTON"));
   buttonbitmap[BTN_DEBUG  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DEBUG_BUTTON"));
   buttonbitmap[BTN_SETUP  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("SETUP_BUTTON"));
+  buttonbitmap[BTN_P8CAPS ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CAPSON_BITMAP"));
   capsbitmap[0] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CAPSOFF_BITMAP"));
   capsbitmap[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CAPSON_BITMAP"));
-
+  //Pravets8 only
+  capsbitmapP8[0] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CAPSOFF_P8_BITMAP"));
+  capsbitmapP8[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CAPSON_P8_BITMAP"));
+  latbitmap[0] = (HBITMAP)LOADBUTTONBITMAP(TEXT("LATOFF_BITMAP"));
+  latbitmap[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("LATON_BITMAP"));
+  /*charsetbitmap[0] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_APPLE_BITMAP"));
+  charsetbitmap[1] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_82_BITMAP"));
+  charsetbitmap[2] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_8A_BITMAP"));
+  charsetbitmap[3] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_8M_BITMAP"));
+  */
+  //===========================
   diskbitmap[ DISK_STATUS_OFF  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKOFF_BITMAP"));
   diskbitmap[ DISK_STATUS_READ ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKREAD_BITMAP"));
   diskbitmap[ DISK_STATUS_WRITE] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKWRITE_BITMAP"));
@@ -125,7 +216,7 @@ void CreateGdiObjects () {
 }
 
 //===========================================================================
-void DeleteGdiObjects () {
+static void DeleteGdiObjects () {
   int loop;
   for (loop = 0; loop < BUTTONS; loop++)
     DeleteObject(buttonbitmap[loop]);
@@ -142,7 +233,7 @@ void DeleteGdiObjects () {
 
 // Draws an 3D box around the main apple screen
 //===========================================================================
-void Draw3dRect (HDC dc, int x1, int y1, int x2, int y2, BOOL out)
+static void Draw3dRect (HDC dc, int x1, int y1, int x2, int y2, BOOL out)
 {	
 	SelectObject(dc,GetStockObject(NULL_BRUSH));
 	SelectObject(dc,out ? btnshadowpen : btnhighlightpen);
@@ -158,7 +249,7 @@ void Draw3dRect (HDC dc, int x1, int y1, int x2, int y2, BOOL out)
 }
 
 //===========================================================================
-void DrawBitmapRect (HDC dc, int x, int y, LPRECT rect, HBITMAP bitmap) {
+static void DrawBitmapRect (HDC dc, int x, int y, LPRECT rect, HBITMAP bitmap) {
   HDC memdc = CreateCompatibleDC(dc);
   SelectObject(memdc,bitmap);
   BitBlt(dc,x,y,
@@ -172,7 +263,7 @@ void DrawBitmapRect (HDC dc, int x, int y, LPRECT rect, HBITMAP bitmap) {
 }
 
 //===========================================================================
-void DrawButton (HDC passdc, int number) {
+static void DrawButton (HDC passdc, int number) {
   FrameReleaseDC();
   HDC dc = (passdc ? passdc : GetDC(g_hFrameWindow));
   int x  = buttonx;
@@ -210,7 +301,7 @@ void DrawButton (HDC passdc, int number) {
 }
 
 //===========================================================================
-void DrawCrosshairs (int x, int y) {
+static void DrawCrosshairs (int x, int y) {
   static int lastx = 0;
   static int lasty = 0;
   FrameReleaseDC();
@@ -280,10 +371,10 @@ void DrawCrosshairs (int x, int y) {
 }
 
 //===========================================================================
-void DrawFrameWindow () {
+static void DrawFrameWindow () {
   FrameReleaseDC();
   PAINTSTRUCT ps;
-  HDC         dc = (painting ? BeginPaint(g_hFrameWindow,&ps)
+  HDC         dc = (g_bPaintingWindow ? BeginPaint(g_hFrameWindow,&ps)
                              : GetDC(g_hFrameWindow));
   VideoRealizePalette(dc);
 
@@ -314,7 +405,7 @@ void DrawFrameWindow () {
 
   // DRAW THE STATUS AREA
   DrawStatusArea(dc,DRAW_BACKGROUND | DRAW_LEDS);
-  if (painting)
+  if (g_bPaintingWindow)
     EndPaint(g_hFrameWindow,&ps);
   else
     ReleaseDC(g_hFrameWindow,dc);
@@ -329,7 +420,7 @@ void DrawFrameWindow () {
 }
 
 //===========================================================================
-void DrawStatusArea (HDC passdc, int drawflags)
+static void DrawStatusArea (HDC passdc, int drawflags)
 {
 	FrameReleaseDC();
 	HDC  dc     = (passdc ? passdc : GetDC(g_hFrameWindow));
@@ -338,6 +429,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 	int  iDrive1Status = DISK_STATUS_OFF;
 	int  iDrive2Status = DISK_STATUS_OFF;
 	bool bCaps   = KeybGetCapsStatus();
+	bool bP8Caps  = KeybGetP8CapsStatus();
 	DiskGetLightStatus(&iDrive1Status,&iDrive2Status);
 
 	if (fullscreen)
@@ -350,7 +442,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 		TextOut(dc,x+ 3,y+2,TEXT("1"),1);
 		SetTextColor(dc,RGB((iDrive2Status==2 ? 255 : 0),(iDrive2Status==1 ? 255 : 0),0));
 		TextOut(dc,x+13,y+2,TEXT("2"),1);
-		if (g_bApple2e)
+		if (!IS_APPLE2)
 		{
 			SetTextAlign(dc,TA_RIGHT | TA_TOP);
 			SetTextColor(dc,(bCaps
@@ -387,21 +479,52 @@ void DrawStatusArea (HDC passdc, int drawflags)
 			DrawBitmapRect(dc,x+12,y+8,&rect,diskbitmap[iDrive1Status]);
 			DrawBitmapRect(dc,x+30,y+8,&rect,diskbitmap[iDrive2Status]);
 
-			if (g_bApple2e)
+			if (!IS_APPLE2)
 			{
-				RECT rect = {0,0,30,8};
-				DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]);
+				RECT rect = {0,0,31,8};
+			switch (g_Apple2Type)
+			{
+			case A2TYPE_APPLE2:			DrawBitmapRect(dc,x+7,y+9,&rect,capsbitmap[bCaps != 0]); break; 
+			case A2TYPE_APPLE2PLUS:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
+			case A2TYPE_APPLE2E:		DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
+			case A2TYPE_APPLE2EEHANCED:	DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]); break; 
+			case A2TYPE_PRAVETS82:		DrawBitmapRect(dc,x+15,y+19,&rect,latbitmap[bCaps != 0]); break; 
+			case A2TYPE_PRAVETS8M:		DrawBitmapRect(dc,x+15,y+19,&rect,latbitmap[bCaps != 0]); break; 
+			case A2TYPE_PRAVETS8A:		DrawBitmapRect(dc,x+2,y+19,&rect,latbitmap[bCaps != 0]); break; 
+			}
+			if (g_Apple2Type == A2TYPE_PRAVETS8A) //Toggles Pravets 8A/C Caps lock LED
+			{
+				RECT rect = {0,0,22,8};
+				DrawBitmapRect(dc,x+23,y+19,&rect,capsbitmapP8[P8CAPS_ON != 0]);
+			}
+
+
+/*				if (g_Apple2Type == A2TYPE_PRAVETS8A)
+					DrawBitmapRect(dc,x+7,y+19,&rect,cyrbitmap[bCaps != 0]);
+				else
+					DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]);
+					*/
 			}
 		}
 
 		if (drawflags & DRAW_TITLE)
 		{
-			TCHAR title[40];
-			_tcscpy(title,g_bApple2e
-				? TITLE_APPLE_2_E
-				: (g_bApple2plus
-					? TITLE_APPLE_2_PLUS
-					: TITLE_APPLE_2_ORG ));
+			TCHAR title[80];
+			switch (g_Apple2Type)
+			{
+			case A2TYPE_APPLE2:			_tcscpy(title, TITLE_APPLE_2); break; 
+			case A2TYPE_APPLE2PLUS:		_tcscpy(title, TITLE_APPLE_2_PLUS); break; 
+			case A2TYPE_APPLE2E:		_tcscpy(title, TITLE_APPLE_2E); break; 
+			case A2TYPE_APPLE2EEHANCED:	_tcscpy(title, TITLE_APPLE_2E_ENHANCED); break; 
+			case A2TYPE_PRAVETS82:		_tcscpy(title, TITLE_PRAVETS_82); break; 
+			case A2TYPE_PRAVETS8M:		_tcscpy(title, TITLE_PRAVETS_8M); break; 
+			case A2TYPE_PRAVETS8A:		_tcscpy(title, TITLE_PRAVETS_8A); break; 
+			}
+
+			if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
+				_tcscat(title,TEXT(" (custom rom)"));
+			else if (g_uTheFreezesF8Rom && IS_APPLE2)
+				_tcscat(title,TEXT(" (The Freeze's non-autostart F8 rom)"));
 
 			switch (g_nAppMode)
 			{
@@ -423,7 +546,7 @@ void DrawStatusArea (HDC passdc, int drawflags)
 }
 
 //===========================================================================
-void EraseButton (int number) {
+static void EraseButton (int number) {
   RECT rect;
   rect.left   = buttonx;
   rect.right  = rect.left+BUTTONCX;
@@ -433,6 +556,7 @@ void EraseButton (int number) {
 }
 
 //===========================================================================
+
 LRESULT CALLBACK FrameWndProc (
 	HWND   window,
 	UINT   message,
@@ -441,13 +565,16 @@ LRESULT CALLBACK FrameWndProc (
 {
 	switch (message)
 	{
-    case WM_ACTIVATE:
+    case WM_ACTIVATE:		// Sent when window is activated/deactivated. wParam indicates WA_ACTIVE, WA_INACTIVE, etc
+							// Eg. Deactivate when Config dialog is active, AppleWin app loses focus, etc
       JoyReset();
       SetUsingCursor(0);
+	  RevealCursor();
       break;
 
-    case WM_ACTIVATEAPP:
-      g_bAppActive = (wparam ? true : false);
+    case WM_ACTIVATEAPP:	// Sent when different app's window is activated/deactivated.
+							// Eg. Deactivate when AppleWin app loses focus
+      g_bAppActive = (wparam ? TRUE : FALSE);
       break;
 
     case WM_CLOSE:
@@ -469,7 +596,12 @@ LRESULT CALLBACK FrameWndProc (
 			if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) ||
 				((g_nAppMode == MODE_STEPPING) && (wparam != TEXT('\x1B'))))
 			{
-				KeybQueueKeypress((int)wparam,ASCII);
+				if( !g_bDebuggerEatKey )
+				{
+					KeybQueueKeypress((int)wparam,ASCII);
+				} else {
+					g_bDebuggerEatKey = false;
+				}
 			}
 			else
 			if ((g_nAppMode == MODE_DEBUG) || (g_nAppMode == MODE_STEPPING))
@@ -482,6 +614,7 @@ LRESULT CALLBACK FrameWndProc (
       g_hFrameWindow = window;
       CreateGdiObjects();
 	  DSInit();
+	  DIMouse::DirectInputInit(window);
       MB_Initialize();
       SpkrInitialize();
       DragAcceptFiles(window,1);
@@ -499,6 +632,7 @@ LRESULT CALLBACK FrameWndProc (
 
     case WM_DDE_EXECUTE: {
       LPTSTR filename = (LPTSTR)GlobalLock((HGLOBAL)lparam);
+//MessageBox( NULL, filename, "DDE Exec", MB_OK );
       int error = DiskInsert(0,filename,0,0);
       if (!error) {
         if (!fullscreen)
@@ -507,7 +641,9 @@ LRESULT CALLBACK FrameWndProc (
         ProcessButtonClick(BTN_RUN);
       }
       else
+      {
         DiskNotifyInvalidImage(filename,error);
+      }
       GlobalUnlock((HGLOBAL)lparam);
       break;
     }
@@ -522,14 +658,15 @@ LRESULT CALLBACK FrameWndProc (
         HD_Cleanup();
       }
       PrintDestroy();
-      CommDestroy();
+      sg_SSC.CommDestroy();
       CpuDestroy();
       MemDestroy();
       SpkrDestroy();
       VideoDestroy();
       MB_Destroy();
       DeleteGdiObjects();
-      PostQuitMessage(0);
+      DIMouse::DirectInputUninit(window);
+      PostQuitMessage(0);	// Post WM_QUIT message to the thread's message queue
       break;
 
     case WM_DISPLAYCHANGE:
@@ -562,6 +699,36 @@ LRESULT CALLBACK FrameWndProc (
       break;
     }
 
+	// @see: http://answers.google.com/answers/threadview?id=133059
+	// Win32 doesn't pass the PrintScreen key via WM_CHAR
+	//		else if (wparam == VK_SNAPSHOT)
+	// Solution: 2 choices:
+	//		1) register hotkey, or
+	//		2) Use low level Keyboard hooks
+	// We use the 1st one since it is compatible with Win95
+	case WM_HOTKEY:
+		// wparam = user id
+		// lparam = modifiers: shift, ctrl, alt, win
+		if (wparam == VK_SNAPSHOT_560)
+		{
+#if _DEBUG
+//			MessageBox( NULL, "Double 580x384 size!", "PrintScreen", MB_OK );
+#endif
+			Video_TakeScreenShot( SCREENSHOT_560x384 );
+		}
+		else
+		if (wparam == VK_SNAPSHOT_280)
+		{
+			if( lparam & MOD_SHIFT)
+			{
+#if _DEBUG
+//				MessageBox( NULL, "Normal 280x192 size!", "PrintScreen", MB_OK );
+#endif
+			}
+			Video_TakeScreenShot( SCREENSHOT_280x192 );
+		}
+		break;
+
 	case WM_KEYDOWN:
 		KeybUpdateCtrlShiftStatus();
 		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == -1))
@@ -576,18 +743,38 @@ LRESULT CALLBACK FrameWndProc (
 			DrawButton((HDC)0,buttondown);
 		}
 		else if (wparam == VK_F9)
-		{
-			videotype++;	// Cycle through available video modes
-			if (videotype >= VT_NUM_MODES)
-				videotype = 0;
+		{			
+			if (GetKeyState(VK_CONTROL) < 0) //CTRL+F9
+			{
+				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9)
+				if (g_nCharsetType >= 3)
+					g_nCharsetType = 0;
+			}
+			else	// Cycle through available video modes
+			{
+				if (GetKeyState(VK_SHIFT) >= 0)	// Backwards
+				{
+					if (videotype == 0)
+						videotype = VT_NUM_MODES;
+					videotype--;
+				}
+				else							// Forwards
+				{
+					videotype++;
+					if (videotype >= VT_NUM_MODES)
+						videotype = 0;
+				}
+			}
+
 			VideoReinitialize();
 			if ((g_nAppMode != MODE_LOGO) || ((g_nAppMode == MODE_DEBUG) && (g_bDebuggerViewingAppleOutput))) // +PATCH
 			{
 				VideoRedrawScreen();
 				g_bDebuggerViewingAppleOutput = true;  // +PATCH
 			}
-			RegSaveValue(TEXT("Configuration"),TEXT("Video Emulation"),1,videotype);
+			REGSAVE(TEXT("Video Emulation"),videotype);
 		}
+
 		else if ((wparam == VK_F11) && (GetKeyState(VK_CONTROL) >= 0))	// Save state (F11)
 		{
 			SoundCore_SetFade(FADE_OUT);
@@ -607,7 +794,9 @@ LRESULT CALLBACK FrameWndProc (
 			SoundCore_SetFade(FADE_IN);
 		}
 		else if (wparam == VK_CAPITAL)
+		{
 			KeybToggleCapsLock();
+		}
 		else if (wparam == VK_PAUSE)
 		{
 			SetUsingCursor(0);
@@ -616,10 +805,12 @@ LRESULT CALLBACK FrameWndProc (
 				case MODE_RUNNING:
 					g_nAppMode = MODE_PAUSED;
 					SoundCore_SetFade(FADE_OUT);
+					RevealCursor();
 					break;
 				case MODE_PAUSED:
 					g_nAppMode = MODE_RUNNING;
 					SoundCore_SetFade(FADE_IN);
+					// Don't call FrameShowCursor(FALSE) else ClipCursor() won't be called
 					break;
 				case MODE_STEPPING:
 					DebuggerInputConsoleChar( DEBUG_EXIT_KEY );
@@ -629,6 +820,10 @@ LRESULT CALLBACK FrameWndProc (
 			if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
 				VideoRedrawScreen();
 			g_bResetTiming = true;
+		}
+		else if ((wparam == VK_SCROLL) && g_uScrollLockToggle)
+		{
+			g_bScrollLock_FullSpeed = !g_bScrollLock_FullSpeed;
 		}
 		else if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) || (g_nAppMode == MODE_STEPPING))
 		{
@@ -643,46 +838,90 @@ LRESULT CALLBACK FrameWndProc (
 		else if (g_nAppMode == MODE_DEBUG)
 			DebuggerProcessKey(wparam);
 
-
 		if (wparam == VK_F10)
 		{
-			SetUsingCursor(0);
-			return 0;
+			if ((g_Apple2Type == A2TYPE_PRAVETS8A) && (GetKeyState(VK_CONTROL) >= 0))
+			{
+				KeybToggleP8ACapsLock ();//Toggles P8 Capslock
+			}
+			else 
+			{
+				SetUsingCursor(0);
+				return 0;	// TC: Why return early?
+			}
 		}
 		break;
 
     case WM_KEYUP:
-      if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == (int)wparam-VK_F1)) {
-        buttondown = -1;
-        if (fullscreen)
-          EraseButton(wparam-VK_F1);
-        else
-          DrawButton((HDC)0,wparam-VK_F1);
-        ProcessButtonClick(wparam-VK_F1);
-      }
-      else
-        JoyProcessKey((int)wparam,((lparam & 0x01000000) != 0),0,0);
-      break;
+		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == (int)wparam-VK_F1))
+		{
+			buttondown = -1;
+			if (fullscreen)
+				EraseButton(wparam-VK_F1);
+			else
+				DrawButton((HDC)0,wparam-VK_F1);
+			ProcessButtonClick(wparam-VK_F1);
+		}
+		else
+		{
+			JoyProcessKey((int)wparam,((lparam & 0x01000000) != 0),0,0);
+		}
+		break;
 
     case WM_LBUTTONDOWN:
-      if (buttondown == -1) {
+      if (buttondown == -1)
+	  {
         int x = LOWORD(lparam);
         int y = HIWORD(lparam);
         if ((x >= buttonx) &&
             (y >= buttony) &&
-            (y <= buttony+BUTTONS*BUTTONCY)) {
+            (y <= buttony+BUTTONS*BUTTONCY))
+		{
           buttonactive = buttondown = (y-buttony-1)/BUTTONCY;
           DrawButton((HDC)0,buttonactive);
           SetCapture(window);
         }
-        else if (usingcursor)
+        else if (g_bUsingCursor && !sg_Mouse.IsActive())
+		{
           if (wparam & (MK_CONTROL | MK_SHIFT))
+		  {
             SetUsingCursor(0);
+		  }
           else
-            JoySetButton(0,1);
-        else if ((x < buttonx) && JoyUsingMouse() &&
-                 ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING)))
+		  {
+	        JoySetButton(BUTTON0, BUTTON_DOWN);
+		  }
+		}
+        else if ( ((x < buttonx) && JoyUsingMouse() && ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_STEPPING))) )
+		{
           SetUsingCursor(1);
+		}
+		else if (sg_Mouse.IsActive())
+		{
+			if (wparam & (MK_CONTROL | MK_SHIFT))
+			{
+				RevealCursor();
+			}
+			else if (g_nAppMode == MODE_RUNNING)
+			{
+				if (!sg_Mouse.IsEnabled())
+				{
+					sg_Mouse.SetEnabled(true);
+
+					POINT Point;
+					GetCursorPos(&Point);
+					ScreenToClient(g_hFrameWindow, &Point);
+					const int iOutOfBoundsX=0, iOutOfBoundsY=0;
+					UpdateMouseInAppleViewport(iOutOfBoundsX, iOutOfBoundsY, Point.x, Point.y);
+
+					// Don't call SetButton() when 1st enabled (else get the confusing action of both enabling & an Apple mouse click)
+				}
+				else
+				{
+					sg_Mouse.SetButton(BUTTON0, BUTTON_DOWN);
+				}
+			}
+		}
 		DebuggerMouseClick( x, y );
       }
       RelayEvent(WM_LBUTTONDOWN,wparam,lparam);
@@ -701,8 +940,14 @@ LRESULT CALLBACK FrameWndProc (
         }
         buttonactive = -1;
       }
-      else if (usingcursor)
-        JoySetButton(0,0);
+      else if (g_bUsingCursor && !sg_Mouse.IsActive())
+	  {
+	    JoySetButton(BUTTON0, BUTTON_UP);
+	  }
+	  else if (sg_Mouse.IsActive())
+	  {
+		sg_Mouse.SetButton(BUTTON0, BUTTON_UP);
+	  }
       RelayEvent(WM_LBUTTONUP,wparam,lparam);
       break;
 
@@ -728,14 +973,59 @@ LRESULT CALLBACK FrameWndProc (
         if (buttonover != -1)
           DrawButton((HDC)0,buttonover);
       }
-      else if (usingcursor) {
+      else if (g_bUsingCursor && !sg_Mouse.IsActive())
+	  {
         DrawCrosshairs(x,y);
-        JoySetPosition(x-viewportx-2,VIEWPORTCX-4,
-                       y-viewporty-2,VIEWPORTCY-4);
+	    JoySetPosition(x-viewportx-2, VIEWPORTCX-4, y-viewporty-2, VIEWPORTCY-4);
       }
+	  else if (sg_Mouse.IsActiveAndEnabled() && (g_nAppMode == MODE_RUNNING))
+	  {
+			if (g_bLastCursorInAppleViewport)
+				break;
+
+			// Outside Apple viewport
+
+			const int iAppleScreenMaxX = VIEWPORTCX-1;
+			const int iAppleScreenMaxY = VIEWPORTCY-1;
+			const int iBoundMinX = viewportx;
+			const int iBoundMaxX = iAppleScreenMaxX;
+			const int iBoundMinY = viewporty;
+			const int iBoundMaxY = iAppleScreenMaxY;
+
+			int iOutOfBoundsX=0, iOutOfBoundsY=0;
+			if (x < iBoundMinX)	iOutOfBoundsX=-1;
+			if (x > iBoundMaxX)	iOutOfBoundsX=1;
+			if (y < iBoundMinY)	iOutOfBoundsY=-1;
+			if (y > iBoundMaxY)	iOutOfBoundsY=1;
+
+			UpdateMouseInAppleViewport(iOutOfBoundsX, iOutOfBoundsY, x, y);
+	  }
+
       RelayEvent(WM_MOUSEMOVE,wparam,lparam);
       break;
     }
+
+	case WM_TIMER:
+		if (wparam == IDEVENT_TIMER_MOUSE)
+		{
+			// NB. Need to check /g_bAppActive/ since WM_TIMER events still occur after AppleWin app has lost focus
+			if (g_bAppActive && sg_Mouse.IsActiveAndEnabled() && (g_nAppMode == MODE_RUNNING))
+			{
+				if (!g_bLastCursorInAppleViewport)
+					break;
+
+				// Inside Apple viewport
+
+				int iOutOfBoundsX=0, iOutOfBoundsY=0;
+
+				long dX,dY;
+				if (DIMouse::ReadImmediateData(&dX, &dY) == S_OK)
+					sg_Mouse.SetPositionRel(dX, dY, &iOutOfBoundsX, &iOutOfBoundsY);
+
+				UpdateMouseInAppleViewport(iOutOfBoundsX, iOutOfBoundsY);
+			}
+		}
+		break;
 
 // VSCROLL 
 // SB_LINEUP // Line Scrolling
@@ -756,7 +1046,6 @@ LRESULT CALLBACK FrameWndProc (
 		}
 		break;
 
-
     case WM_NOTIFY:
       if(((LPNMTTDISPINFO)lparam)->hdr.hwndFrom == tooltipwindow &&
          ((LPNMTTDISPINFO)lparam)->hdr.code == TTN_GETDISPINFO)
@@ -766,9 +1055,9 @@ LRESULT CALLBACK FrameWndProc (
 
     case WM_PAINT:
       if (GetUpdateRect(window,NULL,0)) {
-        painting = 1;
+        g_bPaintingWindow = 1;
         DrawFrameWindow();
-        painting = 0;
+        g_bPaintingWindow = 0;
       }
       break;
 
@@ -828,9 +1117,12 @@ LRESULT CALLBACK FrameWndProc (
 				}			
 			}
 		}
-		if (usingcursor)
+		if (g_bUsingCursor)
 		{
-			JoySetButton(1,(message == WM_RBUTTONDOWN));
+			if (sg_Mouse.IsActive())
+				sg_Mouse.SetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
+			else
+				JoySetButton(BUTTON1, (message == WM_RBUTTONDOWN) ? BUTTON_DOWN : BUTTON_UP);
 		}
 		RelayEvent(message,wparam,lparam);
 		break;
@@ -886,6 +1178,7 @@ LRESULT CALLBACK FrameWndProc (
     case WM_USER_RESTART:
 	  // . Changed Apple computer type (][+ or //e)
 	  // . Changed disk speed (normal or enhanced)
+	  // . Changed Freeze F8 rom setting
       if (g_nAppMode != MODE_LOGO)
         if (MessageBox(g_hFrameWindow,
                        TEXT("Restarting the emulator will reset the state ")
@@ -998,14 +1291,25 @@ void ProcessButtonClick (int button) {
 
 
 //===========================================================================
-void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive) 
-{
-	// http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/winui/windowsuserinterface/resources/menus/usingmenus.asp
-	// http://www.codeproject.com/menu/MenusForBeginners.asp?df=100&forumid=67645&exp=0&select=903061
 
+// http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/winui/windowsuserinterface/resources/menus/usingmenus.asp
+// http://www.codeproject.com/menu/MenusForBeginners.asp?df=100&forumid=67645&exp=0&select=903061
+
+void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive) 
+{		
 	HMENU hmenu;            // menu template
 	HMENU hmenuTrackPopup;  // shortcut menu
+	//This is the default installation path of CiderPress. It shall not be left blank, otherwise  an explorer window will be open.
+	TCHAR PathToCiderPress[MAX_PATH] = "C:\\Program Files\\faddenSoft\\CiderPress\\CiderPress.exe";
+	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
+	//TODO: A directory is open if an empty path to CiderPress is set. This has to be fixed.
 
+	string filename1= "\"";
+	filename1.append (DiskPathFilename[iDrive]);
+	filename1.append ("\"");
+	string sFileNameEmpty = "\"";
+	sFileNameEmpty.append ("\"");
+		
 	//  Load the menu template containing the shortcut menu from the 
 	//  application's resources. 
 	hmenu = LoadMenu(g_hInstance, MAKEINTRESOURCE(ID_MENU_DISK_POPUP)); 
@@ -1045,10 +1349,51 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	else
 	if (iCommand == ID_DISKMENU_WRITEPROTECTION_OFF)
 		DiskSetProtect( iDrive, false );
+	else
+	if (iCommand == ID_DISKMENU_SENDTO_CIDERPRESS)
+	{
+		//if(!filename1.compare("\"\"") == false) //Do not use this, for some reason it does not work!!!
+		if(!filename1.compare(sFileNameEmpty) )		
+		{
+			int MB_Result = 0;
+			MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
+			if (MB_Result == 6) //6= Yes
+			{
+				if (FileExists (PathToCiderPress ))
+				{
+					HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
+				}
+				else					
+					{
+					MessageBox( NULL,
+				"CiderPress not found!\n"
+				"Please install CiderPress in case it is not \n"
+				"or set the path to it from Configuration/Disk otherwise."
+					, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+					}
+				}
+			}
+		else
+		{
+			if (FileExists (PathToCiderPress ))
+			{
+			HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , NULL, SW_SHOWNORMAL);
+			}
+			else
+			{
+			MessageBox( NULL,
+				"CiderPress not found!\n"
+				"Please install CiderPress in case it is not \n"
+				"or set the path to it from Configuration/Disk otherwise."
+				, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+			}
+		}
+
 
 	// Destroy the menu. 
 	DestroyMenu(hmenu); 
-} 
+	}
+}
 
 
 //===========================================================================
@@ -1071,11 +1416,15 @@ void ResetMachineState () {
   MemReset();
   DiskBoot();
   VideoResetState();
-  CommReset();
+  sg_SSC.CommReset();
   PrintReset();
   JoyReset();
   MB_Reset();
   SpkrReset();
+  sg_Mouse.Reset();
+#ifdef SUPPORT_CPM
+  g_ActiveCPU = CPU_6502;
+#endif
 
   SoundCore_SetFade(FADE_NONE);
 }
@@ -1131,31 +1480,35 @@ void SetNormalMode () {
 }
 
 //===========================================================================
-void SetUsingCursor (BOOL newvalue) {
-  if (newvalue == usingcursor)
-    return;
-  usingcursor = newvalue;
-  if (usingcursor) {
-    SetCapture(g_hFrameWindow);
-    RECT rect = {viewportx+2,
-                 viewporty+2,
-                 viewportx+VIEWPORTCX-1,
-                 viewporty+VIEWPORTCY-1};
-    ClientToScreen(g_hFrameWindow,(LPPOINT)&rect.left);
-    ClientToScreen(g_hFrameWindow,(LPPOINT)&rect.right);
-    ClipCursor(&rect);
-    ShowCursor(0);
-    POINT pt;
-    GetCursorPos(&pt);
-    ScreenToClient(g_hFrameWindow,&pt);
-    DrawCrosshairs(pt.x,pt.y);
-  }
-  else {
-    DrawCrosshairs(0,0);
-    ShowCursor(1);
-    ClipCursor(NULL);
-    ReleaseCapture();
-  }
+void SetUsingCursor (BOOL bNewValue)
+{
+	if (bNewValue == g_bUsingCursor)
+		return;
+
+	g_bUsingCursor = bNewValue;
+	if (g_bUsingCursor)
+	{
+		SetCapture(g_hFrameWindow);
+		RECT rect =	{	viewportx+2,				// left
+						viewporty+2,				// top
+						viewportx+VIEWPORTCX-1,		// right
+						viewporty+VIEWPORTCY-1};	// bottom
+		ClientToScreen(g_hFrameWindow,(LPPOINT)&rect.left);
+		ClientToScreen(g_hFrameWindow,(LPPOINT)&rect.right);
+		ClipCursor(&rect);
+		FrameShowCursor(FALSE);
+		POINT pt;
+		GetCursorPos(&pt);
+		ScreenToClient(g_hFrameWindow,&pt);
+		DrawCrosshairs(pt.x,pt.y);
+	}
+	else
+	{
+		DrawCrosshairs(0,0);
+		FrameShowCursor(TRUE);
+		ClipCursor(NULL);
+		ReleaseCapture();
+	}
 }
 
 //
@@ -1165,14 +1518,14 @@ void SetUsingCursor (BOOL newvalue) {
 //===========================================================================
 void FrameCreateWindow ()
 {
-	int width  = VIEWPORTCX + (VIEWPORTX<<1)
+	int width  = VIEWPORTCX + VIEWPORTX*2
 							+ BUTTONCX
-							+ (GetSystemMetrics(SM_CXBORDER)<<1)
-							+ 5;
-	int height = VIEWPORTCY + (VIEWPORTY<<1)
+							+ GetSystemMetrics(SM_CXBORDER)*2
+							+ MAGICX;
+	int height = VIEWPORTCY + VIEWPORTY*2
 							+ GetSystemMetrics(SM_CYBORDER)
 							+ GetSystemMetrics(SM_CYCAPTION)
-							+ 5;
+							+ MAGICY;
 	int xpos;
 
 	if (!RegLoadValue(TEXT("Preferences"),TEXT("Window X-Position"),1,(DWORD *)&xpos))
@@ -1182,25 +1535,20 @@ void FrameCreateWindow ()
 	if (!RegLoadValue(TEXT("Preferences"),TEXT("Window Y-Position"),1,(DWORD *)&ypos))
 		ypos = (GetSystemMetrics(SM_CYSCREEN)-height) >> 1;
 
-	if (g_bApple2e)
+	switch (g_Apple2Type)
 	{
-		g_pAppTitle = TITLE_APPLE_2_E;
+	case A2TYPE_APPLE2:			g_pAppTitle = TITLE_APPLE_2; break; 
+	case A2TYPE_APPLE2PLUS:		g_pAppTitle = TITLE_APPLE_2_PLUS; break; 
+	case A2TYPE_APPLE2E:		g_pAppTitle = TITLE_APPLE_2E; break; 
+	case A2TYPE_APPLE2EEHANCED:	g_pAppTitle = TITLE_APPLE_2E_ENHANCED; break; 
+	case A2TYPE_PRAVETS82:	    g_pAppTitle = TITLE_PRAVETS_82; break; 
+	case A2TYPE_PRAVETS8M:	    g_pAppTitle = TITLE_PRAVETS_8M; break; 
+	case A2TYPE_PRAVETS8A:	    g_pAppTitle = TITLE_PRAVETS_8A; break; 
 	}
-	else
-	{
-		if (g_bApple2plus)
-			g_pAppTitle = TITLE_APPLE_2_PLUS;
-		else
-			g_pAppTitle = TITLE_APPLE_2_ORG;
-	}
+
 
 	g_hFrameWindow = CreateWindow(
 		TEXT("APPLE2FRAME"),
-//		g_bApple2e
-//		? TITLE_APPLE_2_E
-//        : (g_bApple2plus
-//			? TITLE_APPLE_2_PLUS
-//			: TITLE_APPLE_2),
 		g_pAppTitle,
 		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
 		WS_MINIMIZEBOX | WS_VISIBLE,
@@ -1246,23 +1594,30 @@ HDC FrameGetDC () {
 }
 
 //===========================================================================
-HDC FrameGetVideoDC (LPBYTE *addr, LONG *pitch) {
-  if (fullscreen && g_bAppActive && !painting) {
-    RECT rect = {FSVIEWPORTX,
-                 FSVIEWPORTY,
-                 FSVIEWPORTX+VIEWPORTCX,
-                 FSVIEWPORTY+VIEWPORTCY};
-    DDSURFACEDESC surfacedesc;
-    surfacedesc.dwSize = sizeof(surfacedesc);
-    if (surface->Lock(&rect,&surfacedesc,0,NULL) == DDERR_SURFACELOST) {
-      surface->Restore();
-      surface->Lock(&rect,&surfacedesc,0,NULL);
-    }
-    *addr  = (LPBYTE)surfacedesc.lpSurface+(VIEWPORTCY-1)*surfacedesc.lPitch;
-    *pitch = -surfacedesc.lPitch;
-    return (HDC)0;
-  }
-  else return FrameGetDC();
+HDC FrameGetVideoDC (LPBYTE *addr, LONG *pitch)
+{
+	if (fullscreen && g_bAppActive && !g_bPaintingWindow)
+	{
+		RECT rect = {	FSVIEWPORTX,
+						FSVIEWPORTY,
+						FSVIEWPORTX+VIEWPORTCX,
+						FSVIEWPORTY+VIEWPORTCY};
+		DDSURFACEDESC surfacedesc;
+		surfacedesc.dwSize = sizeof(surfacedesc);
+		// TC: Use DDLOCK_WAIT - see Bug #13425
+		if (surface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL) == DDERR_SURFACELOST)
+		{
+			surface->Restore();
+			surface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL);
+		}
+		*addr  = (LPBYTE)surfacedesc.lpSurface+(VIEWPORTCY-1)*surfacedesc.lPitch;
+		*pitch = -surfacedesc.lPitch;
+		return (HDC)0;
+	}
+	else
+	{
+		return FrameGetDC();
+	}
 }
 
 //===========================================================================
@@ -1301,7 +1656,7 @@ void FrameReleaseDC () {
 
 //===========================================================================
 void FrameReleaseVideoDC () {
-  if (fullscreen && g_bAppActive && !painting) {
+  if (fullscreen && g_bAppActive && !g_bPaintingWindow) {
 
     // THIS IS CORRECT ACCORDING TO THE DIRECTDRAW DOCS
     RECT rect = {FSVIEWPORTX,
@@ -1313,4 +1668,178 @@ void FrameReleaseVideoDC () {
     // BUT THIS SEEMS TO BE WORKING
     surface->Unlock(NULL);
   }
+}
+
+//===========================================================================
+
+static bool FileExists(string strFilename) 
+{ 
+	struct stat stFileInfo; 
+	int intStat = stat(strFilename.c_str(),&stFileInfo); 
+	return (intStat == 0) ? true : false;
+}
+
+//===========================================================================
+
+// Called when:
+// . Mouse f/w sets abs position
+// . UpdateMouseInAppleViewport() is called and inside Apple screen
+void FrameSetCursorPosByMousePos()
+{
+	if (!g_hFrameWindow || g_bShowingCursor)
+		return;
+
+	int iX, iMinX, iMaxX;
+	int iY, iMinY, iMaxY;
+	sg_Mouse.GetXY(iX, iMinX, iMaxX, iY, iMinY, iMaxY);
+
+	_ASSERT(iMinX == 0 && iMinY == 0);
+	float fScaleX = (float)(iX-iMinX) / ((float)(iMaxX-iMinX));
+	float fScaleY = (float)(iY-iMinY) / ((float)(iMaxY-iMinY));
+
+	int iWindowX = (int)(fScaleX * (float)VIEWPORTCX);
+	int iWindowY = (int)(fScaleY * (float)VIEWPORTCY);
+
+	POINT Point = {viewportx+2, viewporty+2};	// top-left
+	ClientToScreen(g_hFrameWindow, &Point);
+	SetCursorPos(Point.x+iWindowX-MAGICX, Point.y+iWindowY-MAGICY);
+
+#if defined(_DEBUG) && 0
+	static int OldX=0, OldY=0;
+	char szDbg[200];
+	int X=Point.x+iWindowX-MAGICX;
+	int Y=Point.y+iWindowY-MAGICY;
+	if (X != OldX || Y != OldY)
+	{
+		sprintf(szDbg, "[FrameSetCursorPosByMousePos] x,y=%d,%d (MaxX,Y=%d,%d)\n", X,Y, iMaxX,iMaxY); OutputDebugString(szDbg);
+		OldX=X; OldY=Y;
+	}
+#endif
+}
+
+// Called when:
+// . UpdateMouseInAppleViewport() is called and mouse leaving/entering Apple screen area
+// . NB. Not called when leaving & mouse clipped to Apple screen area
+static void FrameSetCursorPosByMousePos(int x, int y, int dx, int dy, bool bLeavingAppleScreen)
+{
+//	char szDbg[200];
+	if (!g_hFrameWindow || (g_bShowingCursor && bLeavingAppleScreen) || (!g_bShowingCursor && !bLeavingAppleScreen))
+		return;
+
+	int iX, iMinX, iMaxX;
+	int iY, iMinY, iMaxY;
+	sg_Mouse.GetXY(iX, iMinX, iMaxX, iY, iMinY, iMaxY);
+	_ASSERT(iMinX == 0 && iMinY == 0);
+
+	if (bLeavingAppleScreen)
+	{
+		// Set mouse x/y pos to edge of mouse's window
+		if (dx < 0) iX = iMinX;
+		if (dx > 0) iX = iMaxX;
+		if (dy < 0) iY = iMinY;
+		if (dy > 0) iY = iMaxY;
+
+		float fScaleX = (float)(iX-iMinX) / ((float)(iMaxX-iMinX));
+		float fScaleY = (float)(iY-iMinY) / ((float)(iMaxY-iMinY));
+
+		int iWindowX = (int)(fScaleX * (float)VIEWPORTCX) + dx;
+		int iWindowY = (int)(fScaleY * (float)VIEWPORTCY) + dy;
+
+		POINT Point = {viewportx+2, viewporty+2};	// top-left
+		ClientToScreen(g_hFrameWindow, &Point);
+		SetCursorPos(Point.x+iWindowX-MAGICX, Point.y+iWindowY-MAGICY);
+//		sprintf(szDbg, "[MOUSE_LEAVING ] x=%d, y=%d (Scale: x,y=%f,%f; iX,iY=%d,%d)\n", iWindowX, iWindowY, fScaleX, fScaleY, iX, iY); OutputDebugString(szDbg);
+	}
+	else	// Mouse entering Apple screen area
+	{
+//		sprintf(szDbg, "[MOUSE_ENTERING] x=%d, y=%d\n", x, y); OutputDebugString(szDbg);
+		x -= (viewportx+2-MAGICX); if (x < 0) x = 0;
+		y -= (viewporty+2-MAGICY); if (y < 0) y = 0;
+
+		_ASSERT(x <= VIEWPORTCX);
+		_ASSERT(y <= VIEWPORTCY);
+		float fScaleX = (float)x / (float)VIEWPORTCX;
+		float fScaleY = (float)y / (float)VIEWPORTCY;
+
+		int iAppleX = iMinX + (int)(fScaleX * (float)(iMaxX-iMinX));
+		int iAppleY = iMinY + (int)(fScaleY * (float)(iMaxY-iMinY));
+
+		sg_Mouse.SetCursorPos(iAppleX, iAppleY);	// Set new entry position
+
+		// Dump initial deltas (otherwise can get big deltas since last read when entering Apple screen area)
+		DIMouse::ReadImmediateData();
+	}
+}
+
+static void DrawCrosshairsMouse()
+{
+	if (!g_uMouseShowCrosshair)
+		return;
+
+	int iX, iMinX, iMaxX;
+	int iY, iMinY, iMaxY;
+	sg_Mouse.GetXY(iX, iMinX, iMaxX, iY, iMinY, iMaxY);
+	_ASSERT(iMinX == 0 && iMinY == 0);
+
+	float fScaleX = (float)(iX-iMinX) / ((float)(iMaxX-iMinX));
+	float fScaleY = (float)(iY-iMinY) / ((float)(iMaxY-iMinY));
+
+	int iWindowX = (int)(fScaleX * (float)VIEWPORTCX);
+	int iWindowY = (int)(fScaleY * (float)VIEWPORTCY);
+
+	DrawCrosshairs(iWindowX,iWindowY);
+}
+
+#ifdef _DEBUG
+//#define _DEBUG_SHOW_CURSOR	// NB. Get an ASSERT on LMB (after Ctrl+LMB)
+#endif
+
+static void UpdateMouseInAppleViewport(int iOutOfBoundsX, int iOutOfBoundsY, int x, int y)
+{
+	const bool bOutsideAppleViewport = iOutOfBoundsX || iOutOfBoundsY;
+
+	if (bOutsideAppleViewport)
+	{
+		if (g_uMouseRestrictToWindow)
+			return;
+
+		g_bLastCursorInAppleViewport = false;
+
+		if (!g_bShowingCursor)
+		{
+			// Mouse leaving Apple screen area
+			FrameSetCursorPosByMousePos(0, 0, iOutOfBoundsX, iOutOfBoundsY, true);
+#ifdef _DEBUG_SHOW_CURSOR
+			g_bShowingCursor = true;
+#else
+			FrameShowCursor(TRUE);
+#endif
+		}
+	}
+	else
+	{
+		g_bLastCursorInAppleViewport = true;
+
+		if (g_bShowingCursor)
+		{
+			// Mouse entering Apple screen area
+			FrameSetCursorPosByMousePos(x, y, 0, 0, false);
+#ifdef _DEBUG_SHOW_CURSOR
+			g_bShowingCursor = false;
+#else
+			FrameShowCursor(FALSE);
+#endif
+
+			//
+
+			if (g_uMouseRestrictToWindow)
+				SetUsingCursor(TRUE);
+		}
+		else
+		{
+			FrameSetCursorPosByMousePos();	// Set cursor to Apple position each time
+		}
+
+		DrawCrosshairsMouse();
+	}
 }

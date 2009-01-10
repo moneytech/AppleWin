@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -127,6 +127,8 @@ static BYTE	g_nHD_Command;
 
 static HDD g_HardDrive[2] = {0};
 
+static UINT g_uSlot = 7;
+
 //===========================================================================
 
 static void GetImageTitle (LPCTSTR imagefilename, PHDD pHardDrive)
@@ -212,14 +214,18 @@ static LPCTSTR HD_DiskGetName (int nDrive)
 
 // everything below is global
 
-static const DWORD HDDRVR_SIZE = 0x100;
-static LPBYTE lpMemC000 = NULL;
+static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+
+static const DWORD HDDRVR_SIZE = APPLE_SLOT_SIZE;
 
 bool HD_CardIsEnabled()
 {
 	return g_bHD_RomLoaded && g_bHD_Enabled;
 }
 
+// Called by:
+// . LoadConfiguration() - Done at each restart
+// . DiskDlg_OK() - When HD is enabled/disabled on UI
 void HD_SetEnabled(bool bEnabled)
 {
 	if(g_bHD_Enabled == bEnabled)
@@ -227,13 +233,20 @@ void HD_SetEnabled(bool bEnabled)
 
 	g_bHD_Enabled = bEnabled;
 
-	if(lpMemC000 == NULL)	// This will be NULL when called after loading value from Registry
+	// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
+	// . g_uSlot is only really setup by HD_Load_Rom(), later on
+	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, NULL);
+
+	LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
+	if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
 		return;
 
+	//
+
 	if(g_bHD_Enabled)
-		HD_Load_Rom(lpMemC000);
+		HD_Load_Rom(pCxRomPeripheral, g_uSlot);
 	else
-		memset(lpMemC000+0x700, 0, HDDRVR_SIZE);
+		memset(pCxRomPeripheral + g_uSlot*256, 0, HDDRVR_SIZE);
 }
 
 LPCTSTR HD_GetFullName (int nDrive)
@@ -241,14 +254,12 @@ LPCTSTR HD_GetFullName (int nDrive)
 	return g_HardDrive[nDrive].hd_fullname;
 }
 
-VOID HD_Load_Rom(LPBYTE lpMemRom)
+VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
-	lpMemC000 = lpMemRom;	// Keep a copy for HD_SetEnabled()
-
 	if(!g_bHD_Enabled)
 		return;
 
-	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR), "FIRMWARE");
+	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR_FW), "FIRMWARE");
 	if(hResInfo == NULL)
 		return;
 
@@ -264,7 +275,8 @@ VOID HD_Load_Rom(LPBYTE lpMemRom)
 	if(pData == NULL)
 		return;
 
-	memcpy(lpMemRom+0x700, pData, HDDRVR_SIZE);
+	g_uSlot = uSlot;
+	memcpy(pCxRomPeripheral + uSlot*256, pData, HDDRVR_SIZE);
 	g_bHD_RomLoaded = true;
 }
 
@@ -322,7 +334,8 @@ void HD_Select(int nDrive)
 	ofn.lStructSize     = sizeof(OPENFILENAME);
 	ofn.hwndOwner       = g_hFrameWindow;
 	ofn.hInstance       = g_hInstance;
-	ofn.lpstrFilter     = TEXT("Hard Disk Images (*.hdv)\0*.hdv\0");
+	ofn.lpstrFilter     = TEXT("Hard Disk Images (*.hdv,*.po)\0*.hdv;*.po\0")
+						  TEXT("All Files\0*.*\0");
 	ofn.lpstrFile       = filename;
 	ofn.nMaxFile        = MAX_PATH;
 	ofn.lpstrInitialDir = directory;
@@ -354,9 +367,10 @@ void HD_Select(int nDrive)
 #define DEVICE_UNKNOWN_ERROR	0x03
 #define DEVICE_IO_ERROR			0x08
 
-BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
+static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	BYTE r = DEVICE_OK;
+	addr &= 0xFF;
 
 	if (!HD_CardIsEnabled())
 		return r;
@@ -505,8 +519,7 @@ BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCycle
 			}
 			break;
 		default:
-			{
-			}
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
 	}
 	else // write
@@ -547,21 +560,9 @@ BYTE __stdcall HD_IO_EMUL (WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCycle
 			}
 			break;
 		default:
-			break;
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
 	}
 
 	return r;
 }
-
-
-
-
-
-
-
-
-
-
-
-
