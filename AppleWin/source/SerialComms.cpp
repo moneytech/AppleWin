@@ -321,9 +321,13 @@ void CSuperSerialCard::CommTcpSerialClose()
 {
 	if (m_hCommAcceptSocket != INVALID_SOCKET)
 	{
-		//shutdown(m_hCommAcceptSocket, SD_SEND); // In case the client is waiting for data
+		shutdown(m_hCommAcceptSocket, 2 /* SD_BOTH */); // In case the client is waiting for data
 		closesocket(m_hCommAcceptSocket);
 		m_hCommAcceptSocket = INVALID_SOCKET;
+	}
+	while (!m_TcpSerialBuffer.empty())
+	{
+		m_TcpSerialBuffer.pop();
 	}
 }
 

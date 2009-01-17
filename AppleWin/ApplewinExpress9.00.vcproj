@@ -82,7 +82,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib Ws2_32.lib"
 				OutputFile=".\Release/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -175,7 +175,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib Ws2_32.lib"
 				OutputFile=".\Debug/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -536,35 +536,39 @@
 				Name="Z80"
 				>
 				<File
-					RelativePath=".\source\Z80\README.txt"
+					RelativePath=".\source\Z80VICE\daa.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80.cpp"
+					RelativePath=".\source\Z80VICE\daa.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80.h"
+					RelativePath=".\source\Z80VICE\z80.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80codes.h"
+					RelativePath=".\source\Z80VICE\z80.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80daa.h"
+					RelativePath=".\source\z80emu.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80emu.cpp"
+					RelativePath=".\source\z80emu.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80emu.h"
+					RelativePath=".\source\Z80VICE\z80mem.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80io.h"
+					RelativePath=".\source\Z80VICE\z80mem.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80regs.h"
 					>
 				</File>
 			</Filter>
@@ -749,6 +753,10 @@
 			</File>
 			<File
 				RelativePath="RESOURCE\SETUP.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\winres.h"
 				>
 			</File>
 		</Filter>
