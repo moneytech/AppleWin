@@ -755,10 +755,6 @@
 				RelativePath="RESOURCE\SETUP.BMP"
 				>
 			</File>
-			<File
-				RelativePath=".\resource\winres.h"
-				>
-			</File>
 		</Filter>
 		<File
 			RelativePath=".\source\Common.h"
