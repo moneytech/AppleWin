@@ -92,6 +92,7 @@ enum AppMode_e
 #define  REGVALUE_Z80_IN_SLOT5       "Z80 in slot 5"
 #define  REGVALUE_DUMP_TO_PRINTER    "Dump to printer"
 #define  REGVALUE_CONVERT_ENCODING   "Convert printer encoding for clones"
+#define  REGVALUE_DIRECT_CYRILLIC    "Direct cyrillic input for clones"
 #define  REGVALUE_FILTER_UNPRINTABLE "Filter unprintable characters"
 #define  REGVALUE_PRINTER_FILENAME   "Printer Filename"
 #define  REGVALUE_PRINTER_APPEND     "Append to printer file"

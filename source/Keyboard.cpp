@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 
 static bool g_bKeybBufferEnable = false;
+bool g_bDirectCyrillic = true;
 
 #define KEY_OLD
 
@@ -167,6 +168,9 @@ DWORD KeybGetNumQueries ()	// Used in determining 'idleness' of Apple system
 void KeybQueueKeypress (int key, BOOL bASCII)
 {
 	static bool bFreshReset = false;
+	static bool IsPravets= false;
+	if ((g_Apple2Type == A2TYPE_PRAVETS82) || (g_Apple2Type == A2TYPE_PRAVETS8M) || (g_Apple2Type == A2TYPE_PRAVETS8A))
+		IsPravets = true;
 
 	if (bASCII == ASCII)
 	{
@@ -177,7 +181,7 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 		}
 
 		bFreshReset = false;
-		if (key > 0x7F)
+		if ((key > 0x7F) && (IsPravets == false))
 			return;
 
 		if (!IS_APPLE2) 
@@ -198,17 +202,26 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			{
 				P8Shift = true;
 				if (g_Apple2Type == A2TYPE_PRAVETS8A) 
-					keycode = key + 32;
+				keycode = key + 32;
 			}
 
-			//Remap some keys for Pravets82/M
+			//Remap some keys for Pravets82
 			if (g_Apple2Type == A2TYPE_PRAVETS82)
 			{
+				if ((key >= 192) && (key <=255))
+				{						
+					keycode= KeybConvertCyrillic(key);
+				}
+				else if (key >127)
+				{
+					return;
+				}
+				
 				if (key == 64) 
 					keycode = 96;
 				if (key == '^') 
 					keycode = '~';
-
+								
 				if (g_bCapsLock == false) //cyrillic letters
 				{
 					if (key == '`') keycode = '^';
@@ -224,6 +237,16 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 			}
 			if (g_Apple2Type == A2TYPE_PRAVETS8M)  //Pravets 8M charset is still uncertain
 			{
+
+				if ((key >= 192) && (key <=255))
+				{						
+					keycode= KeybConvertCyrillic(key);
+				}
+				else if (key > 127)
+				{
+					return;
+				}
+
 				if (g_bCapsLock == false) //cyrillic letters
 				{
 					if (key == '[') keycode = '{';
@@ -237,9 +260,28 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 						keycode = '^'; //96= key `~
 				}
 			}
-			//Remap some keys for Pravets8A/C, which has a different charset for Pravtes82/M, whose keys MUST NOT be remapped.
+			//Remap some keys for Pravets8A/C, which has a different charset for Pravets82/M, whose keys MUST NOT be remapped.
 			if (g_Apple2Type == A2TYPE_PRAVETS8A) //&& (g_bCapsLock == false))
 			{
+				if (g_bDirectCyrillic )
+				{
+					if ((key  >= 97) && (key  <= 127))
+					{
+						keycode = key -32;
+						P8Shift = true;
+					}
+				}
+				
+				
+				if ((key >= 192) && (key <=255))
+				{						
+					keycode= KeybConvertCyrillic(key);
+				}
+				else if (key >127)
+				{
+					return;
+				}
+
 				if (g_bCapsLock == false) //i.e. cyrillic letters
 			    {
 					if (key == '[') keycode = '{';
@@ -536,3 +578,46 @@ DWORD KeybSetSnapshot(SS_IO_Keyboard* pSS)
 	g_nLastKey		= pSS->nLastKey;
 	return 0;
 }
+
+int KeybConvertCyrillic (int key)
+{		
+		char debkey = 0;
+		int keycode;
+	   const char KeyInput[]= "ABCDEFGHIJKLMNOPQRSTUVWXYZ^[]_`";
+	const char KeyOrderP82[]= "abwgdevzijklmnoprstufhc^[]wyx@q";
+//	const char KeyOrderP8M[]= "abwgdevzijklmnoprstufhc^[]wyx@q";
+	const char KeyOrderP8A[]= "abwgdevzijklmnoprstufhc~{}wyx`q"; //Still the Ý character is not supported in direct cyrillic mode.
+
+		keycode = key;
+		debkey = keycode;
+			if (key >= 224)
+			{
+				key = key - 159 ;
+			}
+			else
+			{
+				key= key - 127;
+				if (g_Apple2Type == A2TYPE_PRAVETS8A) 
+				{
+					P8Shift = true;
+				}
+
+			} //end if
+
+			int loop = 0;
+ 			for (loop=0; loop <33; loop++)
+				{
+				debkey = KeyInput[loop] +1;
+				if (key == KeyInput[loop] ) //	if (key == KeyInput[loop] +1)
+				{
+					switch (g_Apple2Type) //Sets the character set for the Apple model/clone
+						{
+							case A2TYPE_PRAVETS82: keycode= KeyOrderP82[loop];
+							case A2TYPE_PRAVETS8M: keycode= KeyOrderP82[loop];
+							case A2TYPE_PRAVETS8A: keycode= KeyOrderP8A[loop];
+						} //end switch
+				} //end if
+			} //end loop
+	return keycode;
+				
+} //end sub

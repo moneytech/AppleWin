@@ -94,6 +94,7 @@
 #define IDC_PRINTER_FILTER_UNPRINTABLE  1056
 #define IDC_PRINTER_APPEND				1057
 #define IDC_SPIN_PRINTER_IDLE           1058
+#define IDC_KEYBOARD_DIRECT_CYRILLIC    1059
 
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002

@@ -17,6 +17,8 @@ void    KeybToggleCapsLock ();
 void    KeybToggleP8ACapsLock ();
 DWORD   KeybGetSnapshot(SS_IO_Keyboard* pSS);
 DWORD   KeybSetSnapshot(SS_IO_Keyboard* pSS);
+int		KeybConvertCyrillic (int key);
+extern bool		g_bDirectCyrillic;
 
 BYTE __stdcall KeybReadData (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 BYTE __stdcall KeybReadFlag (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);

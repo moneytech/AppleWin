@@ -1123,6 +1123,9 @@ static void AdvancedDlg_OK(HWND window, UINT afterclose)
 	g_bConvertEncoding = IsDlgButtonChecked(window, IDC_PRINTER_CONVERT_ENCODING ) ? true : false;
 	REGSAVE(TEXT(REGVALUE_CONVERT_ENCODING), g_bConvertEncoding ? 1 : 0);
 
+    g_bDirectCyrillic = IsDlgButtonChecked(window, IDC_KEYBOARD_DIRECT_CYRILLIC ) ? true : false;
+	REGSAVE(TEXT(REGVALUE_DIRECT_CYRILLIC), g_bDirectCyrillic ? 1 : 0);
+
 	g_bFilterUnprintable = IsDlgButtonChecked(window, IDC_PRINTER_FILTER_UNPRINTABLE ) ? true : false;
 	REGSAVE(TEXT(REGVALUE_FILTER_UNPRINTABLE), g_bFilterUnprintable ? 1 : 0);
 
@@ -1288,6 +1291,7 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 		CheckDlgButton(window, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_DUMPTOPRINTER, g_bDumpToPrinter ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_CONVERT_ENCODING, g_bConvertEncoding ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_KEYBOARD_DIRECT_CYRILLIC, g_bDirectCyrillic ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_FILTER_UNPRINTABLE, g_bFilterUnprintable ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(window, IDC_PRINTER_APPEND, g_bPrinterAppend ? BST_CHECKED : BST_UNCHECKED);
 		SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE, UDM_SETRANGE, 0, MAKELONG(999,0));
@@ -1298,6 +1302,9 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 		InitFreezeDlgButton(window);
 
 		g_szSSNewDirectory[0] = 0x00;
+
+		// Need to specific cmd-line switch: -printer-real to enable this control
+		EnableWindow(GetDlgItem(window, IDC_DUMPTOPRINTER), g_bEnableDumpToRealPrinter ? TRUE : FALSE);
 
 		afterclose = 0;
 		break;

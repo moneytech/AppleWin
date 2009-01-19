@@ -463,6 +463,9 @@ void LoadConfiguration ()
   if(REGLOAD(TEXT(REGVALUE_CONVERT_ENCODING), &dwTmp))
     g_bConvertEncoding = dwTmp ? true : false;
 
+  if(REGLOAD(TEXT(REGVALUE_DIRECT_CYRILLIC), &dwTmp))
+    g_bDirectCyrillic = dwTmp ? true : false;
+
   if(REGLOAD(TEXT(REGVALUE_FILTER_UNPRINTABLE), &dwTmp))
     g_bFilterUnprintable = dwTmp ? true : false;
 
@@ -730,6 +733,10 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		else if(strcmp(lpCmdLine, "-printscreen") == 0)		// turn on dispay of the last filename print screen was saved to
 		{
 			g_bDisplayPrintScreenFileName = true;
+		}
+		else if(strcmp(lpCmdLine, "-printer-real") == 0)	// Enable control in Advanced config to allow dumping to a real printer
+		{
+			g_bEnableDumpToRealPrinter = true;
 		}
 
 		lpCmdLine = lpNextArg;
