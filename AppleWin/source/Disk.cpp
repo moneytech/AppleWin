@@ -759,10 +759,17 @@ void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
 
 	memcpy(pCxRomPeripheral + uSlot*256, pData, DISK2_FW_SIZE);
 
-	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
-	*(pCxRomPeripheral + (uSlot*256) + 0x4C) = 0xA9;
-	*(pCxRomPeripheral + (uSlot*256) + 0x4D) = 0x00;
-	*(pCxRomPeripheral + (uSlot*256) + 0x4E) = 0xEA;
+	if (enhancedisk)
+	{
+		// Disable the track stepping delay in the Disk II controller firmware
+		*(pCxRomPeripheral + (uSlot*256) + 0x4C) = 0xA9; // was 0x20
+		*(pCxRomPeripheral + (uSlot*256) + 0x4D) = 0x00; // was 0xA8
+		*(pCxRomPeripheral + (uSlot*256) + 0x4E) = 0xEA; // was 0xFC
+
+		// The following maintains the firmware's ADC checksum (used by "The CIA Files")
+		// Correcting for both ADC and EOR checksums is not possible in this case.
+		*(pCxRomPeripheral + (uSlot*256) + 0x4B) = 0x87; // was 0x56
+	}
 
 	//
 
