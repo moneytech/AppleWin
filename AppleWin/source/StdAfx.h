@@ -31,6 +31,7 @@
 #include "Common.h"
 #include "Structs.h"
 
+#include "AppleSPI.h"
 #include "AppleWin.h"
 #include "AY8910.h"
 #include "CPU.h"

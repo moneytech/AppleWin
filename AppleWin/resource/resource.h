@@ -44,6 +44,7 @@
 #define IDR_PRAVETS_82_ROM              139
 #define IDR_PRAVETS_8M_ROM              140
 #define IDR_PRAVETS_8C_ROM              142
+#define IDR_APLSPIDRVR_FW               143
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -62,6 +63,8 @@
 #define IDC_EDIT_HDD1                   1019
 #define IDC_EDIT_HDD2                   1020
 #define IDC_HDD_ENABLE                  1021
+#define IDC_APLSPI_ENABLE               1023
+#define IDC_SLOT7_ENABLE                1024
 #define IDC_SPIN_XTRIM                  1026
 #define IDC_SPIN_YTRIM                  1027
 #define IDC_PHASOR_ENABLE               1029

@@ -180,6 +180,7 @@
 				OutputFile=".\Debug/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
+				AdditionalLibraryDirectories="&quot;C:\Program Files\Microsoft SDKs\Windows\v6.1\Lib&quot;;&quot;C:\Program Files\Microsoft DirectX SDK (November 2008)\Lib\x86&quot;"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/Applewin.pdb"
 				SubSystem="2"
@@ -466,6 +467,14 @@
 				</File>
 				<File
 					RelativePath=".\source\6821.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\AppleSPI.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\AppleSPI.h"
 					>
 				</File>
 				<File

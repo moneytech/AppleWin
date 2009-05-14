@@ -1034,7 +1034,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		
 		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
-		EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
+		EnableSlot7(window, IsDlgButtonChecked(window, IDC_SLOT7_ENABLE));
 
 		afterclose = 0;
 		break;

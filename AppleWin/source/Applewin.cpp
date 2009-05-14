@@ -473,8 +473,19 @@ void LoadConfiguration ()
     g_bPrinterAppend = dwTmp ? true : false;
 
 
-  if(REGLOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
-	  HD_SetEnabled(dwTmp ? true : false);
+//  if(REGLOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
+//	  HD_SetEnabled(dwTmp ? true : false);
+
+  if(REGLOAD(TEXT(REGVALUE_SLOT7_ENABLED), &dwTmp))
+  {
+	  if(REGLOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
+		  HD_SetEnabled(dwTmp ? true : false);
+  }
+	  else
+  {
+	  if(REGLOAD(TEXT(REGVALUE_APLSPI_ENABLED), &dwTmp))
+		  APLSPI_SetEnabled(dwTmp ? true : false);
+	  }
 
   char szHDFilename[MAX_PATH] = {0};
   if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
