@@ -908,7 +908,6 @@ static void EnableHDD(HWND window, BOOL bEnable)
 static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 {
 	BOOL  newdisktype   = (BOOL) SendDlgItemMessage(window,IDC_DISKTYPE,CB_GETCURSEL,0,0);
-	//DWORD newslot7type  = (DWORD)SendDlgItemMessage(window,IDC_SLOT7TYPE,CB_GETCURSEL,0,0);
 
 	if (newdisktype != enhancedisk)
 	{
@@ -929,10 +928,19 @@ static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 	bool bAPLSPIIsEnabled = IsDlgButtonChecked(window, IDC_APLSPI_ENABLE) ? true : false;
 
 	if (SLOT7_IsEnabled()) {
-		
+		// Save whatever the user picked
      	HD_SetEnabled(bHDDIsEnabled);
     	APLSPI_SetEnabled(bAPLSPIIsEnabled);
 	}
+	else
+	{   // Undo anything we have set for SLOT&
+     	HD_SetEnabled(false);
+    	APLSPI_SetEnabled(false);
+		LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
+		if(pCxRomPeripheral != NULL)	
+		memset(pCxRomPeripheral + 7*256, 0, 256);
+	}
+
 
 	REGSAVE(TEXT("Enhance Disk Speed"),newdisktype);
 	REGSAVE(TEXT(REGVALUE_SLOT7_ENABLED), bSLOT7IsEnabled ? 1 : 0);
@@ -1017,6 +1025,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
 		case IDC_SLOT7_ENABLE:
 			EnableHDD(window, IsDlgButtonChecked(window, IDC_SLOT7_ENABLE));
+			uNewSlot7Type = SL7_UNINIT;
 			break;
 
 		case IDC_HDD_ENABLE:
