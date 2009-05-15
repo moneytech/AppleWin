@@ -1150,7 +1150,12 @@ void MemInitialize()
 #endif
 
 	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w
-	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
+	
+    eSLOT7TYPE Slot7Type = SLOT7_GetType();
+    if(Slot7Type == SL7_HDD)
+	  	HD_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
+    else if(Slot7Type == SL7_APLSPI)
+		APLSPI_Load_Rom(pCxRomPeripheral, 7);				// $C700 : HDD f/w
 
 	MemReset();
 }
