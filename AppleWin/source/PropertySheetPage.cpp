@@ -1021,12 +1021,12 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
 		case IDC_HDD_ENABLE:
 			uNewSlot7Type = SL7_HDD;
-			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
+			// EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
 			break;
 
 		case IDC_APLSPI_ENABLE:
 			uNewSlot7Type = SL7_APLSPI;
-			EnableHDD(window, IsDlgButtonChecked(window, IDC_APLSPI_ENABLE));
+			// EnableHDD(window, IsDlgButtonChecked(window, IDC_APLSPI_ENABLE));
 			break;
 
 		case IDC_CIDERPRESS_BROWSE:

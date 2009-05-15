@@ -228,27 +228,31 @@ bool HD_CardIsEnabled()
 // . DiskDlg_OK() - When HD is enabled/disabled on UI
 void HD_SetEnabled(bool bEnabled)
 {
-	if(g_bHD_Enabled == bEnabled)
-		return;
+	if(g_bHD_Enabled  == false && bEnabled == true) {
+	
+		g_bHD_Enabled = bEnabled;
 
-	g_bHD_Enabled = bEnabled;
+		SLOT7_SetType(SL7_HDD);
 
-	SLOT7_SetType(SL7_HDD);
+		// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
+		// . g_uSlot is only really setup by HD_Load_Rom(), later on
+		RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, NULL);
 
-	// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
-	// . g_uSlot is only really setup by HD_Load_Rom(), later on
-	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, NULL);
-
-	LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
-	if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
-		return;
+		LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
+		if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
+			return;
 
 	//
 
-	if(g_bHD_Enabled)
-		HD_Load_Rom(pCxRomPeripheral, g_uSlot);
+		if(g_bHD_Enabled)
+			HD_Load_Rom(pCxRomPeripheral, g_uSlot);
+		else
+			memset(pCxRomPeripheral + g_uSlot*256, 0, HDDRVR_SIZE);
+	}
 	else
-		memset(pCxRomPeripheral + g_uSlot*256, 0, HDDRVR_SIZE);
+	{
+			return;
+	}
 }
 
 LPCTSTR HD_GetFullName (int nDrive)

@@ -125,9 +125,8 @@ bool APLSPI_CardIsEnabled()
 
 void APLSPI_SetEnabled(bool bEnabled)
 {
-	if(g_bAPLSPI_Enabled == bEnabled)
-		return;
-
+	if(g_bAPLSPI_Enabled == false && bEnabled == true) {
+	
 	g_bAPLSPI_Enabled = bEnabled;
 
 	SLOT7_SetType(SL7_APLSPI);
@@ -146,10 +145,21 @@ void APLSPI_SetEnabled(bool bEnabled)
 		APLSPI_Load_Rom(pCxRomPeripheral, g_uSlot);
 	else
 		memset(pCxRomPeripheral + g_uSlot*256, 0, APLSPIDRVR_SIZE);
+	}
+	else
+	{	
+		return;
+	}
 }
 
 VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
+
+	const UINT APLSPI_FW_SIZE = 2*1024;
+	const UINT APLSPI_SLOT_FW_SIZE = 256;
+	const UINT APLSPI_SLOT_FW_OFFSET = 7*256;
+
+
 	if(!g_bAPLSPI_Enabled)
 		return;
 
