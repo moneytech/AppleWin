@@ -908,7 +908,7 @@ static void EnableHDD(HWND window, BOOL bEnable)
 static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 {
 	BOOL  newdisktype   = (BOOL) SendDlgItemMessage(window,IDC_DISKTYPE,CB_GETCURSEL,0,0);
-	DWORD newslot7type  = (DWORD)SendDlgItemMessage(window,IDC_SLOT7TYPE,CB_GETCURSEL,0,0);
+	//DWORD newslot7type  = (DWORD)SendDlgItemMessage(window,IDC_SLOT7TYPE,CB_GETCURSEL,0,0);
 
 	if (newdisktype != enhancedisk)
 	{
@@ -1069,6 +1069,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		  nID = IDC_APLSPI_ENABLE;
 	    else
 		  nID = IDC_SLOT7_DISABLE;
+		// Not sure what to do here above as for now it should only be HDD or APLSPI
 
 	    CheckRadioButton(window, IDC_HDD_ENABLE, IDC_APLSPI_ENABLE, nID);
 

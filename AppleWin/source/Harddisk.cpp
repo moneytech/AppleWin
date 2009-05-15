@@ -228,8 +228,16 @@ bool HD_CardIsEnabled()
 // . DiskDlg_OK() - When HD is enabled/disabled on UI
 void HD_SetEnabled(bool bEnabled)
 {
-	if(g_bHD_Enabled  == false && bEnabled == true) {
-	
+	if(g_bHD_Enabled == false && bEnabled == false) return;
+	if(g_bHD_Enabled == true  && bEnabled == true) return;
+	if(g_bHD_Enabled == true  && bEnabled == false) {
+	g_bHD_Enabled = false; 
+	return;
+	}
+
+	if(g_bHD_Enabled == false && bEnabled == true) {
+		
+		
 		g_bHD_Enabled = bEnabled;
 
 		SLOT7_SetType(SL7_HDD);
@@ -248,10 +256,6 @@ void HD_SetEnabled(bool bEnabled)
 			HD_Load_Rom(pCxRomPeripheral, g_uSlot);
 		else
 			memset(pCxRomPeripheral + g_uSlot*256, 0, HDDRVR_SIZE);
-	}
-	else
-	{
-			return;
 	}
 }
 

@@ -125,31 +125,34 @@ bool APLSPI_CardIsEnabled()
 
 void APLSPI_SetEnabled(bool bEnabled)
 {
+	if(g_bAPLSPI_Enabled == false && bEnabled == false) return;
+	if(g_bAPLSPI_Enabled == true  && bEnabled == true) return;
+	if(g_bAPLSPI_Enabled == true  && bEnabled == false) {
+	g_bAPLSPI_Enabled = false; 
+	return;
+	}
+
 	if(g_bAPLSPI_Enabled == false && bEnabled == true) {
 	
-	g_bAPLSPI_Enabled = bEnabled;
+		g_bAPLSPI_Enabled = bEnabled;
 
-	SLOT7_SetType(SL7_APLSPI);
+		SLOT7_SetType(SL7_APLSPI);
 
-	// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
-	// . g_uSlot is only really setup by HD_Load_Rom(), later on
-	RegisterIoHandler(g_uSlot, APLSPI_IO_EMUL, APLSPI_IO_EMUL, NULL, NULL, NULL, NULL);
+		// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
+		// . g_uSlot is only really setup by HD_Load_Rom(), later on
+		RegisterIoHandler(g_uSlot, APLSPI_IO_EMUL, APLSPI_IO_EMUL, NULL, NULL, NULL, NULL);
 
-	LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
-	if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
-		return;
+		LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
+		if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
+			return;
 
 	//
 
-	if(g_bAPLSPI_Enabled)
-		APLSPI_Load_Rom(pCxRomPeripheral, g_uSlot);
-	else
-		memset(pCxRomPeripheral + g_uSlot*256, 0, APLSPIDRVR_SIZE);
-	}
-	else
-	{	
-		return;
-	}
+		if(g_bAPLSPI_Enabled)
+			APLSPI_Load_Rom(pCxRomPeripheral, g_uSlot);
+		else
+			memset(pCxRomPeripheral + g_uSlot*256, 0, APLSPIDRVR_SIZE);
+		}
 }
 
 VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
