@@ -101,13 +101,27 @@ Implemntation Specifics
 */
 
 
+
+
 static bool g_bAPLSPI_Enabled = false;
 static bool	g_bAPLSPI_RomLoaded = false;
 static UINT g_uSlot = 7;
 
+static BYTE g_spidata = 0;
+static 	BYTE g_spistatus = 0;
+static 	BYTE g_spiclkdiv = 0;
+static 	BYTE g_spislaveSel = 0;
+static 	BYTE g_c800bank = 0;
+
 static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
 static const DWORD APLSPIDRVR_SIZE = APPLE_SLOT_SIZE;
+
+bool APLSPI_CardIsEnabled()
+{
+	return g_bAPLSPI_RomLoaded && g_bAPLSPI_Enabled;
+}
+
 
 void APLSPI_SetEnabled(bool bEnabled)
 {
@@ -115,6 +129,8 @@ void APLSPI_SetEnabled(bool bEnabled)
 		return;
 
 	g_bAPLSPI_Enabled = bEnabled;
+
+	SLOT7_SetType(SL7_APLSPI);
 
 	// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
 	// . g_uSlot is only really setup by HD_Load_Rom(), later on
@@ -166,199 +182,83 @@ VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	BYTE r = DEVICE_OK;
-	//addr &= 0xFF;
+	addr &= 0xFF;
 
-	//if (!HD_CardIsEnabled())
-	//	return r;
+	if (!APLSPI_CardIsEnabled())
+		return r;
 
-	//PHDD pHDD = &g_HardDrive[g_nHD_UnitNum >> 7];	// bit7 = drive select
 
-	//if (bWrite == 0) // read
-	//{
-	//	switch (addr)
-	//	{
-	//	case 0xF0:
-	//		{
-	//			if (pHDD->hd_imageloaded)
-	//			{
-	//				// based on loaded data block request, load block into memory
-	//				// returns status
-	//				switch (g_nHD_Command)
-	//				{
-	//				default:
-	//				case 0x00: //status
-	//					if (GetFileSize(pHDD->hd_file,NULL) == 0)
-	//					{
-	//						pHDD->hd_error = 1;
-	//						r = DEVICE_IO_ERROR;
-	//					}
-	//					break;
-	//				case 0x01: //read
-	//					{
-	//						DWORD br = GetFileSize(pHDD->hd_file,NULL);
-	//						if ((DWORD)(pHDD->hd_diskblock * 512) <= br)	// seek to block
-	//						{
-	//							SetFilePointer(pHDD->hd_file,pHDD->hd_diskblock * 512,NULL,FILE_BEGIN);	// seek to block
-	//							if (ReadFile(pHDD->hd_file,pHDD->hd_buf,512,&br,NULL))	// read block into buffer
-	//							{
-	//								pHDD->hd_error = 0;
-	//								r = 0;
-	//								pHDD->hd_buf_ptr = 0;
-	//							}
-	//							else
-	//							{
-	//								pHDD->hd_error = 1;
-	//								r = DEVICE_IO_ERROR;
-	//							}
-	//						}
-	//						else
-	//						{
-	//							pHDD->hd_error = 1;
-	//							r = DEVICE_IO_ERROR;
-	//						}
-	//					}
-	//					break;
-	//				case 0x02: //write
-	//					{
-	//						DWORD bw = GetFileSize(pHDD->hd_file,NULL);
-	//						if ((DWORD)(pHDD->hd_diskblock * 512) <= bw)
-	//						{
-	//							MoveMemory(pHDD->hd_buf,mem+pHDD->hd_memblock,512);
-	//							SetFilePointer(pHDD->hd_file,pHDD->hd_diskblock * 512,NULL,FILE_BEGIN);	// seek to block
-	//							if (WriteFile(pHDD->hd_file,pHDD->hd_buf,512,&bw,NULL))	// write buffer to file
-	//							{
-	//								pHDD->hd_error = 0;
-	//								r = 0;
-	//							}
-	//							else
-	//							{
-	//								pHDD->hd_error = 1;
-	//								r = DEVICE_IO_ERROR;
-	//							}
-	//						}
-	//						else
-	//						{
-	//							DWORD fsize = SetFilePointer(pHDD->hd_file,0,NULL,FILE_END);
-	//							DWORD addblocks = pHDD->hd_diskblock - (fsize / 512);
-	//							FillMemory(pHDD->hd_buf,512,0);
-	//							while (addblocks--)
-	//							{
-	//								DWORD bw;
-	//								WriteFile(pHDD->hd_file,pHDD->hd_buf,512,&bw,NULL);
-	//							}
-	//							if (SetFilePointer(pHDD->hd_file,pHDD->hd_diskblock * 512,NULL,FILE_BEGIN) != 0xFFFFFFFF) {	// seek to block
-	//								MoveMemory(pHDD->hd_buf,mem+pHDD->hd_memblock,512);
-	//								if (WriteFile(pHDD->hd_file,pHDD->hd_buf,512,&bw,NULL)) // write buffer to file
-	//								{
-	//									pHDD->hd_error = 0;
-	//									r = 0;
-	//								}
-	//								else
-	//								{
-	//									pHDD->hd_error = 1;
-	//									r = DEVICE_IO_ERROR;
-	//								}
-	//							}
-	//						}
-	//					}
-	//					break;
-	//				case 0x03: //format
-	//					break;
-	//				}
-	//			}
-	//			else
-	//			{
-	//				pHDD->hd_error = 1;
-	//				r = DEVICE_UNKNOWN_ERROR;
-	//			}
-	//		}
-	//		break;
-	//	case 0xF1: // hd_error
-	//		{
-	//			r = pHDD->hd_error;
-	//		}
-	//		break;
-	//	case 0xF2:
-	//		{
-	//			r = g_nHD_Command;
-	//		}
-	//		break;
-	//	case 0xF3:
-	//		{
-	//			r = g_nHD_UnitNum;
-	//		}
-	//		break;
-	//	case 0xF4:
-	//		{
-	//			r = (BYTE)(pHDD->hd_memblock & 0x00FF);
-	//		}
-	//		break;
-	//	case 0xF5:
-	//		{
-	//			r = (BYTE)(pHDD->hd_memblock & 0xFF00 >> 8);
-	//		}
-	//		break;
-	//	case 0xF6:
-	//		{
-	//			r = (BYTE)(pHDD->hd_diskblock & 0x00FF);
-	//		}
-	//		break;
-	//	case 0xF7:
-	//		{
-	//			r = (BYTE)(pHDD->hd_diskblock & 0xFF00 >> 8);
-	//		}
-	//		break;
-	//	case 0xF8:
-	//		{
-	//			r = pHDD->hd_buf[pHDD->hd_buf_ptr];
-	//			pHDD->hd_buf_ptr++;
-	//		}
-	//		break;
-	//	default:
-	//		return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
-	//	}
-	//}
-	//else // write
-	//{
-	//	switch (addr)
-	//	{
-	//	case 0xF2:
-	//		{
-	//			g_nHD_Command = d;
-	//		}
-	//		break;
-	//	case 0xF3:
-	//		{
-	//			// b7    = drive#
-	//			// b6..4 = slot#
-	//			// b3..0 = ?
-	//			g_nHD_UnitNum = d;
-	//		}
-	//		break;
-	//	case 0xF4:
-	//		{
-	//			pHDD->hd_memblock = pHDD->hd_memblock & 0xFF00 | d;
-	//		}
-	//		break;
-	//	case 0xF5:
-	//		{
-	//			pHDD->hd_memblock = pHDD->hd_memblock & 0x00FF | (d << 8);
-	//		}
-	//		break;
-	//	case 0xF6:
-	//		{
-	//			pHDD->hd_diskblock = pHDD->hd_diskblock & 0xFF00 | d;
-	//		}
-	//		break;
-	//	case 0xF7:
-	//		{
-	//			pHDD->hd_diskblock = pHDD->hd_diskblock & 0x00FF | (d << 8);
-	//		}
-	//		break;
-	//	default:
-	//		return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
-	//	}
-	//}
+	if (bWrite == 0) // read
+	{
+	
+		switch (addr)
+
+		{
+		case 0xF0:  // SPI Read Data
+			{
+				 r = g_spidata;
+			}
+			break;
+		case 0xF1: // SPI Read Status
+			{
+				r = g_spistatus;
+			}
+			break;
+		case 0xF2:  // Read SCLK Divisor
+			{
+				r = g_spiclkdiv;
+			}
+			break;
+		case 0xF3:  // Read Slave Select
+			{
+				r = g_spislaveSel;
+			}
+			break;
+		case 0xF4: // Read C800 Bank register
+			{
+				r = g_c800bank ;
+			}
+			break;
+
+		default:
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+		
+		}
+	}
+	else // write
+	{
+		switch (addr)
+		{
+		case 0xF0:  // SPI WRITE Data
+			{
+				 g_spidata = d;
+			}
+			break;
+		case 0xF1: // SPI Write Control
+			{
+				g_spistatus = d;
+			}
+			break;
+		case 0xF2:  // Write SCLK Divisor
+			{
+				g_spiclkdiv = d; 
+			}
+			break;
+		case 0xF3:  // Write Slave Select
+			{
+				g_spislaveSel = d;
+			}
+			break;
+		case 0xF4: // Write C800 Bank register
+			{
+				g_c800bank = d;
+			}
+			break;
+
+		default:
+			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+		}
+	}
 
 	return r;
 }

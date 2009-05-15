@@ -233,6 +233,8 @@ void HD_SetEnabled(bool bEnabled)
 
 	g_bHD_Enabled = bEnabled;
 
+	SLOT7_SetType(SL7_HDD);
+
 	// FIXME: For LoadConfiguration(), g_uSlot=7 (see definition at start of file)
 	// . g_uSlot is only really setup by HD_Load_Rom(), later on
 	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, NULL);

@@ -118,6 +118,9 @@ enum AppMode_e
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 
+enum eSLOT7TYPE {SL7_UNINIT=0, SL7_NONE, SL7_HDD, SL7_APLSPI};	// Apple Slot7 types
+
+
 typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
 
 typedef struct _IMAGE__ { int unused; } *HIMAGE;

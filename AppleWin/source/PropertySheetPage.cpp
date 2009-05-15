@@ -896,13 +896,19 @@ static void EnableHDD(HWND window, BOOL bEnable)
 
 	EnableWindow(GetDlgItem(window, IDC_HDD2), bEnable);
 	EnableWindow(GetDlgItem(window, IDC_EDIT_HDD2), bEnable);
+
+	EnableWindow(GetDlgItem(window, IDC_HDD_ENABLE), bEnable);
+	EnableWindow(GetDlgItem(window, IDC_APLSPI_ENABLE), bEnable);
+
+
 }
 
 //---------------------------------------------------------------------------
 
-static void DiskDlg_OK(HWND window, UINT afterclose)
+static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 {
 	BOOL  newdisktype   = (BOOL) SendDlgItemMessage(window,IDC_DISKTYPE,CB_GETCURSEL,0,0);
+	DWORD newslot7type  = (DWORD)SendDlgItemMessage(window,IDC_SLOT7TYPE,CB_GETCURSEL,0,0);
 
 	if (newdisktype != enhancedisk)
 	{
@@ -917,11 +923,21 @@ static void DiskDlg_OK(HWND window, UINT afterclose)
 			afterclose = WM_USER_RESTART;
 	}
 
+    bool bSLOT7IsEnabled = IsDlgButtonChecked(window, IDC_SLOT7_ENABLE) ? true : false;
+	SLOT7_SetEnabled(bSLOT7IsEnabled);
 	bool bHDDIsEnabled = IsDlgButtonChecked(window, IDC_HDD_ENABLE) ? true : false;
-	HD_SetEnabled(bHDDIsEnabled);
+	bool bAPLSPIIsEnabled = IsDlgButtonChecked(window, IDC_APLSPI_ENABLE) ? true : false;
+
+	if (SLOT7_IsEnabled()) {
+		
+     	HD_SetEnabled(bHDDIsEnabled);
+    	APLSPI_SetEnabled(bAPLSPIIsEnabled);
+	}
 
 	REGSAVE(TEXT("Enhance Disk Speed"),newdisktype);
+	REGSAVE(TEXT(REGVALUE_SLOT7_ENABLED), bSLOT7IsEnabled ? 1 : 0);
 	REGSAVE(TEXT(REGVALUE_HDD_ENABLED), bHDDIsEnabled ? 1 : 0);
+	REGSAVE(TEXT(REGVALUE_APLSPI_ENABLED), bAPLSPIIsEnabled ? 1 : 0);
 	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE1), 1, HD_GetFullName(0));
 	RegSaveString(TEXT("Configuration"), TEXT(REGVALUE_HDD_IMAGE2), 1, HD_GetFullName(1));
 
@@ -943,6 +959,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
                              LPARAM lparam)
 {
   static UINT afterclose = 0;
+  static UINT uNewSlot7Type = SL7_UNINIT;
 
   switch (message)
   {
@@ -957,7 +974,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 			break;
         case PSN_APPLY:
 			SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-			DiskDlg_OK(window, afterclose);
+			DiskDlg_OK(window, afterclose, uNewSlot7Type);
 			break;
 		case PSN_QUERYCANCEL:
 			// Can use this to ask user to confirm cancel
@@ -983,7 +1000,7 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 			break;
 
 		case IDC_HDD1:
-			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
+			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE) || IsDlgButtonChecked(window, IDC_APLSPI_ENABLE))
 			{
 				HD_Select(0);
 				SendDlgItemMessage(window,IDC_EDIT_HDD1,WM_SETTEXT,0,(LPARAM)HD_GetFullName(0));
@@ -991,15 +1008,25 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 			break;
 
 		case IDC_HDD2:
-			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE))
+			if(IsDlgButtonChecked(window, IDC_HDD_ENABLE) || IsDlgButtonChecked(window, IDC_APLSPI_ENABLE))
 			{
 				HD_Select(1);
 				SendDlgItemMessage(window,IDC_EDIT_HDD2,WM_SETTEXT,0,(LPARAM)HD_GetFullName(1));
 			}
 			break;
 
+		case IDC_SLOT7_ENABLE:
+			EnableHDD(window, IsDlgButtonChecked(window, IDC_SLOT7_ENABLE));
+			break;
+
 		case IDC_HDD_ENABLE:
+			uNewSlot7Type = SL7_HDD;
 			EnableHDD(window, IsDlgButtonChecked(window, IDC_HDD_ENABLE));
+			break;
+
+		case IDC_APLSPI_ENABLE:
+			uNewSlot7Type = SL7_APLSPI;
+			EnableHDD(window, IsDlgButtonChecked(window, IDC_APLSPI_ENABLE));
 			break;
 
 		case IDC_CIDERPRESS_BROWSE:
@@ -1032,9 +1059,20 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 
 		//
 		
-		CheckDlgButton(window, IDC_HDD_ENABLE, HD_CardIsEnabled() ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(window, IDC_SLOT7_ENABLE, SLOT7_IsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
-		EnableSlot7(window, IsDlgButtonChecked(window, IDC_SLOT7_ENABLE));
+	    int nID;
+	    eSLOT7TYPE Slot7Type = SLOT7_GetType();
+	    if(Slot7Type == SL7_HDD)
+		  nID = IDC_HDD_ENABLE;
+	    else if(Slot7Type == SL7_APLSPI)
+		  nID = IDC_APLSPI_ENABLE;
+	    else
+		  nID = IDC_SLOT7_DISABLE;
+
+	    CheckRadioButton(window, IDC_HDD_ENABLE, IDC_APLSPI_ENABLE, nID);
+
+		EnableHDD(window, IsDlgButtonChecked(window, IDC_SLOT7_ENABLE));
 
 		afterclose = 0;
 		break;

@@ -622,6 +622,14 @@
 					>
 				</File>
 				<File
+					RelativePath=".\source\slot7.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\slot7.h"
+					>
+				</File>
+				<File
 					RelativePath=".\source\SoundCore.cpp"
 					>
 				</File>

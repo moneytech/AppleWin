@@ -64,11 +64,13 @@
 #define IDC_EDIT_HDD2                   1020
 #define IDC_HDD_ENABLE                  1021
 #define IDC_APLSPI_ENABLE               1023
-#define IDC_SLOT7_ENABLE                1024
+#define IDC_SLOT7TYPE                   1024
+#define IDC_SLOT7_ENABLE                1025
 #define IDC_SPIN_XTRIM                  1026
 #define IDC_SPIN_YTRIM                  1027
-#define IDC_PHASOR_ENABLE               1029
-#define IDC_SOUNDCARD_DISABLE           1030
+#define IDC_PHASOR_ENABLE               1028
+#define IDC_SOUNDCARD_DISABLE           1029
+#define IDC_SLOT7_DISABLE               1030
 #define IDC_TFE_SETTINGS_ENABLE_T       1031
 #define IDC_TFE_SETTINGS_ENABLE         1032
 #define IDC_TFE_SETTINGS_INTERFACE_T    1033

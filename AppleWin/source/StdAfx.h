@@ -12,6 +12,7 @@
 // Not needed in VC7.1, but needed in VC Express
 #include <tchar.h> 
 
+#include <assert.h>
 #include <crtdbg.h>
 #include <dsound.h>
 #include <dshow.h>
@@ -31,6 +32,7 @@
 #include "Common.h"
 #include "Structs.h"
 
+#include "slot7.h"
 #include "AppleSPI.h"
 #include "AppleWin.h"
 #include "AY8910.h"
