@@ -127,7 +127,7 @@ UINT g_uMouseShowCrosshair = 0;
 UINT g_uMouseRestrictToWindow = 0;
 
 UINT g_uZ80InSlot5 = 0;
-
+bool g_SLOT7_DLG_Active;
 //
 
 UINT g_uTheFreezesF8Rom = 0;
@@ -922,8 +922,23 @@ static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 			afterclose = WM_USER_RESTART;
 	}
 
+
+
     bool bSLOT7IsEnabled = IsDlgButtonChecked(window, IDC_SLOT7_ENABLE) ? true : false;
 	SLOT7_SetEnabled(bSLOT7IsEnabled);
+
+	if (g_SLOT7_DLG_Active != bSLOT7IsEnabled) {
+		if (MessageBox(window,
+			TEXT("You have changed the slot7 setting.  ")
+			TEXT("This change will not take effect ")
+			TEXT("until the next time you restart the ")
+			TEXT("emulator.\n\n")
+			TEXT("Would you like to restart the emulator now?"),
+			TEXT("Configuration"),
+			MB_ICONQUESTION | MB_YESNO | MB_SETFOREGROUND) == IDYES)
+			afterclose = WM_USER_RESTART;
+	}
+
 	bool bHDDIsEnabled = IsDlgButtonChecked(window, IDC_HDD_ENABLE) ? true : false;
 	bool bAPLSPIIsEnabled = IsDlgButtonChecked(window, IDC_APLSPI_ENABLE) ? true : false;
 
@@ -932,15 +947,17 @@ static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
      	HD_SetEnabled(bHDDIsEnabled);
     	APLSPI_SetEnabled(bAPLSPIIsEnabled);
 	}
-	else
-	{   // Undo anything we have set for SLOT&
-     	HD_SetEnabled(false);
-    	APLSPI_SetEnabled(false);
-		LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
-		if(pCxRomPeripheral != NULL)	
-		memset(pCxRomPeripheral + 7*256, 0, 256);
-	}
+	//else
+	//{   // Undo anything we have set for SLOT7
+ //    	HD_SetEnabled(false);
+ //   	APLSPI_SetEnabled(false);
+	//	LPBYTE pCxRomPeripheral = MemGetCxRomPeripheral();
+	//	if(pCxRomPeripheral != NULL)	
+	//	memset(pCxRomPeripheral + 7*256, 0, 256);
+	//	memset(pCxRomPeripheral + 8*256, 0, 2048);
+	//	// Need to register 
 
+	//}
 
 	REGSAVE(TEXT("Enhance Disk Speed"),newdisktype);
 	REGSAVE(TEXT(REGVALUE_SLOT7_ENABLED), bSLOT7IsEnabled ? 1 : 0);
@@ -1067,6 +1084,8 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		SendDlgItemMessage(window,IDC_CIDERPRESS_FILENAME ,WM_SETTEXT,0,(LPARAM)PathToCiderPress);
 
 		//
+
+		g_SLOT7_DLG_Active = SLOT7_IsEnabled();
 		
 		CheckDlgButton(window, IDC_SLOT7_ENABLE, SLOT7_IsEnabled() ? BST_CHECKED : BST_UNCHECKED);
 
