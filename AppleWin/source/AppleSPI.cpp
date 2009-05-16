@@ -38,7 +38,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 						show enable slot 7 checkbox
 						show Hardisk or Apple SPI radio button
 					- First stab is to just model a 2KB EPROM (WIP)
-					    
+05/14/2009 - RGJ -  - Added initial support for 32K banked ROM in SLOT 7
+					- Added dummy ROM file so i can see whats being loaded
 
 */
 
@@ -112,10 +113,18 @@ static 	BYTE g_spistatus = 0;
 static 	BYTE g_spiclkdiv = 0;
 static 	BYTE g_spislaveSel = 0;
 static 	BYTE g_c800bank = 0;
+static UINT rombankoffset = 0;
+
+static const DWORD  APLSPI_FW_SIZE = 2*1024;
+static const DWORD  APLSPI_FW_FILE_SIZE = 32*1024;
+static const DWORD  APLSPI_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
+static const DWORD  APLSPI_SLOT_FW_OFFSET = g_uSlot*256;
+
+BYTE* g_pRomData;
+BYTE* m_pAPLSPIExpansionRom;
 
 static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
-static const DWORD APLSPIDRVR_SIZE = APPLE_SLOT_SIZE;
 
 bool APLSPI_CardIsEnabled()
 {
@@ -146,22 +155,20 @@ void APLSPI_SetEnabled(bool bEnabled)
 		if(pCxRomPeripheral == NULL)	// This will be NULL when called after loading value from Registry
 			return;
 
-	//
+		//
 
 		if(g_bAPLSPI_Enabled)
 			APLSPI_Load_Rom(pCxRomPeripheral, g_uSlot);
 		else
-			memset(pCxRomPeripheral + g_uSlot*256, 0, APLSPIDRVR_SIZE);
+			memset(pCxRomPeripheral + (g_uSlot*256), 0, APLSPI_SLOT_FW_SIZE);
 		}
+
+		// RegisterIoHandler(g_uSlot, APLSPI_IO_EMUL, APLSPI_IO_EMUL, NULL, NULL, NULL, m_pAPLSPIExpansionRom);
+
 }
 
 VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
-
-	const UINT APLSPI_FW_SIZE = 2*1024;
-	const UINT APLSPI_SLOT_FW_SIZE = 256;
-	const UINT APLSPI_SLOT_FW_OFFSET = 7*256;
-
 
 	if(!g_bAPLSPI_Enabled)
 		return;
@@ -171,20 +178,32 @@ VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 		return;
 
 	DWORD dwResSize = SizeofResource(NULL, hResInfo);
-	if(dwResSize != APLSPIDRVR_SIZE)
+	if(dwResSize != APLSPI_FW_FILE_SIZE)
 		return;
 
 	HGLOBAL hResData = LoadResource(NULL, hResInfo);
 	if(hResData == NULL)
 		return;
 
-	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
-	if(pData == NULL)
+	g_pRomData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+	if(g_pRomData == NULL)
 		return;
 
 	g_uSlot = uSlot;
-	memcpy(pCxRomPeripheral + uSlot*256, pData, APLSPIDRVR_SIZE);
+	memcpy(pCxRomPeripheral + (uSlot*256), (g_pRomData+APLSPI_SLOT_FW_OFFSET), APLSPI_SLOT_FW_SIZE);
 	g_bAPLSPI_RomLoaded = true;
+
+		// Expansion ROM
+	if (m_pAPLSPIExpansionRom == NULL)
+	{
+		m_pAPLSPIExpansionRom = new BYTE [APLSPI_FW_SIZE];
+
+		if (m_pAPLSPIExpansionRom)
+			// Need to skip the first 2048 bytes as that is slot ROM
+			memcpy(m_pAPLSPIExpansionRom, (g_pRomData+2048+rombankoffset), APLSPI_FW_SIZE);
+	}
+
+	RegisterIoHandler(g_uSlot, APLSPI_IO_EMUL, APLSPI_IO_EMUL, NULL, NULL, NULL, m_pAPLSPIExpansionRom);
 }
 
 
@@ -265,6 +284,15 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 		case 0xF4: // Write C800 Bank register
 			{
 				g_c800bank = d;
+				rombankoffset = g_c800bank * 2048;
+				if (m_pAPLSPIExpansionRom)
+					// Need to skip the first 2048 bytes to position ROMBank 0 in file
+					memcpy(m_pAPLSPIExpansionRom, (g_pRomData+2048+rombankoffset), APLSPI_FW_SIZE);
+					// Tom ?
+					// I am wondering if it would not be more effective to just update the
+					// ExpansionRom[uSlot] = g_pRomData+rombankoffset;
+					// vs coping the data each time?
+
 			}
 			break;
 

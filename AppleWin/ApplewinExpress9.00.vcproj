@@ -748,6 +748,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\AppleSPI_LG.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\AppleSPI_SM.rom"
+				>
+			</File>
+			<File
 				RelativePath=".\resource\Applewin.bmp"
 				>
 			</File>
