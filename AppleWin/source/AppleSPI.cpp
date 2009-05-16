@@ -284,6 +284,7 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 		case 0xF4: // Write C800 Bank register
 			{
 				g_c800bank = d;
+				if (g_c800bank > 14) g_c800bank = 14; 
 				rombankoffset = g_c800bank * 2048;
 				if (m_pAPLSPIExpansionRom)
 					// Need to skip the first 2048 bytes to position ROMBank 0 in file
