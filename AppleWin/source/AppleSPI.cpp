@@ -49,8 +49,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 				 - Change dummy ROM map to show what bank we are in F1 -> FF
 				 - Bank zero is now mappable into $C800, this will be useful when inplace updating of the file is supported
 
+05/17/2009 - RGJ - Add support for load ROM image from external file
+
 00/00/2009 - RGJ - Todo
-				 - Add support for load from file
 				 - Add support for Write Protect and flush to disk
  				 - Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
 
@@ -173,6 +174,7 @@ static const DWORD  APLSPI_FW_FILE_SIZE = 32*1024;
 static const DWORD  APLSPI_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
 static const DWORD  APLSPI_SLOT_FW_OFFSET = g_uSlot*256;
 
+static LPBYTE  filerom       = NULL;
 BYTE* g_pRomData;
 BYTE* m_pAPLSPIExpansionRom;
 
@@ -216,31 +218,55 @@ void APLSPI_SetEnabled(bool bEnabled)
 			memset(pCxRomPeripheral + (g_uSlot*256), 0, APLSPI_SLOT_FW_SIZE);
 		}
 
-		// RegisterIoHandler(g_uSlot, APLSPI_IO_EMUL, APLSPI_IO_EMUL, NULL, NULL, NULL, m_pAPLSPIExpansionRom);
-
 }
 
 VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 {
-
+ 
 	if(!g_bAPLSPI_Enabled)
 		return;
 
-	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APLSPIDRVR_FW), "FIRMWARE");
-	if(hResInfo == NULL)
-		return;
+   // Attempt to read the AppleSPI FIRMWARE ROM into memory
+	TCHAR sRomFileName[ 128 ];
+	_tcscpy( sRomFileName, TEXT("AppleSPI_EX.ROM") );
 
-	DWORD dwResSize = SizeofResource(NULL, hResInfo);
-	if(dwResSize != APLSPI_FW_FILE_SIZE)
-		return;
+    TCHAR filename[MAX_PATH];
+    _tcscpy(filename,g_sProgramDir);
+    _tcscat(filename,sRomFileName );
+    HANDLE file = CreateFile(filename,
+                           GENERIC_READ,
+                           FILE_SHARE_READ,
+                           (LPSECURITY_ATTRIBUTES)NULL,
+                           OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                           NULL);
 
-	HGLOBAL hResData = LoadResource(NULL, hResInfo);
-	if(hResData == NULL)
-		return;
+	if (file == INVALID_HANDLE_VALUE)
+	{
+		HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_APLSPIDRVR_FW), "FIRMWARE");
+		if(hResInfo == NULL)
+			return;
 
-	g_pRomData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
-	if(g_pRomData == NULL)
+		DWORD dwResSize = SizeofResource(NULL, hResInfo);
+		if(dwResSize != APLSPI_FW_FILE_SIZE)
+			return;
+
+		HGLOBAL hResData = LoadResource(NULL, hResInfo);
+		if(hResData == NULL)
+			return;
+
+		g_pRomData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+		if(g_pRomData == NULL)
 		return;
+	}
+	else
+	{
+		filerom   = (LPBYTE)VirtualAlloc(NULL,0x8000 ,MEM_COMMIT,PAGE_READWRITE);
+		DWORD bytesread;
+		ReadFile(file,filerom,0x8000,&bytesread,NULL); // HACK: Magic #
+		CloseHandle(file);
+		g_pRomData = (BYTE*) filerom;
+	}
 
 	g_uSlot = uSlot;
 	memcpy(pCxRomPeripheral + (uSlot*256), (g_pRomData+APLSPI_SLOT_FW_OFFSET), APLSPI_SLOT_FW_SIZE);
