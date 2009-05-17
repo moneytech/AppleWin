@@ -75,8 +75,8 @@ Refer to 65SPI datasheet for detailed information
 	C0F2	(r/w) SCLK Divisor
 	C0F3	(r/w) Slave Select
 	C0FC	(r/w) EEPROM Bank select
-	C0FD    (w)   Disable EEPROM write protect - 00 11 22 33 pattern?
-	C0FE    (w)   Enable EEPROM WP - 00 22 44 66 - pattern?
+	C0FD    (w)   Disable EEPROM write protect - 00 11 22 33 pattern
+	C0FE    (w)   Enable EEPROM WP - 00 22 44 66 - pattern
 	C0FF    (r)   WP status
 
 */
@@ -85,15 +85,21 @@ Refer to 65SPI datasheet for detailed information
 Serial Peripheral Interface/ Pagable EEPROM emulation in Applewin.
 
 Concept
-	- Stage One: To emulate a pagable 28C256 (32KB) EEPROM. Plan to model after 
-				 Rich Dreher's CFFA EEPROM support as much as possible (TBD)
-		         This will alow multiple devices to have their own C800 Space.
+	Stage One: 
 
-			   : EEPROM images supplied as ROM file, included in Program resources
+		-To emulate a pagable 28C256 (32KB) EEPROM. 
+			This will alow multiple devices to have their own C800 Space.
+	
+			Consulted Rich Dreher's CFFA EEPROM support as a guide. Need 
+			to consult Datasheet to consider how the real hardware 
+			implmentation would work and adjust accordingly.
+		         
+
+		- EEPROM images supplied as ROM file, included in Program resources
 			     or loadable from a file if found in same dir as Applewin exe and 
 				 updateable via emulator (eventually)
 
-			   : Add EEPROM support to existing HDD driver. It won't use it but it 
+		- Add EEPROM support to existing HDD driver. It won't use it but it 
 				 will come in handy for Uthernet in Slot3 that cannot have it's own ROM while in that slot.
 
 Implemntation Specifics
@@ -147,10 +153,11 @@ Implemntation Specifics
 
 
   2. 65SPI 
-    - Stage Two: To emulate 65SPI so tha muliple devices can be supported from one slot
-		Possibilites include:
-			SDcard support (Hard disk drive images)
-			Ethernet Interface ENC28J60
+	Stage Two: 
+		- To emulate 65SPI so tha muliple devices can be supported from one slot
+			Possibilites include:
+				SDcard support (Hard disk drive images)
+				Ethernet Interface ENC28J60
 
   3. Known Bugs
 		???
@@ -391,6 +398,8 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 
 			}
 			break;
+
+		// Have I made this more difficult then it needs to be? Single write access suffcient?
 		case 0xFD: // Write protect disable - 00 11 22 33
 			{
 				dcount += 1;
