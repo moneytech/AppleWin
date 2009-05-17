@@ -748,11 +748,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\resource\AppleSPI_LG.rom"
+				RelativePath=".\resource\AppleSPI_EX.rom"
 				>
 			</File>
 			<File
-				RelativePath=".\resource\AppleSPI_SM.rom"
+				RelativePath=".\resource\AppleSPI_IN.rom"
 				>
 			</File>
 			<File
