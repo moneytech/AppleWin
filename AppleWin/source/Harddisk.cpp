@@ -583,3 +583,12 @@ static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 
 	return r;
 }
+
+BYTE __stdcall HD_Update_Rom(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
+{
+ // Update ROM image by Storing byte @ program counter minus $c800 as offset into current bank of active slot7 EEPROM
+
+ //*((m_pAPLSPIExpansionRom)+(programcounter-0xc800))=value;
+
+ return 0;
+}

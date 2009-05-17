@@ -52,9 +52,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 05/17/2009 - RGJ	- Add support to load AppleSPI_EX ROM image from external file
 					- Change ROM image size for HDD from 256 bytes to 32K in prep for EEPROM support
 					- Add support for EEPROM Write Protect
+					- Add support for IOWrite_Cxxx in memory.cpp
 
 00/00/2009 - RGJ	- Todo
-					- Add support for IOWrite_Cxxx in memory.cpp
 					- Flush EEPROM changes to disk
  					- Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
 
@@ -411,7 +411,10 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 					ecount = 0;
 				}
 				if (d == 0x226 || d == 0x44 || d == 0x66) g_eepromwp_e_flag = g_eepromwp_e_flag + d;
-				if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) g_eepromwp = true;
+				if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) {
+					g_eepromwp = true;
+					//flush to disk here
+				}
 			}
 			break;
 
@@ -434,4 +437,13 @@ VOID APLSPI_Cleanup()
 	//}
 
 	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
+}
+
+BYTE __stdcall APLSPI_Update_Rom(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
+{
+ // Update ROM image by Storing byte @ program counter minus $c800 as offset into current bank of active slot7 EEPROM
+
+ if (g_eepromwp == false) *((m_pAPLSPIExpansionRom)+(address-0xc800)) = value;
+
+ return 0;
 }

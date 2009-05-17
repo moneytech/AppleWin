@@ -441,6 +441,8 @@ static BYTE* ExpansionRom[NUM_SLOTS];
 enum eExpansionRomType {eExpRomNull=0, eExpRomInternal, eExpRomPeripheral};
 static eExpansionRomType g_eExpansionRomType = eExpRomNull;
 static UINT	g_uPeripheralRomSlot = 0;
+static eExpansionRomType g_last_active_eExpansionRomType = eExpRomNull;
+static UINT	g_last_active_uPeripheralRomSlot = 0;
 
 //=============================================================================
 
@@ -536,6 +538,11 @@ BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE v
 				memcpy(mem+FIRMWARE_EXPANSION_BEGIN, ExpansionRom[uSlot], FIRMWARE_EXPANSION_SIZE);
 				g_eExpansionRomType = eExpRomPeripheral;
 				g_uPeripheralRomSlot = uSlot;
+				g_last_active_eExpansionRomType = eExpRomPeripheral;
+				g_last_active_uPeripheralRomSlot = uSlot;
+
+				
+
 			}
 		}
 		else if (IO_SELECT_InternalROM && IO_STROBE && (g_eExpansionRomType != eExpRomInternal))
@@ -581,10 +588,19 @@ BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE 
 	// a) check for slot7 enabled?
 	// b) check that active c800-cfff space is actually a slot7 device
 	// c) Figure out if it is APPLeSPI or HDD romspace
-	// d) make sure "write" is true
-	// e) anything else 
-	// f) call APLSPI_update_EEPROM or HDD_update_EEPROM to Store byte @ program counter minus $c800 as offset into current bank of active slot7 eeprom
+	// d) call APLSPI_update_EEPROM or HDD_update_EEPROM to Store byte @ program counter minus $c800 as offset into current bank of active slot7 eeprom
+
+	if (SLOT7_IsEnabled()) {
+		if (g_last_active_eExpansionRomType == eExpRomPeripheral && g_last_active_uPeripheralRomSlot == 7) {
+			eSLOT7TYPE Slot7Type = SLOT7_GetType();
+			if(Slot7Type == SL7_HDD)
+	  			HD_Update_Rom(programcounter, address, write, value, nCyclesLeft);				// $C700 : HDD ROM
+			else if(Slot7Type == SL7_APLSPI)
+				APLSPI_Update_Rom(programcounter, address, write, value, nCyclesLeft);			// $C700 : APLSPI ROM
+		}
 	
+	}
+
 	return 0;
 }
 
