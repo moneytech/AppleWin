@@ -174,7 +174,7 @@ static const DWORD  APLSPI_FW_FILE_SIZE = 32*1024;
 static const DWORD  APLSPI_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
 static const DWORD  APLSPI_SLOT_FW_OFFSET = g_uSlot*256;
 
-static LPBYTE  filerom       = NULL;
+static LPBYTE  filerom = NULL;
 BYTE* g_pRomData;
 BYTE* m_pAPLSPIExpansionRom;
 
@@ -263,7 +263,7 @@ VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 	{
 		filerom   = (LPBYTE)VirtualAlloc(NULL,0x8000 ,MEM_COMMIT,PAGE_READWRITE);
 		DWORD bytesread;
-		ReadFile(file,filerom,0x8000,&bytesread,NULL); // HACK: Magic #
+		ReadFile(file,filerom,0x8000,&bytesread,NULL); 
 		CloseHandle(file);
 		g_pRomData = (BYTE*) filerom;
 	}
@@ -382,4 +382,14 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 	}
 
 	return r;
+}
+
+VOID APLSPI_Cleanup()
+{
+	//for(int i=DRIVE_1; i<DRIVE_2; i++)
+	//{
+	//	APLSPI_CleanupDrive(i);
+	//}
+
+	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
 }

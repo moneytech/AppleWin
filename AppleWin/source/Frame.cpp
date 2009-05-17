@@ -732,6 +732,7 @@ LRESULT CALLBACK FrameWndProc (
         ImageDestroy();
         HD_Cleanup();
       }
+	  APLSPI_Cleanup();
       PrintDestroy();
       sg_SSC.CommDestroy();
       CpuDestroy();
