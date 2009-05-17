@@ -129,6 +129,11 @@ static HDD g_HardDrive[2] = {0};
 
 static UINT g_uSlot = 7;
 
+static const DWORD  HDD_FW_SIZE = 2*1024;
+static const DWORD  HDD_FW_FILE_SIZE = 32*1024;
+static const DWORD  HDD_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
+static const DWORD  HDD_SLOT_FW_OFFSET = g_uSlot*256;
+
 //===========================================================================
 
 static void GetImageTitle (LPCTSTR imagefilename, PHDD pHardDrive)
@@ -255,9 +260,11 @@ void HD_SetEnabled(bool bEnabled)
 		if(g_bHD_Enabled)
 			HD_Load_Rom(pCxRomPeripheral, g_uSlot);
 		else
-			memset(pCxRomPeripheral + g_uSlot*256, 0, HDDRVR_SIZE);
+			memset(pCxRomPeripheral + g_uSlot*256, 0, HDD_SLOT_FW_SIZE);
 	}
 }
+
+
 
 LPCTSTR HD_GetFullName (int nDrive)
 {
@@ -274,7 +281,7 @@ VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 		return;
 
 	DWORD dwResSize = SizeofResource(NULL, hResInfo);
-	if(dwResSize != HDDRVR_SIZE)
+	if(dwResSize != HDD_FW_FILE_SIZE)
 		return;
 
 	HGLOBAL hResData = LoadResource(NULL, hResInfo);
@@ -286,7 +293,7 @@ VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 		return;
 
 	g_uSlot = uSlot;
-	memcpy(pCxRomPeripheral + uSlot*256, pData, HDDRVR_SIZE);
+	memcpy(pCxRomPeripheral + (uSlot*256), pData + HDD_SLOT_FW_OFFSET, HDD_SLOT_FW_SIZE);
 	g_bHD_RomLoaded = true;
 }
 

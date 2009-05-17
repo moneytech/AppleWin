@@ -300,7 +300,7 @@ END
 
 IDR_DISK2_FW            FIRMWARE                "Disk2.rom"
 IDR_SSC_FW              FIRMWARE                "SSC.rom"
-IDR_HDDRVR_FW           FIRMWARE                "Hddrvr.bin"
+IDR_HDDRVR_FW           FIRMWARE                "AppleHDD_IN.rom"
 IDR_APLSPIDRVR_FW       FIRMWARE                "AppleSPI_IN.rom"
 IDR_PRINTDRVR_FW        FIRMWARE                "Parallel.rom"
 IDR_MOCKINGBOARD_D_FW   FIRMWARE                "Mockingboard-D.rom"
