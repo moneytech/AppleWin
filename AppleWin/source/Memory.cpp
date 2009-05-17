@@ -575,6 +575,16 @@ BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE v
 
 BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
+	// I need to make sure I am only going to allow updates to c800-CFFF for devices that support EEPROM
+	// In this case so far only slot 7 devices
+
+	// a) check for slot7 enabled?
+	// b) check that active c800-cfff space is actually a slot7 device
+	// c) Figure out if it is APPLeSPI or HDD romspace
+	// d) make sure "write" is true
+	// e) anything else 
+	// f) call APLSPI_update_EEPROM or HDD_update_EEPROM to Store byte @ program counter minus $c800 as offset into current bank of active slot7 eeprom
+	
 	return 0;
 }
 

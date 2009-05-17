@@ -33,27 +33,30 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
 /* 
-05/14/2009 - RGJ - Initial File creation. 
-				 - Based on harddisk.cpp. 
-				 - Updated resources
-					show enable slot 7 checkbox
-					show Hardisk or Apple SPI radio button
-				 - First stab is to just model a 2KB EPROM (WIP)
+05/14/2009 - RGJ	- Initial File creation. 
+					- Based on harddisk.cpp. 
+					- Updated resources
+						show enable slot 7 checkbox
+						show Hardisk or Apple SPI radio button
+					- First stab is to just model a 2KB EPROM (WIP)
 
-05/14/2009 - RGJ - Added initial support for 32K banked ROM in SLOT 7
-				 - Added dummy ROM file so i can see whats being loaded
+05/14/2009 - RGJ	- Added initial support for 32K banked ROM in SLOT 7
+					- Added dummy ROM file so i can see whats being loaded
 
-05/16/2009 - RGJ - Changed bank select scheme to match that of probable hardware implementation
-				 - Moved bank select registers to $C0FC - $C0FF see map farther in this file
-				 - Bank number 1-15 shifted left 3 bits becomes the high order address byte for the correct offset into the ROM
-				 - Change dummy ROM map to show what bank we are in F1 -> FF
-				 - Bank zero is now mappable into $C800, this will be useful when inplace updating of the file is supported
+05/16/2009 - RGJ	- Changed bank select scheme to match that of probable hardware implementation
+					- Moved bank select registers to $C0FC - $C0FF see map farther in this file
+					- Bank number 1-15 shifted left 3 bits becomes the high order address byte for the correct offset into the ROM
+					- Change dummy ROM map to show what bank we are in F1 -> FF
+					- Bank zero is now mappable into $C800, this will be useful when inplace updating of the file is supported
 
-05/17/2009 - RGJ - Add support for load ROM image from external file
+05/17/2009 - RGJ	- Add support to load AppleSPI_EX ROM image from external file
+					- Change ROM image size for HDD from 256 bytes to 32K in prep for EEPROM support
+					- Add support for EEPROM Write Protect
 
-00/00/2009 - RGJ - Todo
-				 - Add support for Write Protect and flush to disk
- 				 - Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
+00/00/2009 - RGJ	- Todo
+					- Add support for IOWrite_Cxxx in memory.cpp
+					- Flush EEPROM changes to disk
+ 					- Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
 
 */
 
@@ -72,9 +75,8 @@ Refer to 65SPI datasheet for detailed information
 	C0F2	(r/w) SCLK Divisor
 	C0F3	(r/w) Slave Select
 	C0FC	(r/w) EEPROM Bank select
-    ----     Not implemented yet below here
-	C0FD    (w)   Disable EEPROM write protect - 33 55 11 pattern?
-	C0FE    (w)   Enable EEPROM WP - 11 55 33 - pattern?
+	C0FD    (w)   Disable EEPROM write protect - 00 11 22 33 pattern?
+	C0FE    (w)   Enable EEPROM WP - 00 22 44 66 - pattern?
 	C0FF    (r)   WP status
 
 */
@@ -91,7 +93,7 @@ Concept
 			     or loadable from a file if found in same dir as Applewin exe and 
 				 updateable via emulator (eventually)
 
-			   : Add EEPROM spport to existing HDD driver. It won't use it but it 
+			   : Add EEPROM support to existing HDD driver. It won't use it but it 
 				 will come in handy for Uthernet in Slot3 that cannot have it's own ROM while in that slot.
 
 Implemntation Specifics
@@ -166,7 +168,11 @@ static BYTE g_spidata = 0;
 static 	BYTE g_spistatus = 0;
 static 	BYTE g_spiclkdiv = 0;
 static 	BYTE g_spislaveSel = 0;
+static 	bool g_eepromwp = 1;
+static 	BYTE g_eepromwp_d_flag = 0;
+static 	BYTE g_eepromwp_e_flag = 0;
 static 	BYTE g_c800bank = 1;
+static  BYTE dcount, ecount = 0;
 static UINT rombankoffset = 2048;
 
 static const DWORD  APLSPI_FW_SIZE = 2*1024;
@@ -327,7 +333,17 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 			break;
 		case 0xFC: // Read C800 Bank register
 			{
-				r = g_c800bank ;
+				r = g_c800bank;
+			}
+			break;
+
+		case 0xFD: // Write protect enable/disable - do nothing on read
+		case 0xFE: // 
+			break;
+
+		case 0xFF: // Read EEPROM Write Protect Status
+			{
+				r = g_eepromwp;
 			}
 			break;
 
@@ -366,7 +382,7 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 				if (g_c800bank > 15) g_c800bank = 15; 
 				rombankoffset = g_c800bank * 2048;
 				if (m_pAPLSPIExpansionRom)
-					// Need to skip the first 2048 bytes to position ROMBank 0 in file
+					//
 					memcpy(m_pAPLSPIExpansionRom, (g_pRomData+rombankoffset), APLSPI_FW_SIZE);
 					// Tom ?
 					// I am wondering if it would not be more effective to just update the
@@ -374,6 +390,32 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 					// vs coping the data each time?
 
 			}
+			break;
+		case 0xFD: // Write protect disable - 00 11 22 33
+			{
+				dcount += 1;
+				if (d == 0x00 || dcount > 3)  {
+					g_eepromwp_d_flag = 0 ;
+					dcount = 0;
+				}
+				if (d == 0x11 || d == 0x22 || d == 0x33) g_eepromwp_d_flag = g_eepromwp_d_flag + d;
+				if (g_eepromwp_d_flag = 0x11 + 0x22 + 0x33) g_eepromwp = false;
+			}
+			break;
+
+		case 0xFE: // Write protect enable - 00 22 44 66
+			{
+				ecount += 1;
+				if (d == 0x00 || ecount > 3)  {
+					g_eepromwp_d_flag = 0 ;
+					ecount = 0;
+				}
+				if (d == 0x226 || d == 0x44 || d == 0x66) g_eepromwp_e_flag = g_eepromwp_e_flag + d;
+				if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) g_eepromwp = true;
+			}
+			break;
+
+		case 0xFF: // Write EEPROM Write Protect Status - do nothing on write
 			break;
 
 		default:
