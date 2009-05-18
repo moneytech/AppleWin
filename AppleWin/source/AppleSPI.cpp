@@ -53,9 +53,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 					- Change ROM image size for HDD from 256 bytes to 32K in prep for EEPROM support
 					- Add support for EEPROM Write Protect
 					- Add support for IOWrite_Cxxx in memory.cpp
+					- Simplified Write Protect
+					- Flush EEPROM changes to disk
 
 00/00/2009 - RGJ	- Todo
-					- Flush EEPROM changes to disk
  					- Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
 
 */
@@ -75,8 +76,8 @@ Refer to 65SPI datasheet for detailed information
 	C0F2	(r/w) SCLK Divisor
 	C0F3	(r/w) Slave Select
 	C0FC	(r/w) EEPROM Bank select
-	C0FD    (w)   Disable EEPROM write protect - 00 11 22 33 pattern
-	C0FE    (w)   Enable EEPROM WP - 00 22 44 66 - pattern
+	C0FD    (w)   Disable EEPROM Write Protect
+	C0FE    (w)   Enable EEPROM Write Proect
 	C0FF    (r)   WP status
 
 */
@@ -385,6 +386,8 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 			break;
 		case 0xFC: // Write C800 Bank register
 			{
+				if (m_pAPLSPIExpansionRom)
+					memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
 				g_c800bank = (d & 0xf8) >> 3;
 				if (g_c800bank > 15) g_c800bank = 15; 
 				rombankoffset = g_c800bank * 2048;
@@ -402,28 +405,75 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 		// Have I made this more difficult then it needs to be? Single write access suffcient?
 		case 0xFD: // Write protect disable - 00 11 22 33
 			{
-				dcount += 1;
-				if (d == 0x00 || dcount > 3)  {
-					g_eepromwp_d_flag = 0 ;
-					dcount = 0;
-				}
-				if (d == 0x11 || d == 0x22 || d == 0x33) g_eepromwp_d_flag = g_eepromwp_d_flag + d;
-				if (g_eepromwp_d_flag = 0x11 + 0x22 + 0x33) g_eepromwp = false;
+				//dcount += 1;
+				//if (d == 0x00 || dcount > 3)  {
+				//	g_eepromwp_d_flag = 0 ;
+				//	dcount = 0;
+				//}
+				//if (d == 0x11 || d == 0x22 || d == 0x33) g_eepromwp_d_flag = g_eepromwp_d_flag + d;
+				//if (g_eepromwp_d_flag = 0x11 + 0x22 + 0x33) 
+					
+					g_eepromwp = false;
 			}
 			break;
 
 		case 0xFE: // Write protect enable - 00 22 44 66
 			{
-				ecount += 1;
-				if (d == 0x00 || ecount > 3)  {
-					g_eepromwp_d_flag = 0 ;
-					ecount = 0;
-				}
-				if (d == 0x226 || d == 0x44 || d == 0x66) g_eepromwp_e_flag = g_eepromwp_e_flag + d;
-				if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) {
-					g_eepromwp = true;
-					//flush to disk here
-				}
+				//ecount += 1;
+				//if (d == 0x00 || ecount > 3)  {
+				//	g_eepromwp_d_flag = 0 ;
+				//	ecount = 0;
+				//}
+				//if (d == 0x226 || d == 0x44 || d == 0x66) g_eepromwp_e_flag = g_eepromwp_e_flag + d;
+				//if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) {
+
+				g_eepromwp = true;
+				// Copy back any changes made in the current bank
+				memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
+
+				//flush to disk here
+				// Need to open the file
+				// Create it if it doesn't exist
+				// Write g_pRomData sizeof(APLSPI_FW_FILE_SIZE) - ie 32K
+
+				TCHAR sRomFileName[ 128 ];
+				_tcscpy( sRomFileName, TEXT("AppleSPI_EX.ROM") );
+
+				TCHAR filename[MAX_PATH];
+				_tcscpy(filename,g_sProgramDir);
+				_tcscat(filename,sRomFileName );
+
+				HANDLE hFile = CreateFile(filename,
+							GENERIC_WRITE,
+							0,
+							NULL,
+							CREATE_ALWAYS,
+							FILE_ATTRIBUTE_NORMAL,
+							NULL);
+
+				DWORD dwError = GetLastError();
+				_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+
+				if(hFile != INVALID_HANDLE_VALUE)
+					{
+						DWORD dwBytesWritten;
+						BOOL bRes = WriteFile(	hFile,
+												g_pRomData,
+												APLSPI_FW_FILE_SIZE,
+												&dwBytesWritten,
+												NULL);
+
+						if(!bRes || (dwBytesWritten != APLSPI_FW_FILE_SIZE))
+							dwError = GetLastError();
+						CloseHandle(hFile);
+					}
+					else
+					{
+						dwError = GetLastError();
+					}
+
+					_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+
 			}
 			break;
 
