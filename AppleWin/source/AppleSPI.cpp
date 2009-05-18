@@ -91,11 +91,10 @@ Concept
 			Consulted Rich Dreher's CFFA EEPROM support as a guide. Need 
 			to consult Datasheet to consider how the real hardware 
 			implmentation would work and adjust accordingly.
-		         
 
 		- EEPROM images supplied as ROM file, included in Program resources
 			     or loadable from a file if found in same dir as Applewin exe and 
-				 updateable via emulator (eventually)
+				 updateable via emulator
 
 		- Add EEPROM support to existing HDD driver. It won't use it but it 
 				 will come in handy for Uthernet in Slot3 that cannot have it's own ROM while in that slot.
