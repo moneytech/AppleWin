@@ -45,6 +45,11 @@ Memory map:
 	C0F6	(r/w) LOW BYTE OF BLOCK NUMBER
 	C0F7	(r/w) HIGH BYTE OF BLOCK NUMBER
 	C0F8    (r)   NEXT BYTE
+	C0FC	(r/w) EEPROM Bank select
+	C0FD    (w)   Disable EEPROM Write Protect
+	C0FE    (w)   Enable EEPROM Write Protect
+	C0FF    (r)   Write Protect status
+
 */
 
 /*
@@ -288,7 +293,7 @@ VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 	if(!g_bHD_Enabled)
 		return;
 
-   // Attempt to read the AppleSPI FIRMWARE ROM into memory
+   // Attempt to read the AppleHDD FIRMWARE ROM into memory
 	TCHAR sRomFileName[ 128 ];
 	_tcscpy( sRomFileName, TEXT("AppleHDD_EX.ROM") );
 
@@ -340,7 +345,6 @@ VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 		m_pHDExpansionRom = new BYTE [HD_FW_SIZE];
 
 		if (m_pHDExpansionRom)
-			// Need to skip the first 2048 bytes as that is slot ROM
 			memcpy(m_pHDExpansionRom, (g_pRomData+rombankoffset), HD_FW_SIZE);
 	}
 

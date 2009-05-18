@@ -36,8 +36,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 05/14/2009 - RGJ	- Initial File creation. 
 					- Based on harddisk.cpp. 
 					- Updated resources
-						show enable slot 7 checkbox
-						show Hardisk or Apple SPI radio button
+						show enable slot 7 check-box
+						show Harddisk or AppleSPI radio button
 					- First stab is to just model a 2KB EPROM (WIP)
 
 05/14/2009 - RGJ	- Added initial support for 32K banked ROM in SLOT 7
@@ -47,7 +47,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 					- Moved bank select registers to $C0FC - $C0FF see map farther in this file
 					- Bank number 1-15 shifted left 3 bits becomes the high order address byte for the correct offset into the ROM
 					- Change dummy ROM map to show what bank we are in F1 -> FF
-					- Bank zero is now mappable into $C800, this will be useful when inplace updating of the file is supported
+					- Bank zero is now mappable into $C800, this will be useful when in place updating of the file is supported
 
 05/17/2009 - RGJ	- Add support to load AppleSPI_EX ROM image from external file
 					- Change ROM image size for HDD from 256 bytes to 32K in prep for EEPROM support
@@ -64,7 +64,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /*
 Memory map:
-Refer to 65SPI datasheet for detailed information
+Refer to 65SPI data-sheet for detailed information
 
     C0F0	(r)   SPI Data In
     C0F0    (w)   SPI Data Out 
@@ -74,8 +74,8 @@ Refer to 65SPI datasheet for detailed information
 	C0F3	(r/w) Slave Select
 	C0FC	(r/w) EEPROM Bank select
 	C0FD    (w)   Disable EEPROM Write Protect
-	C0FE    (w)   Enable EEPROM Write Proect
-	C0FF    (r)   Write Proect status
+	C0FE    (w)   Enable EEPROM Write Protect
+	C0FF    (r)   Write Protect status
 
 */
 
@@ -85,21 +85,21 @@ Serial Peripheral Interface / Pagable EEPROM emulation in Applewin.
 Concept
 	Stage One: 
 
-		-To emulate a pagable 28C256 (32KB) EEPROM. 
-			This will alow multiple devices to have their own C800 Space.
+		-To emulate a pageable 28C256 (32KB) EEPROM. 
+			This will allow multiple devices to have their own C800 Space.
 	
 			Consulted Rich Dreher's CFFA EEPROM support as a guide. Need 
-			to consult Datasheet to consider how the real hardware 
-			implmentation would work and adjust accordingly.
+			to consult Data-sheet to consider how the real hardware 
+			implementation would work and adjust accordingly.
 
 		- EEPROM images supplied as ROM file, included in Program resources
 			     or loadable from a file if found in same dir as Applewin exe and 
-				 updateable via emulator
+				 update-able via emulator
 
 		- Add EEPROM support to existing HDD driver. It won't use it but it 
 				 will come in handy for Uthernet in Slot3 that cannot have it's own ROM while in that slot.
 
-Implemntation Specifics
+Implementation Specifics
 
   1. EEPROM
 		Map as follows
@@ -127,11 +127,11 @@ Implemntation Specifics
 			E:c800 $C800 common code bank 14 (IP65 routines) 2K
 			F:c800 $C800 common code bank 15 (IP65 routines) 2K
 
-		Bank selection via writng to $C0FC - upper address byte offset in ROM file
+		Bank selection via writing to $C0FC - upper address byte offset in ROM file
 		Which is the bank number shifted left 3 bits
 
 		In hex
-			00 - Rom Bank 0 (Actualy 0 - 7 256B pages of Slot ROM - not normally paged into $C800)
+			00 - Rom Bank 0 (Actually 0 - 7 256B pages of Slot ROM - not normally paged into $C800)
 			08 - Rom Bank 1 - F1
 			10 - Rom Bank 2 - F2
 			18 - Rom Bank 3 - F3
@@ -151,18 +151,16 @@ Implemntation Specifics
 
   2. 65SPI 
 	Stage Two: 
-		- To emulate 65SPI so tha muliple devices can be supported from one slot
-			Possibilites include:
+		- To emulate 65SPI so that multiple devices can be supported from one slot
+			Possibilities include:
 				SDcard support (Hard disk drive images)
 				Ethernet Interface ENC28J60
-		- Refactor the code in AppleSPI and HDD so they can share common code
+		- Re-factor the code in AppleSPI and HDD so they can share common code
 
   3. Known Bugs
 		???
 
 */
-
-
 
 
 static bool g_bAPLSPI_Enabled = false;
@@ -280,13 +278,12 @@ VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 	memcpy(pCxRomPeripheral + (uSlot*256), (g_pRomData+APLSPI_SLOT_FW_OFFSET), APLSPI_SLOT_FW_SIZE);
 	g_bAPLSPI_RomLoaded = true;
 
-		// Expansion ROM
+	// Expansion ROM
 	if (m_pAPLSPIExpansionRom == NULL)
 	{
 		m_pAPLSPIExpansionRom = new BYTE [APLSPI_FW_SIZE];
 
 		if (m_pAPLSPIExpansionRom)
-			// Need to skip the first 2048 bytes as that is slot ROM
 			memcpy(m_pAPLSPIExpansionRom, (g_pRomData+rombankoffset), APLSPI_FW_SIZE);
 	}
 
@@ -396,14 +393,13 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 			}
 			break;
 
-		// Have I made this more difficult then it needs to be? Single write access suffcient?
-		case 0xFD: // Write protect disable - 00 11 22 33
+		case 0xFD: // Write protect disable
 			{
 				g_eepromwp = false;
 			}
 			break;
 
-		case 0xFE: // Write protect enable - 00 22 44 66
+		case 0xFE: // Write protect enable
 			{
 				g_eepromwp = true;
 				// Copy back any changes made in the current bank
