@@ -26,6 +26,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * Author: Copyright (c) 2005, Robert Hoem
  */
 
+// 05/18/2009 - RGJ	- Added EEPROM support to HDD implementation, so no loss of HDD support when EEPROM in use - this uses a second 32K ROM file
+
+
 #include "StdAfx.h"
 #pragma  hdrstop
 #include "..\resource\resource.h"
@@ -129,10 +132,19 @@ static HDD g_HardDrive[2] = {0};
 
 static UINT g_uSlot = 7;
 
-static const DWORD  HDD_FW_SIZE = 2*1024;
-static const DWORD  HDD_FW_FILE_SIZE = 32*1024;
-static const DWORD  HDD_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
-static const DWORD  HDD_SLOT_FW_OFFSET = g_uSlot*256;
+static 	bool g_eepromwp = 1;
+static 	BYTE g_c800bank = 1;
+static UINT rombankoffset = 2048;
+
+static const DWORD  HD_FW_SIZE = 2*1024;
+static const DWORD  HD_FW_FILE_SIZE = 32*1024;
+static const DWORD  HD_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
+static const DWORD  HD_SLOT_FW_OFFSET = g_uSlot*256;
+
+static LPBYTE  filerom = NULL;
+static BYTE* g_pRomData;
+static BYTE* m_pHDExpansionRom;
+
 
 //===========================================================================
 
@@ -260,7 +272,7 @@ void HD_SetEnabled(bool bEnabled)
 		if(g_bHD_Enabled)
 			HD_Load_Rom(pCxRomPeripheral, g_uSlot);
 		else
-			memset(pCxRomPeripheral + g_uSlot*256, 0, HDD_SLOT_FW_SIZE);
+			memset(pCxRomPeripheral + g_uSlot*256, 0, HD_SLOT_FW_SIZE);
 	}
 }
 
@@ -276,25 +288,65 @@ VOID HD_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 	if(!g_bHD_Enabled)
 		return;
 
-	HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR_FW), "FIRMWARE");
-	if(hResInfo == NULL)
-		return;
+   // Attempt to read the AppleSPI FIRMWARE ROM into memory
+	TCHAR sRomFileName[ 128 ];
+	_tcscpy( sRomFileName, TEXT("AppleHDD_EX.ROM") );
 
-	DWORD dwResSize = SizeofResource(NULL, hResInfo);
-	if(dwResSize != HDD_FW_FILE_SIZE)
-		return;
+    TCHAR filename[MAX_PATH];
+    _tcscpy(filename,g_sProgramDir);
+    _tcscat(filename,sRomFileName );
+    HANDLE file = CreateFile(filename,
+                           GENERIC_READ,
+                           FILE_SHARE_READ,
+                           (LPSECURITY_ATTRIBUTES)NULL,
+                           OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                           NULL);
 
-	HGLOBAL hResData = LoadResource(NULL, hResInfo);
-	if(hResData == NULL)
-		return;
+	if (file == INVALID_HANDLE_VALUE)	
+	{
+		HRSRC hResInfo = FindResource(NULL, MAKEINTRESOURCE(IDR_HDDRVR_FW), "FIRMWARE");
+		if(hResInfo == NULL)
+			return;
 
-	BYTE* pData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
-	if(pData == NULL)
-		return;
+		DWORD dwResSize = SizeofResource(NULL, hResInfo);
+		if(dwResSize != HD_FW_FILE_SIZE)
+			return;
+
+		HGLOBAL hResData = LoadResource(NULL, hResInfo);
+		if(hResData == NULL)
+			return;
+
+		g_pRomData = (BYTE*) LockResource(hResData);	// NB. Don't need to unlock resource
+		if(g_pRomData == NULL)
+			return;
+	}
+	else
+	{
+		filerom   = (LPBYTE)VirtualAlloc(NULL,0x8000 ,MEM_COMMIT,PAGE_READWRITE);
+		DWORD bytesread;
+		ReadFile(file,filerom,0x8000,&bytesread,NULL); 
+		CloseHandle(file);
+		g_pRomData = (BYTE*) filerom;
+	}
 
 	g_uSlot = uSlot;
-	memcpy(pCxRomPeripheral + (uSlot*256), pData + HDD_SLOT_FW_OFFSET, HDD_SLOT_FW_SIZE);
+	memcpy(pCxRomPeripheral + (uSlot*256), g_pRomData + HD_SLOT_FW_OFFSET, HD_SLOT_FW_SIZE);
 	g_bHD_RomLoaded = true;
+
+		// Expansion ROM
+	if (m_pHDExpansionRom == NULL)
+	{
+		m_pHDExpansionRom = new BYTE [HD_FW_SIZE];
+
+		if (m_pHDExpansionRom)
+			// Need to skip the first 2048 bytes as that is slot ROM
+			memcpy(m_pHDExpansionRom, (g_pRomData+rombankoffset), HD_FW_SIZE);
+	}
+
+	RegisterIoHandler(g_uSlot, HD_IO_EMUL, HD_IO_EMUL, NULL, NULL, NULL, m_pHDExpansionRom);
+
+
 }
 
 VOID HD_Cleanup()
@@ -303,6 +355,8 @@ VOID HD_Cleanup()
 	{
 		HD_CleanupDrive(i);
 	}
+	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
+	delete m_pHDExpansionRom;
 }
 
 // pszFilename is not qualified with path
@@ -535,6 +589,22 @@ static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 				pHDD->hd_buf_ptr++;
 			}
 			break;
+		case 0xFC: // Read C800 Bank register
+			{
+				r = g_c800bank;
+			}
+			break;
+
+		case 0xFD: // Write protect enable/disable - do nothing on read
+		case 0xFE: // 
+			break;
+
+		case 0xFF: // Read EEPROM Write Protect Status
+			{
+				r = g_eepromwp;
+			}
+			break;
+
 		default:
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
@@ -576,6 +646,88 @@ static BYTE __stdcall HD_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 				pHDD->hd_diskblock = pHDD->hd_diskblock & 0x00FF | (d << 8);
 			}
 			break;
+
+		case 0xFC: // Write C800 Bank register
+			{
+				if (m_pHDExpansionRom)
+					memcpy((g_pRomData+rombankoffset), m_pHDExpansionRom, HD_FW_SIZE);
+				g_c800bank = (d & 0xf8) >> 3;
+				if (g_c800bank > 15) g_c800bank = 15; 
+				rombankoffset = g_c800bank * 2048;
+				if (m_pHDExpansionRom)
+					//
+					memcpy(m_pHDExpansionRom, (g_pRomData+rombankoffset), HD_FW_SIZE);
+					// Tom ?
+					// I am wondering if it would not be more effective to just update the
+					// ExpansionRom[uSlot] = g_pRomData+rombankoffset;
+					// vs coping the data each time?
+
+			}
+			break;
+
+		case 0xFD: // Disable Write Protect
+			{
+				g_eepromwp = false;
+			}
+			break;
+
+		case 0xFE: // Enable Write protect
+			{
+				g_eepromwp = true;
+				// Copy back any changes made in the current bank
+				memcpy((g_pRomData+rombankoffset), m_pHDExpansionRom, HD_FW_SIZE);
+
+				//flush to disk here
+				// Need to open the file
+				// Create it if it doesn't exist
+				// Write g_pRomData sizeof(HD_FW_FILE_SIZE) - ie 32K
+
+				TCHAR sRomFileName[ 128 ];
+				_tcscpy( sRomFileName, TEXT("AppleHDD_EX.ROM") );
+
+				TCHAR filename[MAX_PATH];
+				_tcscpy(filename,g_sProgramDir);
+				_tcscat(filename,sRomFileName );
+
+				HANDLE hFile = CreateFile(filename,
+							GENERIC_WRITE,
+							0,
+							NULL,
+							CREATE_ALWAYS,
+							FILE_ATTRIBUTE_NORMAL,
+							NULL);
+
+				DWORD dwError = GetLastError();
+				// Assert ciopied from SaveState - do we need it?
+				_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+
+				if(hFile != INVALID_HANDLE_VALUE)
+					{
+						DWORD dwBytesWritten;
+						BOOL bRes = WriteFile(	hFile,
+												g_pRomData,
+												HD_FW_FILE_SIZE,
+												&dwBytesWritten,
+												NULL);
+
+						if(!bRes || (dwBytesWritten != HD_FW_FILE_SIZE))
+							dwError = GetLastError();
+						CloseHandle(hFile);
+					}
+					else
+					{
+						dwError = GetLastError();
+					}
+
+					// Assert ciopied from SaveState - do we need it?
+					_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+
+			}
+			break;
+
+		case 0xFF: // Write EEPROM Write Protect Status - do nothing on write
+			break;
+
 		default:
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		}
@@ -588,7 +740,7 @@ BYTE __stdcall HD_Update_Rom(WORD programcounter, WORD address, BYTE write, BYTE
 {
  // Update ROM image by Storing byte @ program counter minus $c800 as offset into current bank of active slot7 EEPROM
 
- //*((m_pAPLSPIExpansionRom)+(programcounter-0xc800))=value;
+ if (g_eepromwp == false) *((m_pHDExpansionRom)+(address-0xc800)) = value;
 
  return 0;
 }

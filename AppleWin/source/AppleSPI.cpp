@@ -56,10 +56,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 					- Simplified Write Protect
 					- Flush EEPROM changes to disk
 
-00/00/2009 - RGJ	- Todo
- 					- Add EEPROM support to HDD implmentation so no loss of HDD support going forward when EEPROM in use - this will be a second 32K ROM file
-
-
 */
 
 #include "StdAfx.h"
@@ -79,12 +75,12 @@ Refer to 65SPI datasheet for detailed information
 	C0FC	(r/w) EEPROM Bank select
 	C0FD    (w)   Disable EEPROM Write Protect
 	C0FE    (w)   Enable EEPROM Write Proect
-	C0FF    (r)   WP status
+	C0FF    (r)   Write Proect status
 
 */
 
 /*
-Serial Peripheral Interface/ Pagable EEPROM emulation in Applewin.
+Serial Peripheral Interface / Pagable EEPROM emulation in Applewin.
 
 Concept
 	Stage One: 
@@ -160,6 +156,7 @@ Implemntation Specifics
 			Possibilites include:
 				SDcard support (Hard disk drive images)
 				Ethernet Interface ENC28J60
+		- Refactor the code in AppleSPI and HDD so they can share common code
 
   3. Known Bugs
 		???
@@ -178,10 +175,7 @@ static 	BYTE g_spistatus = 0;
 static 	BYTE g_spiclkdiv = 0;
 static 	BYTE g_spislaveSel = 0;
 static 	bool g_eepromwp = 1;
-static 	BYTE g_eepromwp_d_flag = 0;
-static 	BYTE g_eepromwp_e_flag = 0;
 static 	BYTE g_c800bank = 1;
-static  BYTE dcount, ecount = 0;
 static UINT rombankoffset = 2048;
 
 static const DWORD  APLSPI_FW_SIZE = 2*1024;
@@ -190,8 +184,8 @@ static const DWORD  APLSPI_SLOT_FW_SIZE = APPLE_SLOT_SIZE;
 static const DWORD  APLSPI_SLOT_FW_OFFSET = g_uSlot*256;
 
 static LPBYTE  filerom = NULL;
-BYTE* g_pRomData;
-BYTE* m_pAPLSPIExpansionRom;
+static BYTE* g_pRomData;
+static BYTE* m_pAPLSPIExpansionRom;
 
 static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
@@ -406,28 +400,12 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 		// Have I made this more difficult then it needs to be? Single write access suffcient?
 		case 0xFD: // Write protect disable - 00 11 22 33
 			{
-				//dcount += 1;
-				//if (d == 0x00 || dcount > 3)  {
-				//	g_eepromwp_d_flag = 0 ;
-				//	dcount = 0;
-				//}
-				//if (d == 0x11 || d == 0x22 || d == 0x33) g_eepromwp_d_flag = g_eepromwp_d_flag + d;
-				//if (g_eepromwp_d_flag = 0x11 + 0x22 + 0x33) 
-					
-					g_eepromwp = false;
+				g_eepromwp = false;
 			}
 			break;
 
 		case 0xFE: // Write protect enable - 00 22 44 66
 			{
-				//ecount += 1;
-				//if (d == 0x00 || ecount > 3)  {
-				//	g_eepromwp_d_flag = 0 ;
-				//	ecount = 0;
-				//}
-				//if (d == 0x226 || d == 0x44 || d == 0x66) g_eepromwp_e_flag = g_eepromwp_e_flag + d;
-				//if (g_eepromwp_e_flag = 0x22 + 0x44 + 0x66) {
-
 				g_eepromwp = true;
 				// Copy back any changes made in the current bank
 				memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
@@ -453,6 +431,7 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 							NULL);
 
 				DWORD dwError = GetLastError();
+				// Assert ciopied from SaveState - do we need it?
 				_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
 
 				if(hFile != INVALID_HANDLE_VALUE)
@@ -473,6 +452,7 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 						dwError = GetLastError();
 					}
 
+					// Assert ciopied from SaveState - do we need it?
 					_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
 
 			}
@@ -497,6 +477,7 @@ VOID APLSPI_Cleanup()
 	//}
 
 	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
+	delete m_pAPLSPIExpansionRom;
 }
 
 BYTE __stdcall APLSPI_Update_Rom(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
