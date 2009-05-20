@@ -472,7 +472,7 @@ VOID APLSPI_Cleanup()
 	//}
 
 	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
-	delete m_pAPLSPIExpansionRom;
+	if (m_pAPLSPIExpansionRom) delete m_pAPLSPIExpansionRom;
 }
 
 BYTE __stdcall APLSPI_Update_Rom(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)

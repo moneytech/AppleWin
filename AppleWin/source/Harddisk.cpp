@@ -360,7 +360,7 @@ VOID HD_Cleanup()
 		HD_CleanupDrive(i);
 	}
 	if (filerom) VirtualFree(filerom  ,0,MEM_RELEASE);
-	delete m_pHDExpansionRom;
+	if (m_pHDExpansionRom) delete m_pHDExpansionRom;
 }
 
 // pszFilename is not qualified with path
