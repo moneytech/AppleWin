@@ -219,6 +219,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\source\AppleSPI.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\AppleSPI.h"
+				>
+			</File>
+			<File
 				RelativePath=".\source\Applewin.cpp"
 				>
 			</File>
@@ -368,6 +376,14 @@
 			</File>
 			<File
 				RelativePath=".\source\SerialComms.h"
+				>
+			</File>
+			<File
+				RelativePath=".\source\slot7.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\source\slot7.h"
 				>
 			</File>
 			<File
@@ -625,6 +641,14 @@
 			</File>
 			<File
 				RelativePath=".\resource\Apple2e_Enhanced.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\AppleHDD_IN.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\AppleSPI_IN.rom"
 				>
 			</File>
 			<File
