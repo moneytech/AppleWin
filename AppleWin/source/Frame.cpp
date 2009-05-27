@@ -58,7 +58,19 @@ static HBITMAP capsbitmapP8[2];
 static HBITMAP latbitmap[2];
 //static HBITMAP charsetbitmap [4]; //The idea was to add a charset indicator on the front panel, but it was given up. All charsetbitmap occurences must be REMOVED!
 //===========================
-static HBITMAP diskbitmap[ NUM_DISK_STATUS ];
+static HBITMAP g_hDiskWindowedLED[ NUM_DISK_STATUS ];
+
+//static HBITMAP g_hDiskFullScreenLED[ NUM_DISK_STATUS ];
+
+// Must keep in sync with Disk_Status_e g_aDiskFullScreenColors
+static DWORD g_aDiskFullScreenColorsLED[ NUM_DISK_STATUS ] =
+{
+	RGB(  0,  0,  0), // DISK_STATUS_OFF   BLACK
+	RGB(  0,255,  0), // DISK_STATUS_READ  GREEN
+	RGB(255,  0,  0), // DISK_STATUS_WRITE RED
+	RGB(255,128,  0)  // DISK_STATUS_PROT  ORANGE
+//	RGB(  0,  0,255)  // DISK_STATUS_PROT  -blue-
+};
 
 static HBITMAP buttonbitmap[BUTTONS];
 
@@ -75,8 +87,10 @@ static int     buttony         = BUTTONY;
 static HRGN    clipregion      = (HRGN)0;
        HDC     g_hFrameDC         = (HDC)0;
 static RECT    framerect       = {0,0,0,0};
-HWND    g_hFrameWindow     = (HWND)0;
-BOOL    fullscreen      = 0;
+
+		HWND   g_hFrameWindow  = (HWND)0;
+		BOOL   g_bIsFullScreen = 0;
+
 static BOOL    helpquit        = 0;
 static BOOL    g_bPaintingWindow        = 0;
 static HFONT   smallfont       = (HFONT)0;
@@ -86,8 +100,11 @@ static int     viewportx       = VIEWPORTX;	// Default to Normal (non-FullScreen
 static int     viewporty       = VIEWPORTY;	// Default to Normal (non-FullScreen) mode
 int g_nCharsetType = 0;
 
-static LPDIRECTDRAW        directdraw = (LPDIRECTDRAW)0;
-static LPDIRECTDRAWSURFACE surface    = (LPDIRECTDRAWSURFACE)0;
+// Direct Draw -- For Full Screen
+		LPDIRECTDRAW        g_pDD = (LPDIRECTDRAW)0;
+		LPDIRECTDRAWSURFACE g_pDDPrimarySurface    = (LPDIRECTDRAWSURFACE)0;
+		IDirectDrawPalette* g_pDDPal = (IDirectDrawPalette*)0;
+
 
 static bool g_bShowingCursor = true;
 static bool g_bLastCursorInAppleViewport = false;
@@ -103,6 +120,7 @@ void    SetUsingCursor (BOOL);
 static bool FileExists(string strFilename);
 
 bool	g_bScrollLock_FullSpeed = false;
+bool	g_bFreshReset = false;
 
 // Prototypes:
 static void DrawCrosshairs (int x, int y);
@@ -200,11 +218,17 @@ switch (g_Apple2Type)
   charsetbitmap[3] = (HBITMAP)LOADBUTTONBITMAP(TEXT("CHARSET_8M_BITMAP"));
   */
   //===========================
-  diskbitmap[ DISK_STATUS_OFF  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKOFF_BITMAP"));
-  diskbitmap[ DISK_STATUS_READ ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKREAD_BITMAP"));
-  diskbitmap[ DISK_STATUS_WRITE] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKWRITE_BITMAP"));
-  diskbitmap[ DISK_STATUS_PROT ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKPROT_BITMAP"));
+  g_hDiskWindowedLED[ DISK_STATUS_OFF  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKOFF_BITMAP"));
+  g_hDiskWindowedLED[ DISK_STATUS_READ ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKREAD_BITMAP"));
+  g_hDiskWindowedLED[ DISK_STATUS_WRITE] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKWRITE_BITMAP"));
+  g_hDiskWindowedLED[ DISK_STATUS_PROT ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISKPROT_BITMAP"));
   
+  // Full Screen Drive LED
+//	g_hDiskFullScreenLED[ DISK_STATUS_OFF  ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISK_FULLSCREEN_O")); // Full Screen Off
+//	g_hDiskFullScreenLED[ DISK_STATUS_READ ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISK_FULLSCREEN_R")); // Full Screen Read Only
+//	g_hDiskFullScreenLED[ DISK_STATUS_WRITE] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISK_FULLSCREEN_W")); // Full Screen Write
+//	g_hDiskFullScreenLED[ DISK_STATUS_PROT ] = (HBITMAP)LOADBUTTONBITMAP(TEXT("DISK_FULLSCREEN_P")); // Full Screen Write Protected
+ 
   btnfacebrush    = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
   btnfacepen      = CreatePen(PS_SOLID,1,GetSysColor(COLOR_BTNFACE));
   btnhighlightpen = CreatePen(PS_SOLID,1,GetSysColor(COLOR_BTNHIGHLIGHT));
@@ -223,7 +247,10 @@ static void DeleteGdiObjects () {
   for (loop = 0; loop < 2; loop++)
     DeleteObject(capsbitmap[loop]);
   for (loop = 0; loop < NUM_DISK_STATUS; loop++)
-    DeleteObject(diskbitmap[loop]);
+  {
+	  DeleteObject(g_hDiskWindowedLED[loop]);
+	  //DeleteObject(g_hDiskFullScreenLED[loop]);
+  }
   DeleteObject(btnfacebrush);
   DeleteObject(btnfacepen);
   DeleteObject(btnhighlightpen);
@@ -310,7 +337,7 @@ static void DrawCrosshairs (int x, int y) {
 
   // ERASE THE OLD CROSSHAIRS
   if (lastx && lasty)
-    if (fullscreen) {
+    if (g_bIsFullScreen) {
       int loop = 4;
       while (loop--) {
         RECT rect = {0,0,5,5};
@@ -371,52 +398,60 @@ static void DrawCrosshairs (int x, int y) {
 }
 
 //===========================================================================
-static void DrawFrameWindow () {
-  FrameReleaseDC();
-  PAINTSTRUCT ps;
-  HDC         dc = (g_bPaintingWindow ? BeginPaint(g_hFrameWindow,&ps)
-                             : GetDC(g_hFrameWindow));
-  VideoRealizePalette(dc);
+static void DrawFrameWindow ()
+{
+	FrameReleaseDC();
+	PAINTSTRUCT ps;
+	HDC         dc = (g_bPaintingWindow
+		? BeginPaint(g_hFrameWindow,&ps)
+		: GetDC(g_hFrameWindow));
 
-  if (!fullscreen) {
+	VideoRealizePalette(dc);
 
-    // DRAW THE 3D BORDER AROUND THE EMULATED SCREEN
-    Draw3dRect(dc,
-               VIEWPORTX-2,VIEWPORTY-2,
-               VIEWPORTX+VIEWPORTCX+2,VIEWPORTY+VIEWPORTCY+2,
-               0);
-    Draw3dRect(dc,
-               VIEWPORTX-3,VIEWPORTY-3,
-               VIEWPORTX+VIEWPORTCX+3,VIEWPORTY+VIEWPORTCY+3,
-               0);
-    SelectObject(dc,btnfacepen);
-    Rectangle(dc,
-              VIEWPORTX-4,VIEWPORTY-4,
-              VIEWPORTX+VIEWPORTCX+4,VIEWPORTY+VIEWPORTCY+4);
-    Rectangle(dc,
-              VIEWPORTX-5,VIEWPORTY-5,
-              VIEWPORTX+VIEWPORTCX+5,VIEWPORTY+VIEWPORTCY+5);
+	if (!g_bIsFullScreen)
+	{
+		// DRAW THE 3D BORDER AROUND THE EMULATED SCREEN
+		Draw3dRect(dc,
+			VIEWPORTX-2,VIEWPORTY-2,
+			VIEWPORTX+VIEWPORTCX+2,VIEWPORTY+VIEWPORTCY+2,
+			0);
+		Draw3dRect(dc,
+			VIEWPORTX-3,VIEWPORTY-3,
+			VIEWPORTX+VIEWPORTCX+3,VIEWPORTY+VIEWPORTCY+3,
+			0);
+		SelectObject(dc,btnfacepen);
+		Rectangle(dc,
+			VIEWPORTX-4,VIEWPORTY-4,
+			VIEWPORTX+VIEWPORTCX+4,VIEWPORTY+VIEWPORTCY+4);
+		Rectangle(dc,
+			VIEWPORTX-5,VIEWPORTY-5,
+			VIEWPORTX+VIEWPORTCX+5,VIEWPORTY+VIEWPORTCY+5);
 
-    // DRAW THE TOOLBAR BUTTONS
-    int loop = BUTTONS;
-    while (loop--)
-      DrawButton(dc,loop);
-  }
+		// DRAW THE TOOLBAR BUTTONS
+		int iButton = BUTTONS;
+		while (iButton--)
+		{
+			DrawButton(dc,iButton);
+		}
+	}
 
-  // DRAW THE STATUS AREA
-  DrawStatusArea(dc,DRAW_BACKGROUND | DRAW_LEDS);
-  if (g_bPaintingWindow)
-    EndPaint(g_hFrameWindow,&ps);
-  else
-    ReleaseDC(g_hFrameWindow,dc);
+	// DRAW THE STATUS AREA
+	DrawStatusArea(dc,DRAW_BACKGROUND | DRAW_LEDS);
 
-  // DRAW THE CONTENTS OF THE EMULATED SCREEN
-  if (g_nAppMode == MODE_LOGO)
-    VideoDisplayLogo();
-  else if (g_nAppMode == MODE_DEBUG)
-    DebugDisplay(1);
-  else
-    VideoRedrawScreen();
+	// DRAW THE CONTENTS OF THE EMULATED SCREEN
+	if (g_nAppMode == MODE_LOGO)
+		VideoDisplayLogo();
+	else if (g_nAppMode == MODE_DEBUG)
+		DebugDisplay(1);
+	else
+		VideoRedrawScreen();
+
+	// DD Full-Screen Palette: BUGFIX: needs to come _after_ all drawing...
+	if (g_bPaintingWindow)
+		EndPaint(g_hFrameWindow,&ps);
+	else
+		ReleaseDC(g_hFrameWindow,dc);
+
 }
 
 //===========================================================================
@@ -432,16 +467,33 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 	bool bP8Caps  = KeybGetP8CapsStatus();
 	DiskGetLightStatus(&iDrive1Status,&iDrive2Status);
 
-	if (fullscreen)
+	if (g_bIsFullScreen)
 	{
 		SelectObject(dc,smallfont);
 		SetBkMode(dc,OPAQUE);
 		SetBkColor(dc,RGB(0,0,0));
 		SetTextAlign(dc,TA_LEFT | TA_TOP);
-		SetTextColor(dc,RGB((iDrive1Status==2 ? 255 : 0),(iDrive1Status==1 ? 255 : 0),0));
+
+		SetTextColor(dc, g_aDiskFullScreenColorsLED[ iDrive1Status ] );
 		TextOut(dc,x+ 3,y+2,TEXT("1"),1);
-		SetTextColor(dc,RGB((iDrive2Status==2 ? 255 : 0),(iDrive2Status==1 ? 255 : 0),0));
+
+		SetTextColor(dc, g_aDiskFullScreenColorsLED[ iDrive2Status ] );
 		TextOut(dc,x+13,y+2,TEXT("2"),1);
+
+		// Feature Request #3581 ] drive lights in full screen mode
+		// This has been in for a while, at least since 1.12.7.1
+
+		// Full Screen Drive LED
+		// Note: Made redundant with above code
+		//		RECT rect = {0,0,8,8};
+		//		CONST int DriveLedY = 12; // 8 in windowed mode
+		//		DrawBitmapRect(dc,x+12,y+DriveLedY,&rect,g_hDiskFullScreenLED[ iDrive1Status ]);
+		//		DrawBitmapRect(dc,x+30,y+DriveLedY,&rect,g_hDiskFullScreenLED[ iDrive2Status ]);
+		//		SetTextColor(dc, g_aDiskFullScreenColors[ iDrive1Status ] );
+		//		TextOut(dc,x+ 10,y+2,TEXT("*"),1);
+		//		SetTextColor(dc, g_aDiskFullScreenColors[ iDrive2Status ] );
+		//		TextOut(dc,x+ 20,y+2,TEXT("*"),1);
+
 		if (!IS_APPLE2)
 		{
 			SetTextAlign(dc,TA_RIGHT | TA_TOP);
@@ -457,6 +509,7 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 		TextOut(dc,x+BUTTONCX/2,y+13,(g_nAppMode == MODE_PAUSED
 			? TITLE_PAUSED
 			: TITLE_STEPPING) ,8);
+
 	}
 	else
 	{
@@ -476,8 +529,8 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 		if (drawflags & DRAW_LEDS)
 		{
 			RECT rect = {0,0,8,8};
-			DrawBitmapRect(dc,x+12,y+8,&rect,diskbitmap[iDrive1Status]);
-			DrawBitmapRect(dc,x+30,y+8,&rect,diskbitmap[iDrive2Status]);
+			DrawBitmapRect(dc,x+12,y+8,&rect,g_hDiskWindowedLED[iDrive1Status]);
+			DrawBitmapRect(dc,x+30,y+8,&rect,g_hDiskWindowedLED[iDrive2Status]);
 
 			if (!IS_APPLE2)
 			{
@@ -498,12 +551,13 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 				DrawBitmapRect(dc,x+23,y+19,&rect,capsbitmapP8[P8CAPS_ON != 0]);
 			}
 
-
-/*				if (g_Apple2Type == A2TYPE_PRAVETS8A)
+		
+			/*
+			if (g_Apple2Type == A2TYPE_PRAVETS8A)
 					DrawBitmapRect(dc,x+7,y+19,&rect,cyrbitmap[bCaps != 0]);
 				else
 					DrawBitmapRect(dc,x+7,y+19,&rect,capsbitmap[bCaps != 0]);
-					*/
+*/
 			}
 		}
 
@@ -512,6 +566,7 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 			TCHAR title[80];
 			switch (g_Apple2Type)
 			{
+			default:
 			case A2TYPE_APPLE2:			_tcscpy(title, TITLE_APPLE_2); break; 
 			case A2TYPE_APPLE2PLUS:		_tcscpy(title, TITLE_APPLE_2_PLUS); break; 
 			case A2TYPE_APPLE2E:		_tcscpy(title, TITLE_APPLE_2E); break; 
@@ -519,6 +574,20 @@ static void DrawStatusArea (HDC passdc, int drawflags)
 			case A2TYPE_PRAVETS82:		_tcscpy(title, TITLE_PRAVETS_82); break; 
 			case A2TYPE_PRAVETS8M:		_tcscpy(title, TITLE_PRAVETS_8M); break; 
 			case A2TYPE_PRAVETS8A:		_tcscpy(title, TITLE_PRAVETS_8A); break; 
+			}
+
+			// TODO: g_bDisplayVideoModeInTitle
+			if( 1 )
+			{
+				_tcscat( title, " - " );
+
+				if( g_uHalfScanLines )
+				{
+					_tcscat( title," 50% " );
+				}
+
+				extern char *g_apVideoModeDesc[ NUM_VIDEO_MODES ];
+				_tcscat( title, g_apVideoModeDesc[ g_eVideoType ] );
 			}
 
 			if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
@@ -552,7 +621,11 @@ static void EraseButton (int number) {
   rect.right  = rect.left+BUTTONCX;
   rect.top    = buttony+number*BUTTONCY;
   rect.bottom = rect.top+BUTTONCY;
-  InvalidateRect(g_hFrameWindow,&rect,1);
+
+	// TODO: DD Full-Screen Palette
+	//	if( !g_bIsFullScreen )
+
+	InvalidateRect(g_hFrameWindow,&rect,1);
 }
 
 //===========================================================================
@@ -578,7 +651,7 @@ LRESULT CALLBACK FrameWndProc (
       break;
 
     case WM_CLOSE:
-      if (fullscreen)
+      if (g_bIsFullScreen)
         SetNormalMode();
       if (!IsIconic(window))
         GetWindowRect(window,&framerect);
@@ -635,9 +708,11 @@ LRESULT CALLBACK FrameWndProc (
 //MessageBox( NULL, filename, "DDE Exec", MB_OK );
       int error = DiskInsert(0,filename,0,0);
       if (!error) {
-        if (!fullscreen)
+        if (!g_bIsFullScreen)
           DrawButton((HDC)0,BTN_DRIVE1);
         SetForegroundWindow(window);
+		Sleep(500);	// Wait for SetForegroundWindow() to take affect (400ms seems OK, so use 500ms to be sure)
+		SoundCore_TweakVolumes();
         ProcessButtonClick(BTN_RUN);
       }
       else
@@ -685,7 +760,7 @@ LRESULT CALLBACK FrameWndProc (
       rect.bottom = rect.top+BUTTONCY;
       int error = DiskInsert(PtInRect(&rect,point) ? 1 : 0,filename,0,0);
       if (!error) {
-        if (!fullscreen)
+        if (!g_bIsFullScreen)
           DrawButton((HDC)0,PtInRect(&rect,point) ? BTN_DRIVE2 : BTN_DRIVE1);
         rect.top = buttony+BTN_DRIVE1*BUTTONCY+1;
         if (!PtInRect(&rect,point)) {
@@ -731,11 +806,12 @@ LRESULT CALLBACK FrameWndProc (
 
 	case WM_KEYDOWN:
 		KeybUpdateCtrlShiftStatus();
+
 		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == -1))
 		{
 			SetUsingCursor(0);
 			buttondown = wparam-VK_F1;
-			if (fullscreen && (buttonover != -1)) {
+			if (g_bIsFullScreen && (buttonover != -1)) {
 				if (buttonover != buttondown)
 				EraseButton(buttonover);
 				buttonover = -1;
@@ -744,35 +820,53 @@ LRESULT CALLBACK FrameWndProc (
 		}
 		else if (wparam == VK_F9)
 		{			
-			if (GetKeyState(VK_CONTROL) < 0) //CTRL+F9
+			//bool bCtrlDown  = (GetKeyState(VK_CONTROL) < 0) ? true : false;
+			//bool bShiftDown = (GetKeyState(VK_SHIFT  ) < 0) ? true : false;
+
+// F9 Next Video Mode
+// ^F9 Next Char Set
+// #F9 Prev Video Mode
+// ^#F9 Toggle 50% Scan Lines
+// @F9 -Can't use Alt-F9 as Alt is Open-Apple = Joystick Button #1
+
+			if ( g_bCtrlKey && !g_bShiftKey ) //CTRL+F9
 			{
 				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9)
 				if (g_nCharsetType >= 3)
+				{				
 					g_nCharsetType = 0;
+				}
 			}
 			else	// Cycle through available video modes
+			if ( g_bCtrlKey && g_bShiftKey ) // ALT+F9
 			{
-				if (GetKeyState(VK_SHIFT) >= 0)	// Backwards
-				{
-					if (videotype == 0)
-						videotype = VT_NUM_MODES;
-					videotype--;
-				}
-				else							// Forwards
-				{
-					videotype++;
-					if (videotype >= VT_NUM_MODES)
-						videotype = 0;
-				}
+				g_uHalfScanLines = !g_uHalfScanLines;
+			}
+			else
+			if ( !g_bShiftKey )	// Drop Down Combo Box is in correct order
+			{
+				g_eVideoType++;
+				if (g_eVideoType >= NUM_VIDEO_MODES)
+					g_eVideoType = 0;
+			}
+			else	// Forwards
+			{
+				if (g_eVideoType <= 0)
+					g_eVideoType = NUM_VIDEO_MODES;
+				g_eVideoType--;
 			}
 
+			// TODO: Clean up code:FrameRefreshStatus(DRAW_TITLE) DrawStatusArea((HDC)0,DRAW_TITLE)
+			DrawStatusArea( (HDC)0, DRAW_TITLE );
+
 			VideoReinitialize();
-			if ((g_nAppMode != MODE_LOGO) || ((g_nAppMode == MODE_DEBUG) && (g_bDebuggerViewingAppleOutput))) // +PATCH
+			if ((g_nAppMode != MODE_LOGO) || ((g_nAppMode == MODE_DEBUG) && (g_bDebuggerViewingAppleOutput)))
 			{
 				VideoRedrawScreen();
-				g_bDebuggerViewingAppleOutput = true;  // +PATCH
+				g_bDebuggerViewingAppleOutput = true;
 			}
-			REGSAVE(TEXT("Video Emulation"),videotype);
+
+			Config_Save_Video();
 		}
 
 		else if ((wparam == VK_F11) && (GetKeyState(VK_CONTROL) >= 0))	// Save state (F11)
@@ -836,7 +930,9 @@ LRESULT CALLBACK FrameWndProc (
 				KeybQueueKeypress((int)wparam,NOT_ASCII);
 		}
 		else if (g_nAppMode == MODE_DEBUG)
+		{		
 			DebuggerProcessKey(wparam);
+		}
 
 		if (wparam == VK_F10)
 		{
@@ -856,7 +952,7 @@ LRESULT CALLBACK FrameWndProc (
 		if ((wparam >= VK_F1) && (wparam <= VK_F8) && (buttondown == (int)wparam-VK_F1))
 		{
 			buttondown = -1;
-			if (fullscreen)
+			if (g_bIsFullScreen)
 				EraseButton(wparam-VK_F1);
 			else
 				DrawButton((HDC)0,wparam-VK_F1);
@@ -932,7 +1028,7 @@ LRESULT CALLBACK FrameWndProc (
         ReleaseCapture();
         if (buttondown == buttonactive) {
           buttondown = -1;
-          if (fullscreen)
+          if (g_bIsFullScreen)
             EraseButton(buttonactive);
           else
             DrawButton((HDC)0,buttonactive);
@@ -966,7 +1062,7 @@ LRESULT CALLBACK FrameWndProc (
           DrawButton((HDC)0,buttonactive);
         }
       }
-      else if (fullscreen && (newover != buttonover) && (buttondown == -1)) {
+      else if (g_bIsFullScreen && (newover != buttonover) && (buttondown == -1)) {
         if (buttonover != -1)
           EraseButton(buttonover);
         buttonover = newover;
@@ -1062,11 +1158,30 @@ LRESULT CALLBACK FrameWndProc (
       break;
 
     case WM_PALETTECHANGED:
-      if ((HWND)wparam == window)
-        break;
-      // fall through
+		// To avoid creating an infinite loop, a window that receives this
+		// message must not realize its palette, unless it determines that
+		// wParam does not contain its own window handle.
+		if ((HWND)wparam == window)
+	  {
+#if DEBUG_DD_PALETTE
+		if( g_bIsFullScreen )
+			OutputDebugString( "WM_PALETTECHANGED: Full Screen\n" );
+		else
+			OutputDebugString( "WM_PALETTECHANGED: Windowed\n" );
+#endif
+		break;
+	  } 
+	  // else fall through
 
     case WM_QUERYNEWPALETTE:
+#if DEBUG_DD_PALETTE
+		if( g_bIsFullScreen )
+			OutputDebugString( "WM_QUERYNEWPALETTE: Full Screen\n" );
+		else
+			OutputDebugString( "WM_QUERYNEWPALETTE: Windowed\n" );
+#endif
+
+		// TODO: DD Full-Screen Palette
       DrawFrameWindow();
       break;
 
@@ -1128,14 +1243,22 @@ LRESULT CALLBACK FrameWndProc (
 		break;
 
     case WM_SYSCOLORCHANGE:
-      DeleteGdiObjects();
-      CreateGdiObjects();
-      break;
+#if DEBUG_DD_PALETTE
+		if( g_bIsFullScreen )
+			OutputDebugString( "WM_SYSCOLORCHANGE: Full Screen\n" );
+		else
+			OutputDebugString( "WM_SYSCOLORCHANGE: Windowed\n" );
+#endif
+
+		// TODO: DD Full-Screen Palette
+		DeleteGdiObjects();
+		CreateGdiObjects();
+		break;
 
     case WM_SYSCOMMAND:
       switch (wparam & 0xFFF0) {
         case SC_KEYMENU:
-          if (fullscreen && g_bAppActive)
+          if (g_bIsFullScreen && g_bAppActive)
             return 0;
           break;
         case SC_MINIMIZE:
@@ -1199,6 +1322,49 @@ LRESULT CALLBACK FrameWndProc (
     case WM_USER_LOADSTATE:		// Load state
 		Snapshot_LoadState();
 		break;
+
+	case WM_USER_TCP_SERIAL:	// TCP serial events
+		WORD error = WSAGETSELECTERROR(lparam);
+		if (error != 0)
+		{
+			LogOutput("TCP Serial Winsock error 0x%X (%d)\r", error, error);
+			switch (error)
+			{
+			case WSAENETRESET:
+			case WSAECONNABORTED:
+			case WSAECONNRESET:
+			case WSAENOTCONN:
+			case WSAETIMEDOUT:
+				sg_SSC.CommTcpSerialClose();
+				break;
+
+			default:
+				sg_SSC.CommTcpSerialCleanup();
+				break;
+			}
+		}
+		else
+		{
+			WORD wSelectEvent = WSAGETSELECTEVENT(lparam);
+			switch(wSelectEvent)
+			{
+				case FD_ACCEPT:
+					sg_SSC.CommTcpSerialAccept();
+					break;
+
+				case FD_CLOSE:
+					sg_SSC.CommTcpSerialClose();
+					break;
+
+				case FD_READ:
+					sg_SSC.CommTcpSerialReceive();
+					break;
+
+				case FD_WRITE:
+					break;
+			}
+		}
+		break;
   }
   return DefWindowProc(window,message,wparam,lparam);
 }
@@ -1206,9 +1372,15 @@ LRESULT CALLBACK FrameWndProc (
 
 
 //===========================================================================
-void ProcessButtonClick (int button) {
+void ProcessButtonClick (int button)
+{
+	SoundCore_SetFade(FADE_OUT);
 
-  SoundCore_SetFade(FADE_OUT);
+#if DEBUG_DD_PALETTE
+	char _text[ 80 ];
+	sprintf( _text, "Button: F%d  Full Screen: %d\n", button+1, g_bIsFullScreen );
+	OutputDebugString( _text );
+#endif
 
   switch (button) {
 
@@ -1223,13 +1395,38 @@ void ProcessButtonClick (int button) {
       break;
 
     case BTN_RUN:
-      if (g_nAppMode == MODE_LOGO)
-        DiskBoot();
-      else if (g_nAppMode == MODE_RUNNING)
-        ResetMachineState();
-      if ((g_nAppMode == MODE_DEBUG) || (g_nAppMode == MODE_STEPPING))
-        DebugEnd();
-      g_nAppMode = MODE_RUNNING;
+		KeybUpdateCtrlShiftStatus();
+		if( g_bCtrlKey )
+		{
+			CtrlReset();
+			return;
+		}
+
+		if (g_nAppMode == MODE_LOGO)
+		{
+			DiskBoot();
+			g_nAppMode = MODE_RUNNING;
+		}
+		else
+		if (g_nAppMode == MODE_RUNNING)
+		{
+			ResetMachineState();
+			g_nAppMode = MODE_RUNNING;
+		}
+		if ((g_nAppMode == MODE_DEBUG) || (g_nAppMode == MODE_STEPPING))
+		{
+			// If any breakpoints active, 
+			if (g_nBreakpoints)
+			{
+				// switch to MODE_STEPPING
+				CmdGo( 0 );
+			}
+			else
+			{
+				DebugEnd();
+				g_nAppMode = MODE_RUNNING;
+			}
+		}
       DrawStatusArea((HDC)0,DRAW_TITLE);
       VideoRedrawScreen();
       g_bResetTiming = true;
@@ -1238,7 +1435,7 @@ void ProcessButtonClick (int button) {
     case BTN_DRIVE1:
     case BTN_DRIVE2:
       DiskSelect(button-BTN_DRIVE1);
-      if (!fullscreen)
+      if (!g_bIsFullScreen)
         DrawButton((HDC)0,button);
       break;
 
@@ -1247,7 +1444,7 @@ void ProcessButtonClick (int button) {
       break;
 
     case BTN_FULLSCR:
-      if (fullscreen)
+      if (g_bIsFullScreen)
         SetNormalMode();
       else
         SetFullScreenMode();
@@ -1259,6 +1456,9 @@ void ProcessButtonClick (int button) {
 			ResetMachineState();
 		}
 
+		// bug/feature: allow F7 to enter debugger even though emulator isn't "running"
+		//else
+
 		if (g_nAppMode == MODE_STEPPING)
 		{
 			DebuggerInputConsoleChar( DEBUG_EXIT_KEY );
@@ -1268,6 +1468,10 @@ void ProcessButtonClick (int button) {
 		{
 			g_bDebugDelayBreakCheck = true;
 			ProcessButtonClick(BTN_RUN);
+
+			// TODO: DD Full-Screen Palette
+			// exiting debugger using wrong palette, but this makes problem worse...
+			//InvalidateRect(g_hFrameWindow,NULL,1);
 		}
 		else
 		{
@@ -1398,7 +1602,7 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 
 //===========================================================================
 void RelayEvent (UINT message, WPARAM wparam, LPARAM lparam) {
-  if (fullscreen)
+  if (g_bIsFullScreen)
     return;
   MSG msg;
   msg.hwnd    = g_hFrameWindow;
@@ -1409,7 +1613,8 @@ void RelayEvent (UINT message, WPARAM wparam, LPARAM lparam) {
 }
 
 //===========================================================================
-void ResetMachineState () {
+void ResetMachineState ()
+{
   DiskReset();		// Set floppymotoron=0
   g_bFullSpeed = 0;	// Might've hit reset in middle of InternalCpuExecute() - so beep may get (partially) muted
 
@@ -1429,54 +1634,94 @@ void ResetMachineState () {
   SoundCore_SetFade(FADE_NONE);
 }
 
+
 //===========================================================================
-void SetFullScreenMode () {
-  fullscreen = 1;
-  buttonover = -1;
-  buttonx    = FSBUTTONX;
-  buttony    = FSBUTTONY;
-  viewportx  = FSVIEWPORTX;
-  viewporty  = FSVIEWPORTY;
-  GetWindowRect(g_hFrameWindow,&framerect);
-  SetWindowLong(g_hFrameWindow,GWL_STYLE,WS_POPUP | WS_SYSMENU | WS_VISIBLE);
-  DDSURFACEDESC ddsd;
-  ddsd.dwSize = sizeof(ddsd);
-  ddsd.dwFlags = DDSD_CAPS;
-  ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-  if (DirectDrawCreate(NULL,&directdraw,NULL) != DD_OK ||
-      directdraw->SetCooperativeLevel(g_hFrameWindow,DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN) != DD_OK ||
-      directdraw->SetDisplayMode(640,480,8) != DD_OK ||
-      directdraw->CreateSurface(&ddsd,&surface,NULL) != DD_OK) {
-    SetNormalMode();
-    return;
-  }
-  InvalidateRect(g_hFrameWindow,NULL,1);
+void CtrlReset()
+{
+	// Ctrl+Reset - TODO: This is a terrible place for this code!
+	if (!IS_APPLE2)
+		MemResetPaging();
+
+	DiskReset();
+	KeybReset();
+	if (!IS_APPLE2)
+		VideoResetState();	// Switch Alternate char set off
+	sg_SSC.CommReset();
+	MB_Reset();
+
+	CpuReset();
+	g_bFreshReset = true;
+}
+
+
+//===========================================================================
+void SetFullScreenMode ()
+{
+	g_bIsFullScreen = true;
+	buttonover = -1;
+	buttonx    = FSBUTTONX;
+	buttony    = FSBUTTONY;
+	viewportx  = FSVIEWPORTX;
+	viewporty  = FSVIEWPORTY;
+	GetWindowRect(g_hFrameWindow,&framerect);
+	SetWindowLong(g_hFrameWindow,GWL_STYLE,WS_POPUP | WS_SYSMENU | WS_VISIBLE);
+
+	DDSURFACEDESC ddsd;
+	ddsd.dwSize = sizeof(ddsd);
+	ddsd.dwFlags = DDSD_CAPS;
+	ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+	if (DirectDrawCreate(NULL,&g_pDD,NULL) != DD_OK ||
+		g_pDD->SetCooperativeLevel(g_hFrameWindow,DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN) != DD_OK ||
+		g_pDD->SetDisplayMode(640,480,8) != DD_OK ||
+		g_pDD->CreateSurface(&ddsd,&g_pDDPrimarySurface,NULL) != DD_OK)
+	{
+		g_pDDPrimarySurface = NULL;
+		SetNormalMode();
+		return;
+	}
+
+	// TODO: DD Full-Screen Palette
+	//	if( !g_bIsFullScreen )
+
+	InvalidateRect(g_hFrameWindow,NULL,1);
 }
 
 //===========================================================================
-void SetNormalMode () {
-  fullscreen = 0;
-  buttonover = -1;
-  buttonx    = BUTTONX;
-  buttony    = BUTTONY;
-  viewportx  = VIEWPORTX;
-  viewporty  = VIEWPORTY;
-  directdraw->RestoreDisplayMode();
-  directdraw->SetCooperativeLevel(NULL,DDSCL_NORMAL);
-  SetWindowLong(g_hFrameWindow,GWL_STYLE,
+void SetNormalMode ()
+{
+	g_bIsFullScreen = false;
+	buttonover = -1;
+	buttonx    = BUTTONX;
+	buttony    = BUTTONY;
+	viewportx  = VIEWPORTX;
+	viewporty  = VIEWPORTY;
+	g_pDD->RestoreDisplayMode();
+	g_pDD->SetCooperativeLevel(NULL,DDSCL_NORMAL);
+	SetWindowLong(g_hFrameWindow,GWL_STYLE,
                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |
                 WS_VISIBLE);
-  SetWindowPos(g_hFrameWindow,0,framerect.left,
+	SetWindowPos(g_hFrameWindow,0,framerect.left,
                              framerect.top,
                              framerect.right - framerect.left,
                              framerect.bottom - framerect.top,
                              SWP_NOZORDER | SWP_FRAMECHANGED);
-  if (surface) {
-    surface->Release();
-    surface = (LPDIRECTDRAWSURFACE)0;
-  }
-  directdraw->Release();
-  directdraw = (LPDIRECTDRAW)0;
+
+	// DD Full-Screen Palette: BUGFIX: Re-attach new palette on next new surface
+	// Delete Palette
+	if (g_pDDPal)
+	{
+		g_pDDPal->Release();
+		g_pDDPal = (LPDIRECTDRAWPALETTE)0;
+	}
+
+	if (g_pDDPrimarySurface)
+	{
+		g_pDDPrimarySurface->Release();
+		g_pDDPrimarySurface = (LPDIRECTDRAWSURFACE)0;
+	}
+
+	g_pDD->Release();
+	g_pDD = (LPDIRECTDRAW)0;
 }
 
 //===========================================================================
@@ -1594,9 +1839,11 @@ HDC FrameGetDC () {
 }
 
 //===========================================================================
-HDC FrameGetVideoDC (LPBYTE *addr, LONG *pitch)
+HDC FrameGetVideoDC (LPBYTE *pAddr_, LONG *pPitch_)
 {
-	if (fullscreen && g_bAppActive && !g_bPaintingWindow)
+	// ASSERT( pAddr_ );
+	// ASSERT( pPitch_ );
+	if (g_bIsFullScreen && g_bAppActive && !g_bPaintingWindow)
 	{
 		RECT rect = {	FSVIEWPORTX,
 						FSVIEWPORTY,
@@ -1605,17 +1852,26 @@ HDC FrameGetVideoDC (LPBYTE *addr, LONG *pitch)
 		DDSURFACEDESC surfacedesc;
 		surfacedesc.dwSize = sizeof(surfacedesc);
 		// TC: Use DDLOCK_WAIT - see Bug #13425
-		if (surface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL) == DDERR_SURFACELOST)
+		if (g_pDDPrimarySurface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL) == DDERR_SURFACELOST)
 		{
-			surface->Restore();
-			surface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL);
+			g_pDDPrimarySurface->Restore();
+			g_pDDPrimarySurface->Lock(&rect,&surfacedesc,DDLOCK_WAIT,NULL);
+
+			// DD Full Screen Palette
+//			if (g_pDDPal)
+//			{
+//				g_pDDPrimarySurface->SetPalette(g_pDDPal); // this sets the palette for the primary surface
+//			}
 		}
-		*addr  = (LPBYTE)surfacedesc.lpSurface+(VIEWPORTCY-1)*surfacedesc.lPitch;
-		*pitch = -surfacedesc.lPitch;
+		*pAddr_  = (LPBYTE)surfacedesc.lpSurface+(VIEWPORTCY-1)*surfacedesc.lPitch;
+		*pPitch_ = -surfacedesc.lPitch;
+
 		return (HDC)0;
 	}
 	else
 	{
+		*pAddr_ = g_pFramebufferbits;
+		*pPitch_ = FRAMEBUFFER_W;
 		return FrameGetDC();
 	}
 }
@@ -1655,23 +1911,26 @@ void FrameReleaseDC () {
 }
 
 //===========================================================================
-void FrameReleaseVideoDC () {
-  if (fullscreen && g_bAppActive && !g_bPaintingWindow) {
+void FrameReleaseVideoDC ()
+{
+	if (g_bIsFullScreen && g_bAppActive && !g_bPaintingWindow)
+	{
+		// THIS IS CORRECT ACCORDING TO THE DIRECTDRAW DOCS
+		RECT rect = {
+			FSVIEWPORTX,
+			FSVIEWPORTY,
+			FSVIEWPORTX+VIEWPORTCX,
+			FSVIEWPORTY+VIEWPORTCY
+		};
+		g_pDDPrimarySurface->Unlock(&rect);
 
-    // THIS IS CORRECT ACCORDING TO THE DIRECTDRAW DOCS
-    RECT rect = {FSVIEWPORTX,
-                 FSVIEWPORTY,
-                 FSVIEWPORTX+VIEWPORTCX,
-                 FSVIEWPORTY+VIEWPORTCY};
-    surface->Unlock(&rect);
-
-    // BUT THIS SEEMS TO BE WORKING
-    surface->Unlock(NULL);
-  }
+		// BUT THIS SEEMS TO BE WORKING
+		g_pDDPrimarySurface->Unlock(NULL);
+	}
 }
 
 //===========================================================================
-
+// TODO: FIXME: Util_TestFileExists()
 static bool FileExists(string strFilename) 
 { 
 	struct stat stFileInfo; 

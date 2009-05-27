@@ -58,7 +58,7 @@
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
-				EnableEnhancedInstructionSet="2"
+				EnableEnhancedInstructionSet="1"
 				FloatingPointModel="2"
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderFile=".\Release/Applewin.pch"
@@ -82,7 +82,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
 				OutputFile=".\Release/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -150,8 +150,9 @@
 				AdditionalOptions="/Zm200 "
 				Optimization="0"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
+				MinimalRebuild="true"
 				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
+				UsePrecompiledHeader="2"
 				PrecompiledHeaderFile=".\Debug/Applewin.pch"
 				AssemblerListingLocation=".\Debug/"
 				ObjectFile=".\Debug/"
@@ -175,7 +176,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
 				OutputFile=".\Debug/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -217,203 +218,19 @@
 			Filter=".cpp"
 			>
 			<File
-				RelativePath=".\source\6821.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\6821.h"
-				>
-			</File>
-			<File
 				RelativePath=".\source\Applewin.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\source\Applewin.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\AY8910.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\AY8910.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\CPU.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\CPU.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Disk.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Disk.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\DiskImage.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\DiskImage.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Frame.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Frame.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Harddisk.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Harddisk.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Joystick.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Joystick.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Keyboard.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Keyboard.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Log.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Log.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Memory.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Memory.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Mockingboard.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Mockingboard.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\MouseInterface.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\MouseInterface.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\ParallelPrinter.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\ParallelPrinter.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\PropertySheetPage.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\PropertySheetPage.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Registry.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Registry.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Riff.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Riff.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SaveState.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SaveState.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SerialComms.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SerialComms.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SoundCore.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\SoundCore.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Speaker.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Speaker.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Tape.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Tape.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Util_MemoryTextFile.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Util_MemoryTextFile.h"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Video.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\source\Video.h"
 				>
 			</File>
 			<Filter
@@ -498,6 +315,14 @@
 				<File
 					RelativePath=".\source\Tfe\Tfe.cpp"
 					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Tfe.h"
@@ -506,6 +331,14 @@
 				<File
 					RelativePath=".\source\Tfe\Tfearch.cpp"
 					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Tfearch.h"
@@ -514,18 +347,30 @@
 				<File
 					RelativePath=".\source\Tfe\Tfesupp.cpp"
 					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Tfesupp.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Tfe\Types.h"
-					>
-				</File>
-				<File
 					RelativePath=".\source\Tfe\Uilib.cpp"
 					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Uilib.h"
@@ -533,38 +378,310 @@
 				</File>
 			</Filter>
 			<Filter
-				Name="Z80"
+				Name="Z80VICE"
 				>
 				<File
-					RelativePath=".\source\Z80\README.txt"
+					RelativePath=".\source\Z80VICE\daa.cpp"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\daa.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80.cpp"
+					RelativePath=".\source\Z80VICE\z80.cpp"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80.h"
+					RelativePath=".\source\Z80VICE\z80mem.cpp"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\source\Z80VICE\z80mem.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80codes.h"
+					RelativePath=".\source\Z80VICE\z80regs.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="CommonVICE"
+				>
+				<File
+					RelativePath=".\source\CommonVICE\6510core.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80daa.h"
+					RelativePath=".\source\CommonVICE\alarm.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80emu.cpp"
+					RelativePath=".\source\CommonVICE\interrupt.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80emu.h"
+					RelativePath=".\source\CommonVICE\mem.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Z80\z80io.h"
+					RelativePath=".\source\CommonVICE\types.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Emulator"
+				>
+				<File
+					RelativePath=".\source\6821.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\6821.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\AY8910.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\AY8910.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Disk.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Disk.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\DiskImage.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\DiskImage.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Frame.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Frame.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Harddisk.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Harddisk.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Joystick.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Joystick.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Keyboard.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Keyboard.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Log.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Log.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Memory.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Memory.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Mockingboard.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Mockingboard.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\MouseInterface.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\MouseInterface.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\ParallelPrinter.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\ParallelPrinter.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\PropertySheetPage.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\PropertySheetPage.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Registry.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Registry.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Riff.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Riff.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SaveState.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SaveState.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SerialComms.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SerialComms.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SoundCore.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SoundCore.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Speaker.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Speaker.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Tape.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Tape.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Util_MemoryTextFile.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Util_MemoryTextFile.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Video.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Video.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\z80emu.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\z80emu.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="_Headers"
+				>
+				<File
+					RelativePath=".\source\Common.h"
+					>
+				</File>
+				<File
+					RelativePath=".\resource\resource.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SSI263Phonemes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\StdAfx.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Structs.h"
 					>
 				</File>
 			</Filter>
@@ -574,6 +691,10 @@
 			>
 			<File
 				RelativePath=".\docs\CodingConventions.txt"
+				>
+			</File>
+			<File
+				RelativePath=".\docs\Debugger_Changelog.txt"
 				>
 			</File>
 			<File
@@ -644,19 +765,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\CAPSOFF_P8.BMP"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\CAPSON.BMP"
 				>
 			</File>
 			<File
-				RelativePath=".\resource\CHARIDNICATOR_82.BMP"
-				>
-			</File>
-			<File
-				RelativePath=".\resource\CHARIDNICATOR_8C.BMP"
-				>
-			</File>
-			<File
-				RelativePath=".\resource\CHARIDNICATOR_APPLE.BMP"
+				RelativePath=".\resource\CAPSON_P8.BMP"
 				>
 			</File>
 			<File
@@ -676,14 +793,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\resource\CYROFF.BMP"
-				>
-			</File>
-			<File
-				RelativePath=".\resource\CYRON.BMP"
-				>
-			</File>
-			<File
 				RelativePath="RESOURCE\DEBUG.BMP"
 				>
 			</File>
@@ -696,7 +805,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\Disk2.rom"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\DISKOFF.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Diskprot.bmp"
 				>
 			</File>
 			<File
@@ -724,6 +841,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\Freezes_Non-autostart_F8_Rom.rom"
+				>
+			</File>
+			<File
 				RelativePath="RESOURCE\FULLSCR.BMP"
 				>
 			</File>
@@ -736,7 +857,31 @@
 				>
 			</File>
 			<File
+				RelativePath=".\resource\LATOFF.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\LATON.BMP"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Mockingboard-D.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\MouseInterface.rom"
+				>
+			</File>
+			<File
 				RelativePath=".\resource\Parallel.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\PRAVETS82.ROM"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\Pravets8C.rom"
 				>
 			</File>
 			<File
@@ -751,27 +896,19 @@
 				RelativePath="RESOURCE\SETUP.BMP"
 				>
 			</File>
+			<File
+				RelativePath=".\resource\SSC.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\ThunderClockPlus.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\winres.h"
+				>
+			</File>
 		</Filter>
-		<File
-			RelativePath=".\source\Common.h"
-			>
-		</File>
-		<File
-			RelativePath=".\resource\resource.h"
-			>
-		</File>
-		<File
-			RelativePath=".\source\SSI263Phonemes.h"
-			>
-		</File>
-		<File
-			RelativePath=".\source\StdAfx.h"
-			>
-		</File>
-		<File
-			RelativePath=".\source\Structs.h"
-			>
-		</File>
 	</Files>
 	<Globals>
 	</Globals>

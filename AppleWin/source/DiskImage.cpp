@@ -44,7 +44,7 @@ typedef struct _imageinforec {
     BOOL       writeprotected;
     DWORD      headersize;
     LPBYTE     header;
-    BOOL       validtrack[TRACKS];
+    BOOL       validtrack[TRACKS_MAX];
 } imageinforec, *imageinfoptr;
 
 typedef BOOL  (*boottype  )(imageinfoptr);
@@ -155,7 +155,7 @@ LPBYTE Code62 (int sector) {
   // STARTING AT 4K INTO THE WORK BUFFER.
   {
     LPBYTE sectorbase = workbuffer+(sector << 8);
-    LPBYTE resultptr  = workbuffer+0x1000;
+    LPBYTE resultptr  = workbuffer+TRACK_DENIBBLIZED_SIZE;
     BYTE   offset     = 0xAC;
     while (offset != 0x02) {
       BYTE value = 0;
@@ -180,8 +180,8 @@ LPBYTE Code62 (int sector) {
   // BLOCK OF 343 BYTES STARTING AT 5K INTO THE WORK BUFFER.
   {
     BYTE   savedval  = 0;
-    LPBYTE sourceptr = workbuffer+0x1000;
-    LPBYTE resultptr = workbuffer+0x1400;
+    LPBYTE sourceptr = workbuffer+TRACK_DENIBBLIZED_SIZE;
+    LPBYTE resultptr = workbuffer+TRACK_DENIBBLIZED_SIZE+0x400;
     int    loop      = 342;
     while (loop--) {
       *(resultptr++) = savedval ^ *sourceptr;
@@ -196,14 +196,14 @@ LPBYTE Code62 (int sector) {
   // ZERO BITS.  THE CONVERTED BLOCK OF 343 BYTES IS STORED STARTING AT 4K
   // INTO THE WORK BUFFER.
   {
-    LPBYTE sourceptr = workbuffer+0x1400;
-    LPBYTE resultptr = workbuffer+0x1000;
+    LPBYTE sourceptr = workbuffer+TRACK_DENIBBLIZED_SIZE+0x400;
+    LPBYTE resultptr = workbuffer+TRACK_DENIBBLIZED_SIZE;
     int    loop      = 343;
     while (loop--)
       *(resultptr++) = diskbyte[(*(sourceptr++)) >> 2];
   }
 
-  return workbuffer+0x1000;
+  return workbuffer+TRACK_DENIBBLIZED_SIZE;
 }
 
 //===========================================================================
@@ -225,8 +225,8 @@ void Decode62 (LPBYTE imageptr) {
 
   // USING OUR TABLE, CONVERT THE DISK BYTES BACK INTO 6-BIT BYTES
   {
-    LPBYTE sourceptr = workbuffer+0x1000;
-    LPBYTE resultptr = workbuffer+0x1400;
+    LPBYTE sourceptr = workbuffer+TRACK_DENIBBLIZED_SIZE;
+    LPBYTE resultptr = workbuffer+TRACK_DENIBBLIZED_SIZE+0x400;
     int    loop      = 343;
     while (loop--)
       *(resultptr++) = sixbitbyte[*(sourceptr++) & 0x7F];
@@ -236,8 +236,8 @@ void Decode62 (LPBYTE imageptr) {
   // TO UNDO THE EFFECTS OF THE CHECKSUMMING PROCESS
   {
     BYTE   savedval  = 0;
-    LPBYTE sourceptr = workbuffer+0x1400;
-    LPBYTE resultptr = workbuffer+0x1000;
+    LPBYTE sourceptr = workbuffer+TRACK_DENIBBLIZED_SIZE+0x400;
+    LPBYTE resultptr = workbuffer+TRACK_DENIBBLIZED_SIZE;
     int    loop      = 342;
     while (loop--) {
       *resultptr = savedval ^ *(sourceptr++);
@@ -247,8 +247,8 @@ void Decode62 (LPBYTE imageptr) {
 
   // CONVERT THE 342 6-BIT BYTES INTO 256 8-BIT BYTES
   {
-    LPBYTE lowbitsptr = workbuffer+0x1000;
-    LPBYTE sectorbase = workbuffer+0x1056;
+    LPBYTE lowbitsptr = workbuffer+TRACK_DENIBBLIZED_SIZE;
+    LPBYTE sectorbase = workbuffer+TRACK_DENIBBLIZED_SIZE+0x56;
     BYTE   offset     = 0xAC;
     while (offset != 0x02) {
       if (offset >= 0xAC)
@@ -272,7 +272,7 @@ void Decode62 (LPBYTE imageptr) {
 
 //===========================================================================
 void DenibblizeTrack (LPBYTE trackimage, BOOL dosorder, int nibbles) {
-  ZeroMemory(workbuffer,0x1000);
+  ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
 
   // SEARCH THROUGH THE TRACK IMAGE FOR EACH SECTOR.  FOR EVERY SECTOR
   // WE FIND, COPY THE NIBBLIZED DATA FOR THAT SECTOR INTO THE WORK
@@ -299,13 +299,13 @@ void DenibblizeTrack (LPBYTE trackimage, BOOL dosorder, int nibbles) {
         int loop       = 0;
         int tempoffset = offset;
         while (loop < 384) {
-          *(workbuffer+0x1000+loop++) = *(trackimage+tempoffset++);
+          *(workbuffer+TRACK_DENIBBLIZED_SIZE+loop++) = *(trackimage+tempoffset++);
           if (tempoffset >= nibbles)
             tempoffset = 0;
         }
         if (byteval[2] == 0x96)
-          sector = ((*(workbuffer+0x1004) & 0x55) << 1)
-                     | (*(workbuffer+0x1005) & 0x55);
+          sector = ((*(workbuffer+TRACK_DENIBBLIZED_SIZE+4) & 0x55) << 1)
+                     | (*(workbuffer+TRACK_DENIBBLIZED_SIZE+5) & 0x55);
         else if (byteval[2] == 0xAD) {
           Decode62(workbuffer+(sectornumber[dosorder][sector] << 8));
           sector = 0;
@@ -317,7 +317,7 @@ void DenibblizeTrack (LPBYTE trackimage, BOOL dosorder, int nibbles) {
 
 //===========================================================================
 DWORD NibblizeTrack (LPBYTE trackimagebuffer, BOOL dosorder, int track) {
-  ZeroMemory(workbuffer+4096,4096);
+  ZeroMemory(workbuffer+TRACK_DENIBBLIZED_SIZE,TRACK_DENIBBLIZED_SIZE);
   LPBYTE imageptr = trackimagebuffer;
   BYTE   sector   = 0;
 
@@ -422,6 +422,37 @@ DWORD AplDetect (LPBYTE imageptr, DWORD imagesize) {
           ((length+4+((256-((length+4) & 255)) & 255)) == imagesize));
 }
 
+//===========================================================================
+
+static bool IsValidImageSize(DWORD uImageSize)
+{
+	g_uNumTracksInImage = 0;
+
+	if ((TRACKS_MAX>TRACKS_STANDARD) && (uImageSize > TRACKS_MAX*TRACK_DENIBBLIZED_SIZE))
+		return false;	// >160KB
+
+	//
+
+	bool bValidSize = false;
+
+	if (uImageSize >= (TRACKS_STANDARD+1)*TRACK_DENIBBLIZED_SIZE)
+	{
+		// Is uImageSize == 140KB + n*4K?	(where n>=1)
+		bValidSize = (((uImageSize - TRACKS_STANDARD*TRACK_DENIBBLIZED_SIZE) % TRACK_DENIBBLIZED_SIZE) == 0);
+	}
+	else
+	{
+		bValidSize = (  ((uImageSize >= 143105) && (uImageSize <= 143364)) ||
+						 (uImageSize == 143403) ||
+						 (uImageSize == 143488) );
+	}
+
+	if (bValidSize)
+		g_uNumTracksInImage = uImageSize / TRACK_DENIBBLIZED_SIZE;
+
+	return bValidSize;
+}
+
 /****************************************************************************
 *
 *  DOS ORDER (DO) FORMAT IMPLEMENTATION
@@ -429,10 +460,10 @@ DWORD AplDetect (LPBYTE imageptr, DWORD imagesize) {
 ***/
 
 //===========================================================================
-DWORD DoDetect (LPBYTE imageptr, DWORD imagesize) {
-  if (((imagesize < 143105) || (imagesize > 143364)) &&
-      (imagesize != 143403) && (imagesize != 143488))
-    return 0;
+DWORD DoDetect (LPBYTE imageptr, DWORD imagesize)
+{
+  if (!IsValidImageSize(imagesize))
+	  return 0;
 
   // CHECK FOR A DOS ORDER IMAGE OF A DOS DISKETTE
   {
@@ -463,9 +494,9 @@ DWORD DoDetect (LPBYTE imageptr, DWORD imagesize) {
 //===========================================================================
 void DoRead (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimagebuffer, int *nibbles) {
   SetFilePointer(ptr->file,ptr->offset+(track << 12),NULL,FILE_BEGIN);
-  ZeroMemory(workbuffer,4096);
+  ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
   DWORD bytesread;
-  ReadFile(ptr->file,workbuffer,4096,&bytesread,NULL);
+  ReadFile(ptr->file,workbuffer,TRACK_DENIBBLIZED_SIZE,&bytesread,NULL);
   *nibbles = NibblizeTrack(trackimagebuffer,1,track);
   if (!enhancedisk)
     SkewTrack(track,*nibbles,trackimagebuffer);
@@ -473,11 +504,11 @@ void DoRead (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimagebuf
 
 //===========================================================================
 void DoWrite (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimage, int nibbles) {
-  ZeroMemory(workbuffer,4096);
+  ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
   DenibblizeTrack(trackimage,1,nibbles);
   SetFilePointer(ptr->file,ptr->offset+(track << 12),NULL,FILE_BEGIN);
   DWORD byteswritten;
-  WriteFile(ptr->file,workbuffer,4096,&byteswritten,NULL);
+  WriteFile(ptr->file,workbuffer,TRACK_DENIBBLIZED_SIZE,&byteswritten,NULL);
 }
 
 /****************************************************************************
@@ -529,9 +560,9 @@ void IieRead (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimagebu
   if (*(ptr->header+13) <= 2) {
     IieConvertSectorOrder(ptr->header+14);
     SetFilePointer(ptr->file,(track << 12)+30,NULL,FILE_BEGIN);
-    ZeroMemory(workbuffer,4096);
+    ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
     DWORD bytesread;
-    ReadFile(ptr->file,workbuffer,4096,&bytesread,NULL);
+    ReadFile(ptr->file,workbuffer,TRACK_DENIBBLIZED_SIZE,&bytesread,NULL);
     *nibbles = NibblizeTrack(trackimagebuffer,2,track);
   }
 
@@ -610,10 +641,10 @@ void Nib2Write (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimage
 ***/
 
 //===========================================================================
-DWORD PoDetect (LPBYTE imageptr, DWORD imagesize) {
-  if (((imagesize < 143105) || (imagesize > 143364)) &&
-      (imagesize != 143488))
-    return 0;
+DWORD PoDetect (LPBYTE imageptr, DWORD imagesize)
+{
+  if (!IsValidImageSize(imagesize))
+	  return 0;
 
   // CHECK FOR A PRODOS ORDER IMAGE OF A DOS DISKETTE
   {
@@ -644,9 +675,9 @@ DWORD PoDetect (LPBYTE imageptr, DWORD imagesize) {
 //===========================================================================
 void PoRead (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimagebuffer, int *nibbles) {
   SetFilePointer(ptr->file,ptr->offset+(track << 12),NULL,FILE_BEGIN);
-  ZeroMemory(workbuffer,4096);
+  ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
   DWORD bytesread;
-  ReadFile(ptr->file,workbuffer,4096,&bytesread,NULL);
+  ReadFile(ptr->file,workbuffer,TRACK_DENIBBLIZED_SIZE,&bytesread,NULL);
   *nibbles = NibblizeTrack(trackimagebuffer,0,track);
   if (!enhancedisk)
     SkewTrack(track,*nibbles,trackimagebuffer);
@@ -654,11 +685,11 @@ void PoRead (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimagebuf
 
 //===========================================================================
 void PoWrite (imageinfoptr ptr, int track, int quartertrack, LPBYTE trackimage, int nibbles) {
-  ZeroMemory(workbuffer,4096);
+  ZeroMemory(workbuffer,TRACK_DENIBBLIZED_SIZE);
   DenibblizeTrack(trackimage,0,nibbles);
   SetFilePointer(ptr->file,ptr->offset+(track << 12),NULL,FILE_BEGIN);
   DWORD byteswritten;
-  WriteFile(ptr->file,workbuffer,4096,&byteswritten,NULL);
+  WriteFile(ptr->file,workbuffer,TRACK_DENIBBLIZED_SIZE,&byteswritten,NULL);
 }
 
 /****************************************************************************
@@ -710,11 +741,11 @@ BOOL ImageBoot (HIMAGE imagehandle) {
 }
 
 //===========================================================================
-void ImageClose (HIMAGE imagehandle) {
+void ImageClose (HIMAGE imagehandle){
   imageinfoptr ptr = (imageinfoptr)imagehandle;
   if (ptr->file != INVALID_HANDLE_VALUE)
     CloseHandle(ptr->file);
-  for (int track = 0; track < TRACKS; track++)
+  for (UINT track = 0; track < g_uNumTracksInImage; track++)
     if (!ptr->validtrack[track]) {
       DeleteFile(ptr->filename);
       break;
@@ -732,7 +763,7 @@ void ImageDestroy () {
 
 //===========================================================================
 void ImageInitialize () {
-  workbuffer = (LPBYTE)VirtualAlloc(NULL,0x2000,MEM_COMMIT,PAGE_READWRITE);
+  workbuffer = (LPBYTE)VirtualAlloc(NULL, TRACK_DENIBBLIZED_SIZE*2, MEM_COMMIT, PAGE_READWRITE);
 }
 
 //===========================================================================
@@ -884,7 +915,7 @@ int ImageOpen (LPCTSTR  imagefilename,
 			((imageinfoptr)*hDiskImage_)->offset         = pImage-view;
 			((imageinfoptr)*hDiskImage_)->writeprotected = *pWriteProtected_;
 
-			for (int track = 0; track < TRACKS; track++)
+			for (UINT track = 0; track < g_uNumTracksInImage; track++)
 		        ((imageinfoptr)*hDiskImage_)->validtrack[track] = (size > 0);
 
 			return IMAGE_ERROR_NONE; // HACK: MAGIC # 0

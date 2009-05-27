@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2009, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Debugger
  *
- * Author: Copyright (C) 2006-2008 Michael Pohoreski
+ * Author: Copyright (C) 2006-2009 Michael Pohoreski
  */
 
 // disable warning C4786: symbol greater than 255 character:
@@ -38,12 +38,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //	#define DEBUG_ASM_HASH 1
 #define ALLOW_INPUT_LOWERCASE 1
 
-// TODO: COLOR RESET
-// TODO: COLOR SAVE ["filename"]
-// TODO: COLOR LOAD ["filename"]
-
 	// See Debugger_Changelong.txt for full details
-	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,0,6);
+	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,0,8);
 
 
 // Public _________________________________________________________________________________________
@@ -254,7 +250,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("M")           , CmdMemoryMove        , CMD_MEMORY_MOVE          , "Memory move"                  },
 		{TEXT("BSAVE")       , CmdMemorySave        , CMD_MEMORY_SAVE          , "Save a region of memory"      },
 		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        , "Search memory for text / hex values" },
-		{TEXT("@")				,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory resuts" },
+		{TEXT("@")           ,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory resuts" },
 //		{TEXT("SA")          , CmdMemorySearchAscii,  CMD_MEMORY_SEARCH_ASCII  , "Search ASCII text"            },
 //		{TEXT("ST")          , CmdMemorySearchApple , CMD_MEMORY_SEARCH_APPLE  , "Search Apple text (hi-bit)"   },
 		{TEXT("SH")          , CmdMemorySearchHex   , CMD_MEMORY_SEARCH_HEX    , "Search memory for hex values" },
@@ -296,15 +292,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("GR")          , CmdViewOutput_GRX    , CMD_VIEW_GRX   , "View Lo-Res screen (current page)"      },
 		{TEXT("GR1")         , CmdViewOutput_GR1    , CMD_VIEW_GR1   , "View Lo-Res screen Page 1"              },
 		{TEXT("GR2")         , CmdViewOutput_GR2    , CMD_VIEW_GR2   , "View Lo-Res screen Page 2"              },
-		{TEXT("DGR")			, CmdViewOutput_DGRX   , CMD_VIEW_DGRX  , "View Double lo-res (current page)"      },
-		{TEXT("DGR1")			, CmdViewOutput_DGR1   , CMD_VIEW_DGR1  , "View Double lo-res Page 1"              },
-		{TEXT("DGR2")			, CmdViewOutput_DGR2   , CMD_VIEW_DGR2  , "View Double lo-res Page 2"              },
-		{TEXT("HGR")			, CmdViewOutput_HGRX   , CMD_VIEW_HGRX  , "View Hi-res (current page)"             },
-		{TEXT("HGR1")			, CmdViewOutput_HGR1   , CMD_VIEW_HGR1  , "View Hi-res Page 1"                     },
-		{TEXT("HGR2")			, CmdViewOutput_HGR2   , CMD_VIEW_HGR2  , "View Hi-res Page 2"                     },
-		{TEXT("DHGR")			, CmdViewOutput_DHGRX  , CMD_VIEW_DHGRX , "View Double Hi-res (current page)"      },
-		{TEXT("DHGR1")			, CmdViewOutput_DHGR1  , CMD_VIEW_DHGR1 , "View Double Hi-res Page 1"              },
-		{TEXT("DHGR2")			, CmdViewOutput_DHGR2  , CMD_VIEW_DHGR2 , "View Double Hi-res Page 2"              },
+		{TEXT("DGR")         , CmdViewOutput_DGRX   , CMD_VIEW_DGRX  , "View Double lo-res (current page)"      },
+		{TEXT("DGR1")        , CmdViewOutput_DGR1   , CMD_VIEW_DGR1  , "View Double lo-res Page 1"              },
+		{TEXT("DGR2")        , CmdViewOutput_DGR2   , CMD_VIEW_DGR2  , "View Double lo-res Page 2"              },
+		{TEXT("HGR")         , CmdViewOutput_HGRX   , CMD_VIEW_HGRX  , "View Hi-res (current page)"             },
+		{TEXT("HGR1")        , CmdViewOutput_HGR1   , CMD_VIEW_HGR1  , "View Hi-res Page 1"                     },
+		{TEXT("HGR2")        , CmdViewOutput_HGR2   , CMD_VIEW_HGR2  , "View Hi-res Page 2"                     },
+		{TEXT("DHGR")        , CmdViewOutput_DHGRX  , CMD_VIEW_DHGRX , "View Double Hi-res (current page)"      },
+		{TEXT("DHGR1")       , CmdViewOutput_DHGR1  , CMD_VIEW_DHGR1 , "View Double Hi-res Page 1"              },
+		{TEXT("DHGR2")       , CmdViewOutput_DHGR2  , CMD_VIEW_DHGR2 , "View Double Hi-res Page 2"              },
 	// Watch
 		{TEXT("W")           , CmdWatch             , CMD_WATCH_ADD     , "Alias for WA (Watch Add)"                      },
 		{TEXT("WA")          , CmdWatchAdd          , CMD_WATCH_ADD     , "Add/Update address or symbol to watch"         },
@@ -460,7 +456,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	};
 
 	// Index into Palette
-	int g_aColorIndex[ NUM_COLORS ] =
+	int g_aColorIndex[ NUM_DEBUG_COLORS ] =
 	{
 		K0, W8,              // BG_CONSOLE_OUTPUT   FG_CONSOLE_OUTPUT (W8)
 
@@ -524,7 +520,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		W8    // FG_SOURCE
 	};
 
-	COLORREF g_aColors[ NUM_COLOR_SCHEMES ][ NUM_COLORS ];
+	COLORREF g_aColors[ NUM_COLOR_SCHEMES ][ NUM_DEBUG_COLORS ];
 
 	COLORREF DebuggerGetColor ( int iColor );
 
@@ -855,54 +851,57 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Prototypes _______________________________________________________________
 
-	static	int ParseInput   ( LPTSTR pConsoleInput, bool bCook = true );
+	static	int ParseInput ( LPTSTR pConsoleInput, bool bCook = true );
 	static	Update_t ExecuteCommand ( int nArgs );
 
 // Breakpoints
-	void _BWZ_List( const Breakpoint_t * aBreakWatchZero, const int iBWZ ); // bool bZeroBased = true );
-	void _BWZ_ListAll( const Breakpoint_t * aBreakWatchZero, const int nMax );
+	void _BWZ_List ( const Breakpoint_t * aBreakWatchZero, const int iBWZ ); // bool bZeroBased = true );
+	void _BWZ_ListAll ( const Breakpoint_t * aBreakWatchZero, const int nMax );
 
 //	bool CheckBreakpoint (WORD address, BOOL memory);
-	bool CheckBreakpointsIO   ();
-	bool CheckBreakpointsReg  ();
+	bool CheckBreakpointsIO ();
+	bool CheckBreakpointsReg ();
 	bool _CmdBreakpointAddReg ( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen );
 	int  _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp );
 
 // Config - Colors
-	static	void _ConfigColorsReset();
+	static	void _ConfigColorsReset ( BYTE *pPalDst = 0 );
 
 // Config - Save
-	bool ConfigSave_BufferToDisk( char *pFileName, ConfigSave_t eConfigSave );
-	void ConfigSave_PrepareHeader( const Parameters_e eCategory, const Commands_e eCommandClear );
+	bool ConfigSave_BufferToDisk ( char *pFileName, ConfigSave_t eConfigSave );
+	void ConfigSave_PrepareHeader ( const Parameters_e eCategory, const Commands_e eCommandClear );
 
 // Drawing
 	static	bool DebuggerSetColor ( const int iScheme, const int iColor, const COLORREF nColor );
 	static	void _CmdColorGet ( const int iScheme, const int iColor );
 
 // Font
-	static	void _UpdateWindowFontHeights(int nFontHeight);
+	static	void _UpdateWindowFontHeights (int nFontHeight);
 
 // Symbols
-	Update_t _CmdSymbolsClear      ( Symbols_e eSymbolTable );
-	Update_t _CmdSymbolsCommon     ( int nArgs, int bSymbolTables );
+	Update_t _CmdSymbolsClear ( Symbols_e eSymbolTable );
+	Update_t _CmdSymbolsCommon ( int nArgs, int bSymbolTables );
 	Update_t _CmdSymbolsListTables (int nArgs, int bSymbolTables );
-	Update_t _CmdSymbolsUpdate     ( int nArgs );
+	Update_t _CmdSymbolsUpdate ( int nArgs );
 
-	bool _CmdSymbolList_Address2Symbol( int nAddress   , int bSymbolTables );
-	bool _CmdSymbolList_Symbol2Address( LPCTSTR pSymbol, int bSymbolTables );
+	bool _CmdSymbolList_Address2Symbol ( int nAddress   , int bSymbolTables );
+	bool _CmdSymbolList_Symbol2Address ( LPCTSTR pSymbol, int bSymbolTables );
+
+	// SymbolOffset
+	int ParseSymbolTable ( TCHAR *pFileName, Symbols_e eWhichTableToLoad, int nSymbolOffset = 0 );
 
 // Source Level Debugging
 	static	bool BufferAssemblyListing ( char * pFileName );
-	static	bool ParseAssemblyListing  ( bool bBytesToMemory, bool bAddSymbols );
+	static	bool ParseAssemblyListing ( bool bBytesToMemory, bool bAddSymbols );
 
 
 // Window
-	void _WindowJoin    ();
-	void _WindowSplit   (Window_e eNewBottomWindow );
-	void _WindowLast    ();
-	void _WindowSwitch  ( int eNewWindow );
+	void _WindowJoin ();
+	void _WindowSplit (Window_e eNewBottomWindow );
+	void _WindowLast ();
+	void _WindowSwitch ( int eNewWindow );
 	int  WindowGetHeight ( int iWindow );
-	void WindowUpdateDisasmSize           ();
+	void WindowUpdateDisasmSize ();
 	void WindowUpdateConsoleDisplayedSize ();
 	void WindowUpdateSizes                ();
 	Update_t _CmdWindowViewFull   (int iNewWindow);
@@ -1481,7 +1480,7 @@ Update_t CmdBreakInvalid (int nArgs) // Breakpoint IFF Full-speed!
 		goto _Help;
 
 	int iType = 0; // default to BRK
-	int nActive;
+	int nActive = 0;
 
 //	if (nArgs == 2)
 	iType = g_aArgs[ 1 ].nValue;
@@ -2751,7 +2750,7 @@ void _ColorPrint( int iColor, COLORREF nColor )
 
 void _CmdColorGet( const int iScheme, const int iColor )
 {
-	if (iColor < NUM_COLORS)
+	if (iColor < NUM_DEBUG_COLORS)
 	{
 //	COLORREF nColor = g_aColors[ iScheme ][ iColor ];
 		DebugColors_e eColor = static_cast<DebugColors_e>( iColor );
@@ -2771,7 +2770,7 @@ inline COLORREF DebuggerGetColor( int iColor )
 {
 	COLORREF nColor = RGB(0,255,255); // 0xFFFF00; // Hot Pink! -- so we notice errors. Not that there is anything wrong with pink...
 
-	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_COLORS))
+	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_DEBUG_COLORS))
 	{
 		nColor = g_aColors[ g_iColorScheme ][ iColor ];
 	}
@@ -2783,7 +2782,7 @@ inline COLORREF DebuggerGetColor( int iColor )
 bool DebuggerSetColor( const int iScheme, const int iColor, const COLORREF nColor )
 {
 	bool bStatus = false;
-	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_COLORS))
+	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_DEBUG_COLORS))
 	{
 		g_aColors[ iScheme ][ iColor ] = nColor;
 		bStatus = true;
@@ -2802,7 +2801,7 @@ bool DebuggerSetColor( const int iScheme, const int iColor, const COLORREF nColo
 //===========================================================================
 Update_t CmdConfigColorMono (int nArgs)
 {
-	int iScheme;
+	int iScheme = 0;
 	
 	if (g_iCommand == CMD_CONFIG_COLOR)
 		iScheme = SCHEME_COLOR;
@@ -2826,7 +2825,7 @@ Update_t CmdConfigColorMono (int nArgs)
 		return HelpLastCommand();
 
 	int iColor = g_aArgs[ 1 ].nValue;
-	if ((iColor < 0) || iColor >= NUM_COLORS)
+	if ((iColor < 0) || iColor >= NUM_DEBUG_COLORS)
 		return HelpLastCommand();
 
 	int iParam;
@@ -2880,7 +2879,7 @@ Update_t CmdConfigHColor (int nArgs)
 		return Help_Arg_1( g_iCommand );
 
 	int iColor = g_aArgs[ 1 ].nValue;
-	if ((iColor < 0) || iColor >= NUM_COLORS)
+	if ((iColor < 0) || iColor >= NUM_DEBUG_COLORS)
 		return Help_Arg_1( g_iCommand );
 
 	if (nArgs == 1)
@@ -4854,6 +4853,7 @@ Update_t CmdMemorySave (int nArgs)
 				BYTE *pDst = pMemory;
 				BYTE *pSrc = mem + nAddressStart;
 				
+				// memcpy -- copy out of active memory bank
 				int iByte;
 				for( iByte = 0; iByte < nAddressLen; iByte++ )
 				{
@@ -6345,8 +6345,14 @@ Update_t _CmdSymbolsListTables (int nArgs, int bSymbolTables)
 	return ConsoleUpdate();
 }
 
+
+void Print_Current_Path()
+{
+	ConsoleDisplayError( g_sProgramDir );
+}
+
 //===========================================================================
-int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad )
+int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad, int nSymbolOffset )
 {
 	int nSymbolsLoaded = 0;
 
@@ -6365,6 +6371,14 @@ int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad )
 	sprintf( sFormat2, "%%%ds %%x", MAX_SYMBOLS_LEN ); // i.e. "%13s %x"
 
 	FILE *hFile = fopen(pFileName,"rt");
+
+	if( !hFile )
+	{
+		ConsoleDisplayError( "Symbol File not found:" );
+		Print_Current_Path();
+		nSymbolsLoaded = -1; // HACK: ERROR: FILE NOT EXIST
+	}
+
 	while(hFile && !feof(hFile))
 	{
 		// Support 2 types of symbols files:
@@ -6375,8 +6389,7 @@ int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad )
 		//    . SYMBOL  =$0000; Comment
 		//    . SYMBOL  =$FFFF; Comment
 		//
-		DWORD INVALID_ADDRESS = 0xFFFF + 1;
-		DWORD nAddress = INVALID_ADDRESS;
+		DWORD nAddress = _6502_MEM_END + 1; // default to invalid address
 		char  sName[ MAX_SYMBOLS_LEN+1 ]  = "";
 
 		const int MAX_LINE = 256;
@@ -6398,12 +6411,16 @@ int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad )
 			p = strstr(szLine, " ");		// 1st space between name & value
 			int nLen = p - szLine;
 			if (nLen > MAX_SYMBOLS_LEN)
+			{
 				memset(&szLine[MAX_SYMBOLS_LEN], ' ', nLen-MAX_SYMBOLS_LEN);	// sscanf fails for nAddress if string too long
-
+			}
 			sscanf(szLine, sFormat2, sName, &nAddress);
 		}
 
-		if( (nAddress >= INVALID_ADDRESS) || (sName[0] == 0) )
+		// SymbolOffset
+		nAddress += nSymbolOffset;
+
+		if( (nAddress > _6502_MEM_END) || (sName[0] == 0) )
 			continue;
 
 		g_aSymbols[ eWhichTableToLoad ] [ (WORD) nAddress ] = sName;
@@ -6411,7 +6428,9 @@ int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad )
 	}
 
 	if (hFile)
+	{
 		fclose(hFile);
+	}
 
 	return nSymbolsLoaded;
 }
@@ -6430,6 +6449,8 @@ Update_t CmdSymbolsLoad (int nArgs)
 		return ConsoleDisplayError( sFileName );
 	}
 
+	int nSymbols = 0;
+
 	if (! nArgs)
 	{
 		// Default to main table
@@ -6444,26 +6465,62 @@ Update_t CmdSymbolsLoad (int nArgs)
 			// load user symbols
 			_tcscat( sFileName, g_sFileNameSymbolsUser );
 		}
-		g_nSymbolsLoaded = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable );
 
-		return (UPDATE_DISASM || UPDATE_SYMBOLS);
+		nSymbols = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable );
 	}
 
-	int iArg = 0;
-	while (iArg++ <= nArgs)
+	int iArg = 1;
+	if (iArg <= nArgs)
 	{
-		TCHAR *pFileName = g_aArgs[ iArg ].sArg;
+		TCHAR *pFileName = NULL;
+		
+		if( g_aArgs[ iArg ].bType & TYPE_QUOTED_2 )
+		{
+			pFileName = g_aArgs[ iArg ].sArg;
 
-		_tcscpy(sFileName,g_sProgramDir);
-		_tcscat(sFileName, pFileName);
+			_tcscpy(sFileName,g_sProgramDir);
+			_tcscat(sFileName, pFileName);
 
-		// Remember File ame of symbols loaded
-		_tcscpy( g_sFileNameSymbolsUser, pFileName );
+			// Remember File Name of last symbols loaded
+			_tcscpy( g_sFileNameSymbolsUser, pFileName );
+		}
 
-		g_nSymbolsLoaded = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable );
+		// SymbolOffset
+		// sym load "filename" [,symbol_offset]
+		int nOffsetAddr = 0;
+
+		iArg++;
+		if( iArg <= nArgs)
+		{
+			if (g_aArgs[ iArg ].eToken == TOKEN_COMMA)
+			{
+				iArg++;
+				if( iArg <= nArgs )
+				{
+					nOffsetAddr = g_aArgs[ iArg ].nValue;
+					if( (nOffsetAddr < _6502_MEM_BEGIN) || (nOffsetAddr > _6502_MEM_END) )
+					{
+						nOffsetAddr = 0;
+					}
+				}
+			}
+		}
+
+		if( pFileName )
+		{
+			nSymbols = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable, nOffsetAddr );
+		}
 	}
 
-	return (UPDATE_DISASM || UPDATE_SYMBOLS);
+	if( nSymbols > 0 )
+	{
+		g_nSymbolsLoaded = nSymbols;
+	}
+
+	Update_t bUpdateDisplay = UPDATE_DISASM;
+	bUpdateDisplay |= (nSymbols > 0) ? UPDATE_SYMBOLS : 0;
+
+	return bUpdateDisplay;
 }
 
 //===========================================================================
@@ -6672,14 +6729,17 @@ Update_t _CmdSymbolsCommon ( int nArgs, int bSymbolTables )
 			if (iParam == PARAM_LOAD)
 			{
 				nArgs = _Arg_Shift( iArg, nArgs);
-				CmdSymbolsLoad( nArgs );
+				Update_t bUpdate = CmdSymbolsLoad( nArgs );
 
 				int iTable = _GetSymbolTableFromFlag( bSymbolTables );
 				if (iTable != NUM_SYMBOL_TABLES)
 				{
-					wsprintf( sText, "  Symbol Table: %s, loaded symbols: %d",
+					if( bUpdate & UPDATE_SYMBOLS )
+					{
+						wsprintf( sText, "  Symbol Table: %s, loaded symbols: %d",
 						g_aSymbolTableNames[ iTable ], g_nSymbolsLoaded );
-					ConsoleBufferPush( sText );
+						ConsoleBufferPush( sText );
+					}
 				}
 				else
 				{
@@ -8543,8 +8603,19 @@ void _SetupColorRamp( const int iPrimary, int & iColor_ )
 }
 #endif // _DEBUG
 
+// Full Screen uses the palette from g_pFramebufferinfo
+// BUT DebutInitialize() is called before VideoInitialize()
+// THUS this is called post-initialize to set up the global palette
+//
+// pPalDst is the first color in the palette that we can stick our custom debug colors in
 //===========================================================================
-void _ConfigColorsReset()
+void Debug_UpdatePalette( BYTE *pPalDst )
+{
+	_ConfigColorsReset( pPalDst );
+}
+
+//===========================================================================
+void _ConfigColorsReset( BYTE *pPalDst )
 {
 //	int iColor = 1; // black only has one level, skip it, since black levels same as white levels
 //	for (int iPrimary = 1; iPrimary < 8; iPrimary++ )
@@ -8552,15 +8623,26 @@ void _ConfigColorsReset()
 //		_SetupColorRamp( iPrimary, iColor );
 //	}
 
+	BYTE *pDst = pPalDst;
+
 	// Setup default colors
 	int iColor;
-	for (iColor = 0; iColor < NUM_COLORS; iColor++ )
+	for (iColor = 0; iColor < NUM_DEBUG_COLORS; iColor++ )
 	{
 		COLORREF nColor = gaColorPalette[ g_aColorIndex[ iColor ] ];
 
 		int R = (nColor >>  0) & 0xFF;
 		int G = (nColor >>  8) & 0xFF;
 		int B = (nColor >> 16) & 0xFF;
+
+		if( pDst )
+		{
+			*(pDst + 0) = B;
+			*(pDst + 1) = G;
+			*(pDst + 2) = R;
+			*(pDst + 3) = 0;
+			pDst += 4;
+		}
 
 		// There are many, many ways of shifting the color domain to the monochrome domain
 		// NTSC uses 3x3 matrix, could map RGB -> wavelength, etc.
@@ -9005,6 +9087,11 @@ void DebuggerProcessKey( int keycode )
 
 	if (g_bDebuggerViewingAppleOutput)
 	{
+		if ((VK_SHIFT == keycode) || (VK_CONTROL == keycode) || (VK_MENU == keycode))
+		{
+			return;
+		}
+
 		// Normally any key press takes us out of "Viewing Apple Output" g_nAppMode
 		// VK_F# are already processed, so we can't use them to cycle next video g_nAppMode
 //		    if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
@@ -9260,7 +9347,7 @@ void DebuggerProcessKey( int keycode )
 					}
 					else
 					{
-						// Scroll through console input history
+						// TODO: FIXME: Scroll through console input history
 					}
 				}
 				else
@@ -9289,7 +9376,7 @@ void DebuggerProcessKey( int keycode )
 					}
 					else
 					{
-						// Scroll through console input history
+						// TODO: FIXME: Scroll through console input history
 					}
 				}
 				else

@@ -38,10 +38,11 @@ static BYTE asciicode[2][10] = {
 	{0x08,0x0B,0x15,0x0A,0x00,0x00,0x00,0x00,0x00,0x7F}
 };	// Convert PC arrow keys to Apple keycodes
 
-static bool  g_bShiftKey = false;
-static bool  g_bCtrlKey  = false;
-static bool  g_bAltKey   = false;
-static bool  g_bCapsLock = true; //Caps lock key for Apple2 and Lat/Cyr lock for Pravets8
+bool  g_bShiftKey = false;
+bool  g_bCtrlKey  = false;
+bool  g_bAltKey   = false;
+
+bool  g_bCapsLock = true; //Caps lock key for Apple2 and Lat/Cyr lock for Pravets8
 static bool  g_bP8CapsLock = true; //Caps lock key of Pravets 8A/C
 static int   lastvirtkey     = 0;	// Current PC keycode
 static BYTE  keycode         = 0;	// Current Apple keycode
@@ -166,17 +167,15 @@ DWORD KeybGetNumQueries ()	// Used in determining 'idleness' of Apple system
 //===========================================================================
 void KeybQueueKeypress (int key, BOOL bASCII)
 {
-	static bool bFreshReset = false;
-
 	if (bASCII == ASCII)
 	{
-		if (bFreshReset && key == 0x03)
+		if (g_bFreshReset && key == VK_CANCEL) // OLD HACK: 0x03
 		{
-			bFreshReset = false;
+			g_bFreshReset = false;
 			return; // Swallow spurious CTRL-C caused by CTRL-BREAK
 		}
 
-		bFreshReset = false;
+		g_bFreshReset = false;
 		if (key > 0x7F)
 			return;
 
@@ -301,24 +300,14 @@ void KeybQueueKeypress (int key, BOOL bASCII)
 	} 
 	else //(bASCII != ASCII)
 	{
+		// Note: VK_CANCEL is Control-Break
 		if ((key == VK_CANCEL) && (GetKeyState(VK_CONTROL) < 0))
 		{
-			// Ctrl+Reset
-			if (!IS_APPLE2)
-				MemResetPaging();
-
-			DiskReset();
-			KeybReset();
-			if (!IS_APPLE2)
-				VideoResetState();	// Switch Alternate char set off
-			MB_Reset();
-
 #ifndef KEY_OLD
 			g_nNextInIdx = g_nNextOutIdx = g_nKeyBufferCnt = 0;
 #endif
-
-			CpuReset();
-			bFreshReset = true;
+			g_bFreshReset = true;
+			CtrlReset();
 			return;
 		}
 

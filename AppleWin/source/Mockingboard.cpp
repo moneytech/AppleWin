@@ -75,10 +75,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //   . ORB  = 0x3F (STOP)
 //
 
-#define LOG_SSI263 0
-
 #include "StdAfx.h"
 #pragma  hdrstop
+
+#define LOG_SSI263 0
+
 #include <wchar.h>
 
 #include "AY8910.h"
@@ -288,6 +289,10 @@ static void AY8910_Write(BYTE nDevice, BYTE nReg, BYTE nValue, BYTE nAYDevice)
 				break;
 
 			case AY_LATCH:		// 7: LATCH ADDRESS
+				// http://www.worldofspectrum.org/forums/showthread.php?t=23327
+				// Selecting an unused register number above 0x0f puts the AY into a state where
+				// any values written to the data/address bus are ignored, but can be read back
+				// within a few tens of thousands of cycles before they decay to zero.
 				if(pMB->sy6522.ORA <= 0x0F)
 					pMB->nAYCurrentRegister = pMB->sy6522.ORA & 0x0F;
 				// else Pro-Mockingboard (clone from HK)
@@ -1285,10 +1290,6 @@ static void MB_DSUninit()
 
 //=============================================================================
 
-static BYTE __stdcall PhasorIO (WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
-static BYTE __stdcall MB_Read(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
-static BYTE __stdcall MB_Write(WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, ULONG nCyclesLeft);
-
 void MB_Initialize()
 {
 	if(g_bDisableDirectSound)
@@ -1317,31 +1318,7 @@ void MB_Initialize()
 		MB_Reset();
 	}
 
-	//
-
 	g_bMB_Active = (g_SoundcardType != SC_NONE);
-
-	//
-
-#ifdef SUPPORT_CPM
-	if (g_Slot4 == CT_Mockingboard)
-	{
-		const UINT uSlot4 = 4;
-		RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
-
-		const UINT uSlot5 = 5;
-		RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
-	}
-#else
-	if (g_Slot4 == CT_Mockingboard)
-	{
-		const UINT uSlot4 = 4;
-		RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
-	}
-
-	const UINT uSlot5 = 5;
-	RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
-#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1495,6 +1472,24 @@ static BYTE __stdcall PhasorIO (WORD PC, WORD nAddr, BYTE bWrite, BYTE nValue, U
 	AY8910_InitClock((int)fCLK);
 
 	return MemReadFloatingBus(nCyclesLeft);
+}
+
+//-----------------------------------------------------------------------------
+
+void MB_InitializeIO(LPBYTE pCxRomPeripheral, UINT uSlot4, UINT uSlot5)
+{
+#ifdef SUPPORT_CPM
+		if (g_Slot4 == CT_Mockingboard)
+		{
+			RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+			RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+		}
+#else
+		if (g_Slot4 == CT_Mockingboard)
+			RegisterIoHandler(uSlot4, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+
+		RegisterIoHandler(uSlot5, PhasorIO, PhasorIO, MB_Read, MB_Write, NULL, NULL);
+#endif
 }
 
 //-----------------------------------------------------------------------------

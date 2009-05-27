@@ -1,7 +1,7 @@
 #pragma once
 
 // Types ____________________________________________________________
-enum VIDEOTYPE
+enum VideoType_e
 {
 	  VT_MONO_CUSTOM
 	, VT_COLOR_STANDARD
@@ -11,8 +11,8 @@ enum VIDEOTYPE
 	, VT_MONO_AMBER
 	, VT_MONO_GREEN
 	, VT_MONO_WHITE
-	, VT_MONO_AUTHENTIC
-	, VT_NUM_MODES
+//	, VT_MONO_AUTHENTIC
+	, NUM_VIDEO_MODES
 };
 
 enum AppleFont_e
@@ -43,8 +43,10 @@ enum AppleFont_e
 extern HBITMAP g_hLogoBitmap;
 
 extern BOOL       graphicsmode;
-extern COLORREF   monochrome;
-extern DWORD      videotype;
+extern COLORREF   monochrome; // saved
+extern DWORD      g_eVideoType; // saved
+extern DWORD      g_uHalfScanLines; // saved
+extern LPBYTE     g_pFramebufferbits;
 
 // Prototypes _______________________________________________________
 

@@ -63,7 +63,7 @@ enum AppMode_e
 #define	TITLE_PRAVETS_8M        TEXT("Pravets 8M Emulator")
 #define	TITLE_PRAVETS_8A        TEXT("Pravets 8A Emulator")
 
-#define TITLE_PAUSED       TEXT(" Paused ")
+#define TITLE_PAUSED       TEXT("* PAUSED *")
 #define TITLE_STEPPING     TEXT("Stepping")
 
 #define  REGLOAD(a,b) RegLoadValue(TEXT("Configuration"),a,1,b)
@@ -96,6 +96,9 @@ enum AppMode_e
 #define  REGVALUE_PRINTER_FILENAME   "Printer Filename"
 #define  REGVALUE_PRINTER_APPEND     "Append to printer file"
 #define  REGVALUE_PRINTER_IDLE_LIMIT "Printer idle limit"
+#define  REGVALUE_VIDEO_MODE         "Video Emulation"
+#define  REGVALUE_VIDEO_HALF_SCAN_LINES "Half Scan Lines"
+#define  REGVALUE_VIDEO_MONO_COLOR      "Monochrome Color"
 
 // Preferences 
 #define REG_PREFS							"Preferences"
@@ -109,7 +112,7 @@ enum AppMode_e
 #define WM_USER_LOADSTATE	WM_USER+4
 #define VK_SNAPSHOT_560		WM_USER+5
 #define VK_SNAPSHOT_280		WM_USER+6
-
+#define WM_USER_TCP_SERIAL	WM_USER+7
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 

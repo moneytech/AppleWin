@@ -57,10 +57,9 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 
 // Public _________________________________________________________________________________________
 
-	BOOL      enhancedisk     = 1;
-	// dynamic array of strings
-	string DiskPathFilename[];
-	bool bSaveDiskImage = true;
+	BOOL enhancedisk = 1;
+	string DiskPathFilename[];		// dynamic array of strings
+	UINT g_uNumTracksInImage = 0;
 	
 // Private ________________________________________________________________________________________
 
@@ -84,13 +83,14 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 		int    nibbles;
 	};
 
-static WORD      currdrive       = 0;
-static BOOL      diskaccessed    = 0;
-static Disk_t    g_aFloppyDisk[DRIVES];
-static BYTE      floppylatch     = 0;
-static BOOL      floppymotoron   = 0;
-static BOOL      floppywritemode = 0;
-static WORD      phases; // state bits for stepper magnet phases 0 - 3
+static WORD		currdrive       = 0;
+static BOOL		diskaccessed    = 0;
+static Disk_t	g_aFloppyDisk[DRIVES];
+static BYTE		floppylatch     = 0;
+static BOOL		floppymotoron   = 0;
+static BOOL		floppywritemode = 0;
+static WORD		phases; // state bits for stepper magnet phases 0 - 3
+static bool		bSaveDiskImage = true;
 
 static void CheckSpinning();
 static Disk_Status_e GetDriveLightStatus( const int iDrive );
@@ -249,7 +249,7 @@ static void ReadTrack (int iDrive)
 
 	Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
 
-	if (pFloppy->track >= TRACKS)
+	if (pFloppy->track >= (int)g_uNumTracksInImage)
 	{
 		pFloppy->trackimagedata = 0;
 		return;
@@ -308,7 +308,7 @@ static void WriteTrack (int iDrive)
 {
 	Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
 
-	if (pFloppy->track >= TRACKS)
+	if (pFloppy->track >= (int)g_uNumTracksInImage)
 		return;
 
 	if (pFloppy->writeprotected)
@@ -382,7 +382,7 @@ static BYTE __stdcall DiskControlStepper (WORD, WORD address, BYTE, BYTE, ULONG)
   if (direction)
   {
     fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
-    int newtrack = MIN(TRACKS-1, fptr->phase >> 1); // (round half tracks down)
+    int newtrack = MIN((int)g_uNumTracksInImage-1, fptr->phase >> 1); // (round half tracks down)
     LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
     if (newtrack != fptr->track)
     {
@@ -757,14 +757,14 @@ void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
 	if(pData == NULL)
 		return;
 
-	memcpy(pCxRomPeripheral + uSlot*256, pData, DISK2_FW_SIZE);
+	memcpy(pCxRomPeripheral + uSlot*APPLE_SLOT_SIZE, pData, DISK2_FW_SIZE);
 
-	// TODO/FIXME: HACK! REMOVE A WAIT ROUTINE FROM THE DISK CONTROLLER'S FIRMWARE
-	*(pCxRomPeripheral + (uSlot*256) + 0x4C) = 0xA9;
-	*(pCxRomPeripheral + (uSlot*256) + 0x4D) = 0x00;
-	*(pCxRomPeripheral + (uSlot*256) + 0x4E) = 0xEA;
-
-	//
+	// NB. We used to disable the track stepping delay in the Disk II controller firmware by
+	// patching $C64C with $A9,$00,$EA. Now not doing this since:
+	// . Authentic Speed should be authentic
+	// . Enhanced Speed runs emulation unthrottled, so removing the delay has negligible effect
+	// . Patching the firmware breaks the ADC checksum used by "The CIA Files" (Tricky Dick)
+	// . In this case we can patch to compensate for an ADC or EOR checksum but not both
 
 	RegisterIoHandler(uSlot, Disk_IORead, Disk_IOWrite, NULL, NULL, NULL, NULL);
 }

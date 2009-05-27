@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2009, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Tfe\Uilib.h"
 
 TCHAR   computerchoices[] =
-				TEXT("Apple ][ (Original Model)\0")
+				TEXT("Apple ][ (Original)\0")
 				TEXT("Apple ][+\0")
 				TEXT("Apple //e\0")
 				TEXT("Enhanced Apple //e\0")
@@ -76,14 +76,15 @@ TCHAR   serialchoices[]   =  TEXT("None\0")
                              TEXT("COM1\0")
                              TEXT("COM2\0")
                              TEXT("COM3\0")
-                             TEXT("COM4\0");
+                             TEXT("COM4\0")
+                             TEXT("TCP\0");
 
 TCHAR   soundchoices[]    =  TEXT("Disabled\0")
                              TEXT("PC Speaker (direct)\0")
                              TEXT("PC Speaker (translated)\0")
                              TEXT("Sound Card\0");
 
-// Must match VT_NUM_MODES!
+// Must match NUM_VIDEO_MODES!
 TCHAR   videochoices[]    =
 	TEXT("Monochrome (Custom)\0")
 	TEXT("Color (standard)\0")
@@ -93,8 +94,19 @@ TCHAR   videochoices[]    =
 	TEXT("Monochrome - Amber\0")
 	TEXT("Monochrome - Green\0")
 	TEXT("Monochrome - White\0")
-	TEXT("Monochrome - Authentic\0");
 	;
+
+char *g_apVideoModeDesc[ NUM_VIDEO_MODES ] =
+{
+	"Custom",
+	"Std.",
+	"Text",
+	"TV",
+	"HalfPixel",
+	"Amber",
+	"Green",
+	"White"
+};
 
 TCHAR   discchoices[]     =  TEXT("Authentic Speed\0")
                              TEXT("Enhanced Speed\0");
@@ -107,6 +119,8 @@ enum {PG_CONFIG=0, PG_INPUT, PG_SOUND, PG_DISK, PG_ADVANCED, PG_NUM_SHEETS};
 
 UINT g_nLastPage = PG_CONFIG;
 
+// TODO: CLEANUP! Move to peripherals.cpp !!!
+// g_nConfig_
 UINT g_uScrollLockToggle = 0;
 UINT g_uMouseInSlot4 = 0;
 UINT g_uMouseShowCrosshair = 0;
@@ -256,6 +270,24 @@ static eApple2Type GetApple2Type(DWORD NewCompType, DWORD NewCloneType)
 	}
 }
 
+
+// ====================================================================
+void Config_Save_Video()
+{
+	REGSAVE(TEXT(REGVALUE_VIDEO_MODE           ),g_eVideoType);
+	REGSAVE(TEXT(REGVALUE_VIDEO_HALF_SCAN_LINES),g_uHalfScanLines);
+	REGSAVE(TEXT(REGVALUE_VIDEO_MONO_COLOR     ),monochrome);
+}
+
+// ====================================================================
+void Config_Load_Video()
+{
+	REGLOAD(TEXT(REGVALUE_VIDEO_MODE           ),&g_eVideoType);
+	REGLOAD(TEXT(REGVALUE_VIDEO_HALF_SCAN_LINES),&g_uHalfScanLines);
+	REGLOAD(TEXT(REGVALUE_VIDEO_MONO_COLOR     ),&monochrome);
+}
+
+
 static void ConfigDlg_OK(HWND window, UINT afterclose)
 {
 	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
@@ -286,12 +318,14 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 		}
 	}
 
-	if (videotype != newvidtype)
+	if (g_eVideoType != newvidtype)
 	{
-		videotype = newvidtype;
+		g_eVideoType = newvidtype;
 		VideoReinitialize();
 		if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
+		{
 			VideoRedrawScreen();
+		}
 	}
 
 	sg_SSC.CommSetSerialPort(window,newserialport);
@@ -314,7 +348,8 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	REGSAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
 	REGSAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	REGSAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
-	REGSAVE(TEXT("Video Emulation")   ,videotype);
+
+	Config_Save_Video();
 
 	//
 
@@ -396,6 +431,9 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
           VideoChooseColor();
           break;
 
+		case IDC_CHECK_HALF_SCAN_LINES:
+		  g_uHalfScanLines = IsDlgButtonChecked(window, IDC_CHECK_HALF_SCAN_LINES) ? 1 : 0;
+
 #if 0
         case IDC_RECALIBRATE:
           RegSaveValue(TEXT(""),TEXT("RunningOnOS"),0,0);
@@ -419,27 +457,30 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
 
     case WM_INITDIALOG: //Init general settings dialog
 	{
-      g_nLastPage = PG_CONFIG;
+		g_nLastPage = PG_CONFIG;
 
-	  UINT iApple2String;
-	  switch (g_Apple2Type)
-	  {
-		case A2TYPE_APPLE2:			iApple2String = 0; break;
-		case A2TYPE_APPLE2PLUS:		iApple2String = 1; break;
-		case A2TYPE_APPLE2E:		iApple2String = 2; break;
-		case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
-		case A2TYPE_PRAVETS82:	    iApple2String = 4; break;
-		case A2TYPE_PRAVETS8M:	    iApple2String = 5; break;
-		case A2TYPE_PRAVETS8A:	    iApple2String = 6; break;
-	  }
+		UINT iApple2String = 0;
+		switch (g_Apple2Type)
+		{
+			default:
+			case A2TYPE_APPLE2:			iApple2String = 0; break;
+			case A2TYPE_APPLE2PLUS:		iApple2String = 1; break;
+			case A2TYPE_APPLE2E:		iApple2String = 2; break;
+			case A2TYPE_APPLE2EEHANCED:	iApple2String = 3; break;
+			case A2TYPE_PRAVETS82:		iApple2String = 4; break;
+			case A2TYPE_PRAVETS8M:		iApple2String = 5; break;
+			case A2TYPE_PRAVETS8A:		iApple2String = 6; break;
+		}
 
 	  if (iApple2String > 3) 
 		FillComboBox(window,IDC_COMPUTER,computerchoices,4);
 	  else
 		FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
 
-      FillComboBox(window,IDC_VIDEOTYPE,videochoices,videotype);
-      FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
+      FillComboBox(window,IDC_VIDEOTYPE,videochoices,g_eVideoType);
+      CheckDlgButton(window, IDC_CHECK_HALF_SCAN_LINES, g_uHalfScanLines ? BST_CHECKED : BST_UNCHECKED);
+	  
+	  FillComboBox(window,IDC_SERIALPORT,serialchoices,sg_SSC.GetSerialPort());
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);
@@ -1299,6 +1340,9 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 
 		g_szSSNewDirectory[0] = 0x00;
 
+		// Need to specific cmd-line switch: -printer-real to enable this control
+		EnableWindow(GetDlgItem(window, IDC_DUMPTOPRINTER), g_bEnableDumpToRealPrinter ? TRUE : FALSE);
+
 		afterclose = 0;
 		break;
 	}
@@ -1594,7 +1638,6 @@ void PSP_Init()
 	PropSheetHeader.nStartPage = g_nLastPage;
 	PropSheetHeader.ppsp = PropSheetPages;
 
-	DWORD g_Apple2Type = 0;
 	g_bEnableFreezeDlgButton = UNDEFINED;
 	int i = PropertySheet(&PropSheetHeader);	// Result: 0=Cancel, 1=OK
 
