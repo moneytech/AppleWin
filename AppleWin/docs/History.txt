@@ -2,8 +2,6 @@ AppleWin history
 ================
 
 This version of AppleWin is based directly on Oliver Schmidt's 1.10.4 source.
-The release numbering used to be restricted to 1.12.x, but we have now decided
-to lift this restriction.
 
 Bug reports should be submitted here:
 https://developer.berlios.de/bugs/?func=addbug&group_id=6117
