@@ -265,11 +265,19 @@ BOOL CSuperSerialCard::CheckComm()
 
 			if (m_hCommHandle != INVALID_HANDLE_VALUE)
 			{
+				//BOOL bRes = SetupComm(m_hCommHandle, 8192, 8192);
+				//_ASSERT(bRes);
+
 				UpdateCommState();
+
+				// ReadIntervalTimeout=MAXDWORD; ReadTotalTimeoutConstant=ReadTotalTimeoutMultiplier=0:
+				// Read operation is to return immediately with the bytes that have already been received,
+				// even if no bytes have been received.
 				COMMTIMEOUTS ct;
 				ZeroMemory(&ct,sizeof(COMMTIMEOUTS));
 				ct.ReadIntervalTimeout = MAXDWORD;
 				SetCommTimeouts(m_hCommHandle,&ct);
+
 				CommThInit();
 			}
 			else
@@ -323,9 +331,9 @@ void CSuperSerialCard::CommTcpSerialClose()
 		closesocket(m_hCommAcceptSocket);
 		m_hCommAcceptSocket = INVALID_SOCKET;
 	}
-	while (!m_TcpSerialBuffer.empty())
+	while (!m_qTcpSerialBuffer.empty())
 	{
-		m_TcpSerialBuffer.pop();
+		m_qTcpSerialBuffer.pop();
 	}
 }
 
@@ -347,17 +355,17 @@ void CSuperSerialCard::CommTcpSerialReceive()
 {
 	if (m_hCommAcceptSocket != INVALID_SOCKET)
 	{
-		char data[0x80];
-		int received = 0;
-		while ((received = recv(m_hCommAcceptSocket, data, sizeof(data), 0)) > 0)
+		char Data[0x80];
+		int nReceived = 0;
+		while ((nReceived = recv(m_hCommAcceptSocket, Data, sizeof(Data), 0)) > 0)
 		{
-			for (int i = 0; i < received; i++)
+			for (int i = 0; i < nReceived; i++)
 			{
-				m_TcpSerialBuffer.push(data[i]);
+				m_qTcpSerialBuffer.push(Data[i]);
 			}
 		}
 
-		if (m_bRxIrqEnabled && !m_TcpSerialBuffer.empty())
+		if (m_bRxIrqEnabled && !m_qTcpSerialBuffer.empty())
 		{
 			m_vbCommIRQ = true;
 			CpuIrqAssert(IS_SSC);
@@ -571,10 +579,10 @@ BYTE __stdcall CSuperSerialCard::CommReceive(WORD, WORD, BYTE, BYTE, ULONG)
 
 	BYTE result = 0;
 
-	if (!m_TcpSerialBuffer.empty())
+	if (!m_qTcpSerialBuffer.empty())
 	{
-		result = m_TcpSerialBuffer.front();
-		m_TcpSerialBuffer.pop();
+		result = m_qTcpSerialBuffer.front();
+		m_qTcpSerialBuffer.pop();
 	}
 	else if (m_vRecvBytes)
 	{
@@ -586,7 +594,7 @@ BYTE __stdcall CSuperSerialCard::CommReceive(WORD, WORD, BYTE, BYTE, ULONG)
 		if (m_vbCommIRQ && !m_vRecvBytes)
 		{
 			// Read last byte, so get CommThread to call WaitCommEvent() again
-			OutputDebugString("CommRecv: SetEvent - ACK\n");
+			//OutputDebugString("CommRecv: SetEvent - ACK\n");
 			SetEvent(m_hCommEvent[COMMEVT_ACK]);
 		}
 	}
@@ -680,7 +688,7 @@ BYTE __stdcall CSuperSerialCard::CommStatus(WORD, WORD, BYTE, BYTE, ULONG)
 	{
 		bIRQ = true;
 	}
-	if (m_bRxIrqEnabled && (m_vRecvBytes || !m_TcpSerialBuffer.empty()))
+	if (m_bRxIrqEnabled && (m_vRecvBytes || !m_qTcpSerialBuffer.empty()))
 	{
 		bIRQ = true;
 	}
@@ -690,7 +698,7 @@ BYTE __stdcall CSuperSerialCard::CommStatus(WORD, WORD, BYTE, BYTE, ULONG)
 	//
 
 	BYTE uStatus = ST_TX_EMPTY 
-				| ((m_vRecvBytes || !m_TcpSerialBuffer.empty()) ? ST_RX_FULL : 0x00)
+				| ((m_vRecvBytes || !m_qTcpSerialBuffer.empty()) ? ST_RX_FULL : 0x00)
 #ifdef SUPPORT_MODEM
 				| ((modemstatus & MS_RLSD_ON)	? 0x00 : ST_DCD)	// Need 0x00 to allow ZLink to start up
 				| ((modemstatus & MS_DSR_ON)	? 0x00 : ST_DSR)
@@ -871,19 +879,66 @@ void CSuperSerialCard::CommUpdate(DWORD totalcycles)
 
 //===========================================================================
 
+// ERROR_OPERATION_ABORTED: CE_RXOVER
+//
+// Config:
+// . DOS Box (laptop) -> ZLink (PC)
+// . Baud = 300/4800/9600/19200
+// . InQueue size = 0x1000
+// . AppleII speed = 1MHz/2MHz/Unthrottled
+// . TYPE AW-PascalCrash.txt >COM7
+//
+// Error:
+// . Always get ERROR_OPERATION_ABORTED after reading 0x555 total bytes
+// . dwErrors = 1 (CE_RXOVER)
+// . COMSTAT::InQueue = 0x1000
+//
+
+static UINT g_uDbgTotalRx = 0;
+
 void CSuperSerialCard::CheckCommEvent(DWORD dwEvtMask)
 {
 	if (dwEvtMask & EV_RXCHAR)
 	{
+#if 1
+		char Data[0x80];
+		DWORD dwReceived = 0;
+
+		// Read COM buffer until empty
+		// NB. Potentially dangerous, as Apple read rate might be too slow, so could run out of memory on PC!
+		do
+		{
+			if (!ReadFile(m_hCommHandle, Data, sizeof(Data), &dwReceived, &m_o))
+				break;
+
+			EnterCriticalSection(&m_CriticalSection);
+			{
+				for (DWORD i = 0; i < dwReceived; i++)
+					m_qComSerialBuffer.push(Data[i]);
+			}
+			LeaveCriticalSection(&m_CriticalSection);
+
+			if (dwReceived && m_bRxIrqEnabled && !m_vbCommIRQ)
+			{
+				m_vbCommIRQ = true;
+				CpuIrqAssert(IS_SSC);
+			}
+
+			g_uDbgTotalRx += dwReceived;
+		}
+		while(sizeof(Data) == dwReceived);
+#else
 		EnterCriticalSection(&m_CriticalSection);
 		ReadFile(m_hCommHandle, m_RecvBuffer, 1, (DWORD*)&m_vRecvBytes, &m_o);
 		LeaveCriticalSection(&m_CriticalSection);
+		g_uDbgTotalRx++;
 
 		if (m_bRxIrqEnabled && m_vRecvBytes)
 		{
 			m_vbCommIRQ = true;
 			CpuIrqAssert(IS_SSC);
 		}
+#endif
 	}
 	//else if (dwEvtMask & EV_TXEMPTY)
 	//{
@@ -932,10 +987,23 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 		if (!bRes)
 		{
 			DWORD dwRet = GetLastError();
-			// Got this error once: ERROR_OPERATION_ABORTED
 			_ASSERT(dwRet == ERROR_IO_PENDING);
 			if (dwRet != ERROR_IO_PENDING)
+			{
+				// Probably: ERROR_OPERATION_ABORTED
+				DWORD dwErrors;
+				COMSTAT Stat;
+				ClearCommError(pSSC->m_hCommHandle, &dwErrors, &Stat);
+				if (dwErrors)
+				{
+					if (dwErrors & CE_RXOVER)
+						sprintf(szDbg, "CommThread: Err=CE_RXOVER (0x%08X): InQueue=0x%08X\n", dwErrors, Stat.cbInQue);
+					else
+						sprintf(szDbg, "CommThread: Err=Other (0x%08X): InQueue=0x%08X, OutQueue=0x%08X\n", dwErrors, Stat.cbInQue, Stat.cbOutQue);
+					OutputDebugString(szDbg);
+				}
 				return -1;
+			}
 
 			//
 			// Wait for comm event
@@ -943,7 +1011,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 
 			while(1)
 			{
-				OutputDebugString("CommThread: Wait1\n");
+				//OutputDebugString("CommThread: Wait1\n");
 				dwWaitResult = WaitForMultipleObjects( 
 										nNumEvents,			// number of handles in array
 										hCommEvent_Wait,	// array of event handles
@@ -959,7 +1027,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 			}
 
 			dwWaitResult -= WAIT_OBJECT_0;			// Determine event # that signaled
-			sprintf(szDbg, "CommThread: GotEvent1: %d\n", dwWaitResult); OutputDebugString(szDbg);
+			//sprintf(szDbg, "CommThread: GotEvent1: %d\n", dwWaitResult); OutputDebugString(szDbg);
 
 			if (dwWaitResult == (nNumEvents-1))
 				break;	// Termination event
@@ -976,7 +1044,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 
 			while(1)
 			{
-				OutputDebugString("CommThread: Wait2\n");
+				//OutputDebugString("CommThread: Wait2\n");
 				dwWaitResult = WaitForMultipleObjects( 
 										nNumEvents,			// number of handles in array
 										hCommEvent_Ack,		// array of event handles
@@ -988,7 +1056,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 			}
 
 			dwWaitResult -= WAIT_OBJECT_0;			// Determine event # that signaled
-			sprintf(szDbg, "CommThread: GotEvent2: %d\n", dwWaitResult); OutputDebugString(szDbg);
+			//sprintf(szDbg, "CommThread: GotEvent2: %d\n", dwWaitResult); OutputDebugString(szDbg);
 
 			if (dwWaitResult == (nNumEvents-1))
 				break;	// Termination event
@@ -1053,6 +1121,8 @@ bool CSuperSerialCard::CommThInit()
 									this,			// lpParameter
 									0,				// dwCreationFlags : 0 = Run immediately
 									&dwThreadId);	// lpThreadId
+
+		SetThreadPriority(m_hCommThread, THREAD_PRIORITY_TIME_CRITICAL);
 
 		InitializeCriticalSection(&m_CriticalSection);
 	}

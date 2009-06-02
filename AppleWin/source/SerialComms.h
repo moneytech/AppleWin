@@ -96,7 +96,8 @@ private:
 
 	CRITICAL_SECTION	m_CriticalSection;	// To guard /g_vRecvBytes/
 	BYTE				m_RecvBuffer[uRecvBufferSize];	// NB: More work required if >1 is used
-	queue<BYTE>			m_TcpSerialBuffer;
+	queue<BYTE>			m_qComSerialBuffer;
+	queue<BYTE>			m_qTcpSerialBuffer;
 	volatile DWORD		m_vRecvBytes;
 
 	//
