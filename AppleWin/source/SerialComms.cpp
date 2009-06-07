@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2009, Tom Charlesworth, Michael Pohoreski, Nick Westgate
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ CSuperSerialCard::CSuperSerialCard()
 
 	GetDIPSW();
 
-	m_vRecvBytes = 0;
+//	m_vRecvBytes = 0;
 
 	m_hCommHandle = INVALID_HANDLE_VALUE;
 	m_hCommListenSocket = INVALID_SOCKET;
@@ -82,7 +82,7 @@ CSuperSerialCard::CSuperSerialCard()
 
 	m_bWrittenTx = false;
 
-	m_vbCommIRQ = false;
+//	m_vbCommIRQ = false;
 	m_hCommThread = NULL;
 
 	for (UINT i=0; i<COMMEVT_MAX; i++)
@@ -367,7 +367,7 @@ void CSuperSerialCard::CommTcpSerialReceive()
 
 		if (m_bRxIrqEnabled && !m_qTcpSerialBuffer.empty())
 		{
-			m_vbCommIRQ = true;
+			//m_vbCommIRQ = true;	// TC: Not needed in TCP mode
 			CpuIrqAssert(IS_SSC);
 		}
 	}
@@ -584,6 +584,25 @@ BYTE __stdcall CSuperSerialCard::CommReceive(WORD, WORD, BYTE, BYTE, ULONG)
 		result = m_qTcpSerialBuffer.front();
 		m_qTcpSerialBuffer.pop();
 	}
+#if 1
+	else	// COM
+	{
+		EnterCriticalSection(&m_CriticalSection);
+		if (!m_qComSerialBuffer.empty())
+		{
+			result = m_qComSerialBuffer.front();
+			m_qComSerialBuffer.pop();
+
+			// NB. IRQ assert must be atomic with popping queue
+			// - So that CheckCommEvent() doesn't detect an empty queue & assert IRQ too!
+			if (m_bRxIrqEnabled && !m_qComSerialBuffer.empty())
+			{
+				CpuIrqAssert(IS_SSC);
+			}
+		}
+		LeaveCriticalSection(&m_CriticalSection);
+	}
+#else
 	else if (m_vRecvBytes)
 	{
 		// Don't need critical section in here as CommThread is waiting for ACK
@@ -598,6 +617,7 @@ BYTE __stdcall CSuperSerialCard::CommReceive(WORD, WORD, BYTE, BYTE, ULONG)
 			SetEvent(m_hCommEvent[COMMEVT_ACK]);
 		}
 	}
+#endif
 
 	return result;
 }
@@ -688,6 +708,25 @@ BYTE __stdcall CSuperSerialCard::CommStatus(WORD, WORD, BYTE, BYTE, ULONG)
 	{
 		bIRQ = true;
 	}
+#if 1
+	if (m_bRxIrqEnabled && (!m_qComSerialBuffer.empty() || !m_qTcpSerialBuffer.empty()))
+	{
+		bIRQ = true;
+		// BUG? : Double read of CommStatus will return ST_IRQ=1 for both, even though IRQ is deasserted on 1st read
+	}
+
+	m_bWrittenTx = false;		// Read status reg always clears IRQ
+
+	//
+
+	BYTE uStatus = ST_TX_EMPTY 
+				| ((!m_qComSerialBuffer.empty() || !m_qTcpSerialBuffer.empty()) ? ST_RX_FULL : 0x00)
+ #ifdef SUPPORT_MODEM
+				| ((modemstatus & MS_RLSD_ON)	? 0x00 : ST_DCD)	// Need 0x00 to allow ZLink to start up
+				| ((modemstatus & MS_DSR_ON)	? 0x00 : ST_DSR)
+ #endif
+				| (bIRQ							? ST_IRQ : 0x00);
+#else // ================================================================
 	if (m_bRxIrqEnabled && (m_vRecvBytes || !m_qTcpSerialBuffer.empty()))
 	{
 		bIRQ = true;
@@ -699,11 +738,12 @@ BYTE __stdcall CSuperSerialCard::CommStatus(WORD, WORD, BYTE, BYTE, ULONG)
 
 	BYTE uStatus = ST_TX_EMPTY 
 				| ((m_vRecvBytes || !m_qTcpSerialBuffer.empty()) ? ST_RX_FULL : 0x00)
-#ifdef SUPPORT_MODEM
+ #ifdef SUPPORT_MODEM
 				| ((modemstatus & MS_RLSD_ON)	? 0x00 : ST_DCD)	// Need 0x00 to allow ZLink to start up
 				| ((modemstatus & MS_DSR_ON)	? 0x00 : ST_DSR)
-#endif
+ #endif
 				| (bIRQ							? ST_IRQ : 0x00);
+#endif
 
 	if (m_hCommHandle != INVALID_HANDLE_VALUE)
 	{
@@ -808,7 +848,7 @@ void CSuperSerialCard::CommReset()
 
 	GetDIPSW();
 
-	m_vRecvBytes = 0;
+//	m_vRecvBytes = 0;
 
 	//
 
@@ -817,7 +857,7 @@ void CSuperSerialCard::CommReset()
 
 	m_bWrittenTx = false;
 
-	m_vbCommIRQ = false;
+//	m_vbCommIRQ = false;
 }
 
 //===========================================================================
@@ -894,6 +934,28 @@ void CSuperSerialCard::CommUpdate(DWORD totalcycles)
 // . COMSTAT::InQueue = 0x1000
 //
 
+
+// Design:
+// =======
+// NB. Can call CpuIrqAssert(IS_SSC) from CheckCommEvent() & CommReceive()
+//
+// 1) CheckCommEvent()
+//    Do atomically:
+//    - Assert IRQ if queue empty
+//    - Push to queue
+//
+// 2) CommReceive()
+//    Do atomically:
+//    - Pop from queue
+//    - Assert IRQ if queue still not empty
+//
+// 3) CommStatus()
+//    Do atomically:
+//    - Checks queue empty to set:
+//      ST_IRQ     - means SSC is asserting IRQ
+//      ST_RX_FULL - means there is 1 byte in RX buffer
+//
+
 static UINT g_uDbgTotalRx = 0;
 
 void CSuperSerialCard::CheckCommEvent(DWORD dwEvtMask)
@@ -903,13 +965,20 @@ void CSuperSerialCard::CheckCommEvent(DWORD dwEvtMask)
 #if 1
 		char Data[0x80];
 		DWORD dwReceived = 0;
+		bool bGotData = false;
+
+		//EnterCriticalSection(&m_CriticalSection);
+		//const bool bInitiallyEmpty = m_qComSerialBuffer.empty();
+		//LeaveCriticalSection(&m_CriticalSection);
 
 		// Read COM buffer until empty
 		// NB. Potentially dangerous, as Apple read rate might be too slow, so could run out of memory on PC!
 		do
 		{
-			if (!ReadFile(m_hCommHandle, Data, sizeof(Data), &dwReceived, &m_o))
+			if (!ReadFile(m_hCommHandle, Data, sizeof(Data), &dwReceived, &m_o) || !dwReceived)
 				break;
+
+			bGotData = true;
 
 			EnterCriticalSection(&m_CriticalSection);
 			{
@@ -918,15 +987,29 @@ void CSuperSerialCard::CheckCommEvent(DWORD dwEvtMask)
 			}
 			LeaveCriticalSection(&m_CriticalSection);
 
-			if (dwReceived && m_bRxIrqEnabled && !m_vbCommIRQ)
-			{
-				m_vbCommIRQ = true;
-				CpuIrqAssert(IS_SSC);
-			}
-
 			g_uDbgTotalRx += dwReceived;
 		}
 		while(sizeof(Data) == dwReceived);
+
+		//
+
+		// Consider:
+		// . bInitiallyEmpty = false (ie. queue has data)
+		// . During this ReadFile() the queue empties && Apple has serviced last RX irq, so RX irq is deasserted
+		// = Then RX irq never asserted
+
+		// Consider:
+		// . Apple in irq handler & reads byte-A from queue
+		// . New COM byte-B arrives:
+		//   - ReadFile() & CpuIrqAssert()
+		// . Apple reads CommStatus (deassert irq) for byte-A
+		// = IRQ for byte-B is missed
+
+		//if (bInitiallyEmpty && bGotData && m_bRxIrqEnabled)
+		if (bGotData && m_bRxIrqEnabled)
+		{
+			CpuIrqAssert(IS_SSC);
+		}
 #else
 		EnterCriticalSection(&m_CriticalSection);
 		ReadFile(m_hCommHandle, m_RecvBuffer, 1, (DWORD*)&m_vRecvBytes, &m_o);
@@ -1020,7 +1103,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 
 				// On very 1st wait *only*: get a false signal (when not running via debugger)
 				if ((dwWaitResult == WAIT_OBJECT_0) && (dwEvtMask == 0))
-					continue;
+					continue;	// BUG-TC: dwEvtMask is loop-invariant (so pop it out of this loop)
 
 				if ((dwWaitResult >= WAIT_OBJECT_0) && (dwWaitResult <= WAIT_OBJECT_0+nNumEvents-1))
 					break;
@@ -1036,6 +1119,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 		// Comm event
 		pSSC->CheckCommEvent(dwEvtMask);
 
+#if 0
 		if (pSSC->m_vbCommIRQ)
 		{
 			//
@@ -1063,6 +1147,7 @@ DWORD WINAPI CSuperSerialCard::CommThread(LPVOID lpParameter)
 
 			pSSC->m_vbCommIRQ = false;
 		}
+#endif
 	}
 
 	return 0;
@@ -1177,8 +1262,8 @@ DWORD CSuperSerialCard::CommGetSnapshot(SS_IO_Comms* pSS)
 	pSS->comminactivity	= m_dwCommInactivity;
 	pSS->controlbyte	= m_uControlByte;
 	pSS->parity			= m_uParity;
-	memcpy(pSS->recvbuffer, m_RecvBuffer, uRecvBufferSize);
-	pSS->recvbytes		= m_vRecvBytes;
+//	memcpy(pSS->recvbuffer, m_RecvBuffer, uRecvBufferSize);
+	pSS->recvbytes		= 0;
 	pSS->stopbits		= m_uStopBits;
 	return 0;
 }
@@ -1191,8 +1276,8 @@ DWORD CSuperSerialCard::CommSetSnapshot(SS_IO_Comms* pSS)
 	m_dwCommInactivity	= pSS->comminactivity;
 	m_uControlByte		= pSS->controlbyte;
 	m_uParity			= pSS->parity;
-	memcpy(m_RecvBuffer, pSS->recvbuffer, uRecvBufferSize);
-	m_vRecvBytes	= pSS->recvbytes;
+//	memcpy(m_RecvBuffer, pSS->recvbuffer, uRecvBufferSize);
+//	m_vRecvBytes	= pSS->recvbytes;
 	m_uStopBits		= pSS->stopbits;
 	return 0;
 }
