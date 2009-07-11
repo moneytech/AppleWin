@@ -78,6 +78,7 @@
 				OutputFile=".\Release/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
+				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Release/Applewin.pdb"
 				SubSystem="2"
 				TargetMachine="1"
@@ -592,6 +593,10 @@
 			>
 			<File
 				RelativePath=".\docs\CodingConventions.txt"
+				>
+			</File>
+			<File
+				RelativePath=".\docs\Debugger_Changelog.txt"
 				>
 			</File>
 			<File
