@@ -53,6 +53,7 @@ private:
 	BYTE __stdcall CommStatus(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 	BYTE __stdcall CommTransmit(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
+	void	InternalReset();
 	void	GetDIPSW();
 	void	SetDIPSWDefaults();
 	BYTE	GenerateControl();

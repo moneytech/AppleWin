@@ -68,17 +68,10 @@ CSuperSerialCard::CSuperSerialCard()
 {
 	m_dwSerialPort = 0;
 
-	GetDIPSW();
-
 	m_hCommHandle = INVALID_HANDLE_VALUE;
 	m_hCommListenSocket = INVALID_SOCKET;
 	m_hCommAcceptSocket = INVALID_SOCKET;
 	m_dwCommInactivity	= 0;
-
-	m_bTxIrqEnabled = false;
-	m_bRxIrqEnabled = false;
-
-	m_bWrittenTx = false;
 
 	m_hCommThread = NULL;
 
@@ -87,9 +80,26 @@ CSuperSerialCard::CSuperSerialCard()
 
 	memset(&m_o, 0, sizeof(m_o));
 
+	InternalReset();
+}
+
+void CSuperSerialCard::InternalReset()
+{
+	GetDIPSW();
+
+	m_bTxIrqEnabled = false;
+	m_bRxIrqEnabled = false;
+
+	m_bWrittenTx = false;
+
 	m_vuRxCurrBuffer = 0;
-	m_vbRxIrqPending = false;
+
 	m_vbTxIrqPending = false;
+	m_vbRxIrqPending = false;
+
+	m_qComSerialBuffer[0].c.clear();
+	m_qComSerialBuffer[1].c.clear();
+	m_qTcpSerialBuffer.c.clear();
 }
 
 //===========================================================================
@@ -827,14 +837,7 @@ void CSuperSerialCard::CommReset()
 {
 	CloseComm();
 
-	GetDIPSW();
-
-	//
-
-	m_bTxIrqEnabled = false;
-	m_bRxIrqEnabled = false;
-
-	m_bWrittenTx = false;
+	InternalReset();
 }
 
 //===========================================================================
