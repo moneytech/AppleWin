@@ -95,21 +95,22 @@ private:
 	//
 
 	CRITICAL_SECTION	m_CriticalSection;	// To guard /g_vRecvBytes/
-//	BYTE				m_RecvBuffer[uRecvBufferSize];	// NB: More work required if >1 is used
-	queue<BYTE>			m_qComSerialBuffer;
+	queue<BYTE>			m_qComSerialBuffer[2];
+	volatile UINT		m_vuRxCurrBuffer;	// Written to on COM recv. SSC reads from other one
 	queue<BYTE>			m_qTcpSerialBuffer;
-//	volatile DWORD		m_vRecvBytes;
 
 	//
 
 	bool m_bTxIrqEnabled;
 	bool m_bRxIrqEnabled;
 
+	volatile bool		m_vbTxIrqPending;
+	volatile bool		m_vbRxIrqPending;
+
 	bool m_bWrittenTx;
 
 	//
 
-	volatile bool m_vbCommIRQ;
 	HANDLE m_hCommThread;
 
 	HANDLE m_hCommEvent[COMMEVT_MAX];
