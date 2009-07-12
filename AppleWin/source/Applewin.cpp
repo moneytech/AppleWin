@@ -71,6 +71,7 @@ DWORD       g_dwCyclesThisFrame = 0;
 
 FILE*		g_fh			= NULL;
 bool		g_bDisableDirectSound = false;
+bool		g_bDisableDirectSoundMockingboard = false;
 
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
@@ -760,8 +761,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		{
 			g_bRegisterFileTypes = false;
 		}
-		else
-		if(strcmp(lpCmdLine, "-d1") == 0)
+		else if(strcmp(lpCmdLine, "-d1") == 0)
 		{
 			lpCmdLine = GetCurrArg(lpNextArg);
 			lpNextArg = GetNextArg(lpNextArg);
@@ -777,7 +777,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		{
 			bSetFullScreen = true;
 		}
-		else if((strcmp(lpCmdLine, "-l") == 0) && (g_fh == NULL))
+		else if(((strcmp(lpCmdLine, "-l") == 0) || (strcmp(lpCmdLine, "-log") == 0)) && (g_fh == NULL))
 		{
 			g_fh = fopen("AppleWin.log", "a+t");	// Open log file (append & text g_nAppMode)
 			CHAR aDateStr[80], aTimeStr[80];
@@ -788,6 +788,10 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		else if(strcmp(lpCmdLine, "-m") == 0)
 		{
 			g_bDisableDirectSound = true;
+		}
+		else if(strcmp(lpCmdLine, "-no-mb") == 0)
+		{
+			g_bDisableDirectSoundMockingboard = true;
 		}
 #ifdef RAMWORKS
 		else if(strcmp(lpCmdLine, "-r") == 0)		// RamWorks size [1..127]

@@ -1292,7 +1292,7 @@ static void MB_DSUninit()
 
 void MB_Initialize()
 {
-	if(g_bDisableDirectSound)
+	if (g_bDisableDirectSound || g_bDisableDirectSoundMockingboard)
 	{
 		MockingboardVoice.bMute = true;
 		g_SoundcardType = SC_NONE;
