@@ -49,7 +49,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #define  SOUND_WAVE    3
 
 static const unsigned short g_nSPKR_NumChannels = 1;
-static const DWORD g_dwDSSpkrBufferSize = 16 * 1024 * sizeof(short) * g_nSPKR_NumChannels;
+static const UINT MAX_SPKR_SAMPLES = 16 * 1024;
+static const DWORD g_dwDSSpkrBufferSize = MAX_SPKR_SAMPLES * sizeof(short) * g_nSPKR_NumChannels;
 
 //-------------------------------------
 
@@ -800,6 +801,23 @@ static ULONG Spkr_SubmitWaveBuffer_FullSpeed(short* pSpeakerBuffer, ULONG nNumSa
 
 //-----------------------------------------------------------------------------
 
+static int g_nErrorInc = 1;
+static int g_nErrorMax = 50;
+
+void Spkr_SetErrorInc(const int nErrorInc)
+{
+	g_nErrorInc = nErrorInc < g_nErrorMax ? nErrorInc : g_nErrorMax;
+	if(g_fh) fprintf(g_fh, "Speaker Error Inc = %d\n", g_nErrorInc);
+}
+
+void Spkr_SetErrorMax(const int nErrorMax)
+{
+	g_nErrorMax = nErrorMax < MAX_SPKR_SAMPLES ? nErrorMax : MAX_SPKR_SAMPLES;
+	if(g_fh) fprintf(g_fh, "Speaker Error Max = %d\n", g_nErrorMax);
+}
+
+//-------------------------------------
+
 static ULONG Spkr_SubmitWaveBuffer(short* pSpeakerBuffer, ULONG nNumSamples)
 {
 	char szDbg[200];
@@ -883,13 +901,13 @@ static ULONG Spkr_SubmitWaveBuffer(short* pSpeakerBuffer, ULONG nNumSamples)
 
 	// Calc correction factor so that play-buffer doesn't under/overflow
 	if(nBytesRemaining < g_dwDSSpkrBufferSize / 4)
-		nNumSamplesError++;							// < 1/4 of play-buffer remaining (need *more* data)
+		nNumSamplesError += g_nErrorInc;			// < 1/4 of play-buffer remaining (need *more* data)
 	else if(nBytesRemaining > g_dwDSSpkrBufferSize / 2)
-		nNumSamplesError--;							// > 1/2 of play-buffer remaining (need *less* data)
+		nNumSamplesError -= g_nErrorInc;			// > 1/2 of play-buffer remaining (need *less* data)
 	else
 		nNumSamplesError = 0;						// Acceptable amount of data in buffer
 
-	const int nMaxError = 50;	// Cap feedback to +/-nMaxError units
+	const int nMaxError = g_nErrorMax;				// Cap feedback to +/-nMaxError units
 	if(nNumSamplesError < -nMaxError) nNumSamplesError = -nMaxError;
 	if(nNumSamplesError >  nMaxError) nNumSamplesError =  nMaxError;
 	g_nCpuCyclesFeedback = (int) ((double)nNumSamplesError * g_fClksPerSpkrSample);

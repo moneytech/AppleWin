@@ -817,6 +817,20 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		{
 			g_bDisplayPrintScreenFileName = true;
 		}
+		else if(strcmp(lpCmdLine, "-spkr-inc") == 0)
+		{
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
+			const int nErrorInc = atoi(lpCmdLine);
+			Spkr_SetErrorInc( nErrorInc );
+		}
+		else if(strcmp(lpCmdLine, "-spkr-max") == 0)
+		{
+			lpCmdLine = GetCurrArg(lpNextArg);
+			lpNextArg = GetNextArg(lpNextArg);
+			const int nErrorMax = atoi(lpCmdLine);
+			Spkr_SetErrorMax( nErrorMax );
+		}
 		else if(strcmp(lpCmdLine, "-use-real-printer") == 0)	// Enable control in Advanced config to allow dumping to a real printer
 		{
 			g_bEnableDumpToRealPrinter = true;
