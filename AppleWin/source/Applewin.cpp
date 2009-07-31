@@ -822,14 +822,14 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 			lpCmdLine = GetCurrArg(lpNextArg);
 			lpNextArg = GetNextArg(lpNextArg);
 			const int nErrorInc = atoi(lpCmdLine);
-			Spkr_SetErrorInc( nErrorInc );
+			SoundCore_SetErrorInc( nErrorInc );
 		}
 		else if(strcmp(lpCmdLine, "-spkr-max") == 0)
 		{
 			lpCmdLine = GetCurrArg(lpNextArg);
 			lpNextArg = GetNextArg(lpNextArg);
 			const int nErrorMax = atoi(lpCmdLine);
-			Spkr_SetErrorMax( nErrorMax );
+			SoundCore_SetErrorMax( nErrorMax );
 		}
 		else if(strcmp(lpCmdLine, "-use-real-printer") == 0)	// Enable control in Advanced config to allow dumping to a real printer
 		{
