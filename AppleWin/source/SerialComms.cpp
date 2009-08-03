@@ -527,22 +527,22 @@ BYTE __stdcall CSuperSerialCard::CommControl(WORD, WORD, BYTE write, BYTE value,
 			// a decent buffer in the device being accessed.  The faster Apples
 			// have no difficulty with this speed, however.
 
-			case 0x00: // fall through [16x external clock]
+			case 0x00: m_uBaudRate = CBR_115200;	break;	// Internal clk: undoc'd 115.2K (or 16x external clock)
 			case 0x01: // fall through [50 bps]
 			case 0x02: // fall through [75 bps]
 			case 0x03: // fall through [109.92 bps]
 			case 0x04: // fall through [134.58 bps]
-			case 0x05: m_uBaudRate = CBR_110;     break;	// [150 bps]
-			case 0x06: m_uBaudRate = CBR_300;     break;
-			case 0x07: m_uBaudRate = CBR_600;     break;
-			case 0x08: m_uBaudRate = CBR_1200;    break;
+			case 0x05: m_uBaudRate = CBR_110;		break;	// [150 bps]
+			case 0x06: m_uBaudRate = CBR_300;		break;
+			case 0x07: m_uBaudRate = CBR_600;		break;
+			case 0x08: m_uBaudRate = CBR_1200;		break;
 			case 0x09: // fall through [1800 bps]
-			case 0x0A: m_uBaudRate = CBR_2400;    break;
+			case 0x0A: m_uBaudRate = CBR_2400;		break;
 			case 0x0B: // fall through [3600 bps]
-			case 0x0C: m_uBaudRate = CBR_4800;    break;
+			case 0x0C: m_uBaudRate = CBR_4800;		break;
 			case 0x0D: // fall through [7200 bps]
-			case 0x0E: m_uBaudRate = CBR_9600;    break;
-			case 0x0F: m_uBaudRate = CBR_19200;   break;
+			case 0x0E: m_uBaudRate = CBR_9600;		break;
+			case 0x0F: m_uBaudRate = CBR_19200;		break;
 		}
 
 		if (m_uControlByte & 0x10)
@@ -553,10 +553,10 @@ BYTE __stdcall CSuperSerialCard::CommControl(WORD, WORD, BYTE write, BYTE value,
 		// UPDATE THE BYTE SIZE
 		switch (m_uControlByte & 0x60)
 		{
-			case 0x00: m_uByteSize = 8;  break;
-			case 0x20: m_uByteSize = 7;  break;
-			case 0x40: m_uByteSize = 6;  break;
-			case 0x60: m_uByteSize = 5;  break;
+			case 0x00: m_uByteSize = 8; break;
+			case 0x20: m_uByteSize = 7; break;
+			case 0x40: m_uByteSize = 6; break;
+			case 0x60: m_uByteSize = 5; break;
 		}
 
 		// UPDATE THE NUMBER OF STOP BITS
@@ -854,6 +854,9 @@ void CSuperSerialCard::CommDestroy()
 
 void CSuperSerialCard::CommSetSerialPort(HWND window, DWORD newserialport)
 {
+	if (m_dwSerialPort == newserialport)
+		return;
+
 	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
 	{
 		m_dwSerialPort = newserialport;
