@@ -469,12 +469,12 @@ void LoadConfiguration ()
   if (REGLOAD(TEXT("Serial Port"),&dwSerialPort))
 	sg_SSC.SetSerialPort(dwSerialPort);
 
-	REGLOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
-	REGLOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
+  REGLOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
+  REGLOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
 
-	Config_Load_Video();
+  Config_Load_Video();
 
-	REGLOAD(TEXT("Uthernet Active")   ,(DWORD *)&tfe_enabled);
+  REGLOAD(TEXT("Uthernet Active")   ,(DWORD *)&tfe_enabled);
 
   SetCurrentCLK6502();
 

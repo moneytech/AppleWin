@@ -24,7 +24,7 @@ class CSuperSerialCard
 {
 public:
 	CSuperSerialCard();
-	virtual ~CSuperSerialCard() {}
+	virtual ~CSuperSerialCard();
 
 	void	CommInitialize(LPBYTE pCxRomPeripheral, UINT uSlot);
 	void    CommReset();
@@ -34,8 +34,18 @@ public:
 	DWORD   CommGetSnapshot(SS_IO_Comms* pSS);
 	DWORD   CommSetSnapshot(SS_IO_Comms* pSS);
 
+	char*	GetSerialPortChoices();
 	DWORD	GetSerialPort() { return m_dwSerialPort; }
-	void	SetSerialPort(DWORD dwSerialPort) { m_dwSerialPort = dwSerialPort; }
+	void	SetSerialPort(const DWORD dwSerialPort)
+	{
+		m_dwSerialPort = dwSerialPort;
+
+		if (m_vecCOMPorts.empty())
+			ScanCOMPorts();
+
+		if (dwSerialPort >= GetNumSerialPortChoices())
+			m_dwSerialPort = 0;
+	}
 
 	void	CommTcpSerialAccept();
 	void	CommTcpSerialReceive();
@@ -65,10 +75,16 @@ private:
 	static DWORD WINAPI	CommThread(LPVOID lpParameter);
 	bool	CommThInit();
 	void	CommThUninit();
+	UINT	GetNumSerialPortChoices() { return m_vecCOMPorts.size()+2; }	// +2 for "None" & "TCP" items
+	void	ScanCOMPorts();
 
 	//
 
 private:
+	std::vector<UINT> m_vecCOMPorts;
+	char*	m_aySerialPortChoices;
+	static const UINT SIZEOF_SERIALCHOICE_ITEM = 8;
+	UINT	m_uTCPChoiceItemIdx;
 	DWORD	m_dwSerialPort;
 
 	static SSC_DIPSW	m_DIPSWDefault;

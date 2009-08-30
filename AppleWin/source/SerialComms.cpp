@@ -43,7 +43,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "..\resource\resource.h"
 
 //#define SUPPORT_MODEM
-#define TCP_SERIAL_OPTION 5
 #define TCP_SERIAL_PORT 1977
 
 // Default: 19200-8-N-1
@@ -64,7 +63,9 @@ SSC_DIPSW CSuperSerialCard::m_DIPSWDefault =
 
 //===========================================================================
 
-CSuperSerialCard::CSuperSerialCard()
+CSuperSerialCard::CSuperSerialCard() :
+	m_aySerialPortChoices(NULL),
+	m_uTCPChoiceItemIdx(0)
 {
 	m_dwSerialPort = 0;
 
@@ -100,6 +101,11 @@ void CSuperSerialCard::InternalReset()
 	m_qComSerialBuffer[0].c.clear();
 	m_qComSerialBuffer[1].c.clear();
 	m_qTcpSerialBuffer.c.clear();
+}
+
+CSuperSerialCard::~CSuperSerialCard()
+{
+	delete [] m_aySerialPortChoices;
 }
 
 //===========================================================================
@@ -208,7 +214,7 @@ BOOL CSuperSerialCard::CheckComm()
 	// check for COM or TCP socket handle, and setup if invalid
 	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
 	{
-		if (m_dwSerialPort == TCP_SERIAL_OPTION)
+		if (m_dwSerialPort == m_uTCPChoiceItemIdx)
 		{
 			// init Winsock 1.1 (for Win95, otherwise could use 2.2)
 			WSADATA wsaData;
@@ -263,7 +269,7 @@ BOOL CSuperSerialCard::CheckComm()
 		}
 		else
 		{
-			TCHAR portname[8];
+			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
 			wsprintf(portname, TEXT("COM%u"), m_dwSerialPort);
 
 			m_hCommHandle = CreateFile(portname,
@@ -1167,6 +1173,66 @@ void CSuperSerialCard::CommThUninit()
 			m_hCommEvent[i] = NULL;
 		}
 	}
+}
+
+//===========================================================================
+
+void CSuperSerialCard::ScanCOMPorts()
+{
+	m_vecCOMPorts.clear();
+
+	for (UINT i=1; i<32; i++)	// Arbitrary upper limit
+	{
+		TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
+		wsprintf(portname, TEXT("COM%u"), i);
+
+		HANDLE hCommHandle = CreateFile(portname,
+								GENERIC_READ | GENERIC_WRITE,
+								0,								// exclusive access
+								(LPSECURITY_ATTRIBUTES)NULL,	// default security attributes
+								OPEN_EXISTING,
+								FILE_FLAG_OVERLAPPED,			// required for WaitCommEvent()
+								NULL);
+
+		if (hCommHandle != INVALID_HANDLE_VALUE)
+		{
+			CloseHandle(hCommHandle);
+			m_vecCOMPorts.push_back(i);
+		}
+	}
+
+	//
+
+	m_uTCPChoiceItemIdx = m_vecCOMPorts.size()+1;
+}
+
+char* CSuperSerialCard::GetSerialPortChoices()
+{
+	ScanCOMPorts();				// Do this every time in case news ones available (eg. for USB COM ports)
+	delete [] m_aySerialPortChoices;
+	m_aySerialPortChoices = new TCHAR [ GetNumSerialPortChoices() * SIZEOF_SERIALCHOICE_ITEM + 1 ];	// +1 for final NULL item
+
+	TCHAR* pNextSerialChoice = m_aySerialPortChoices;
+
+	//
+
+	pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("None"));
+	pNextSerialChoice++;		// Skip NULL char
+
+	for (UINT i=0; i<m_vecCOMPorts.size(); i++)
+	{
+		pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("COM%u"), m_vecCOMPorts[i]);
+		pNextSerialChoice++;	// Skip NULL char
+	}
+
+	pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("TCP"));
+	pNextSerialChoice++;		// Skip NULL char
+
+	*pNextSerialChoice = 0;
+
+	//
+
+	return m_aySerialPortChoices;
 }
 
 //===========================================================================
