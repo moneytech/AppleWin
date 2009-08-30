@@ -602,7 +602,7 @@ BYTE __stdcall CSuperSerialCard::CommReceive(WORD, WORD, BYTE, BYTE, ULONG)
 		result = m_qTcpSerialBuffer.front();
 		m_qTcpSerialBuffer.pop();
 	}
-	else	// COM
+	else if (m_hCommHandle != INVALID_HANDLE_VALUE)	// COM
 	{
 		EnterCriticalSection(&m_CriticalSection);
 		{
