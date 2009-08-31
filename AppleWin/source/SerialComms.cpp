@@ -67,6 +67,7 @@ CSuperSerialCard::CSuperSerialCard() :
 	m_aySerialPortChoices(NULL),
 	m_uTCPChoiceItemIdx(0)
 {
+	memset(m_ayCurrentSerialPortName, 0, sizeof(m_ayCurrentSerialPortName));
 	m_dwSerialPort = 0;
 
 	m_hCommHandle = INVALID_HANDLE_VALUE;
@@ -866,6 +867,13 @@ void CSuperSerialCard::CommSetSerialPort(HWND window, DWORD newserialport)
 	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
 	{
 		m_dwSerialPort = newserialport;
+
+		if (m_dwSerialPort == m_uTCPChoiceItemIdx)
+			strcpy(m_ayCurrentSerialPortName, TEXT_SERIAL_TCP);
+		else if (m_dwSerialPort != 0)
+			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_dwSerialPort);
+		else
+			m_ayCurrentSerialPortName[0] = 0;	// "None"
 	}
 	else
 	{
@@ -1233,6 +1241,32 @@ char* CSuperSerialCard::GetSerialPortChoices()
 	//
 
 	return m_aySerialPortChoices;
+}
+
+void CSuperSerialCard::SetSerialPortName(const char* pSerialPortName)
+{
+	strncpy(m_ayCurrentSerialPortName, pSerialPortName, SIZEOF_SERIALCHOICE_ITEM);
+
+	if (m_vecCOMPorts.empty())
+		ScanCOMPorts();
+
+	if (strncmp(TEXT_SERIAL_COM, pSerialPortName, sizeof(TEXT_SERIAL_COM)-1) == 0)
+	{
+		const char* p = &pSerialPortName[ sizeof(TEXT_SERIAL_COM)-1 ];
+		m_dwSerialPort = atoi(p);
+
+		if (m_dwSerialPort >= GetNumSerialPortChoices())
+			m_dwSerialPort = 0;
+	}
+	else if (strncmp(TEXT_SERIAL_TCP, pSerialPortName, sizeof(TEXT_SERIAL_TCP)-1) == 0)
+	{
+		m_dwSerialPort = m_uTCPChoiceItemIdx;
+	}
+	else
+	{
+		m_ayCurrentSerialPortName[0] = 0;	// "None"
+		m_dwSerialPort = 0;
+	}
 }
 
 //===========================================================================

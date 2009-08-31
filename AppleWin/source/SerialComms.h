@@ -20,6 +20,9 @@ typedef struct
 	bool	bInterrupts;
 } SSC_DIPSW;
 
+#define TEXT_SERIAL_COM TEXT("COM")
+#define TEXT_SERIAL_TCP TEXT("TCP")
+
 class CSuperSerialCard
 {
 public:
@@ -36,16 +39,8 @@ public:
 
 	char*	GetSerialPortChoices();
 	DWORD	GetSerialPort() { return m_dwSerialPort; }
-	void	SetSerialPort(const DWORD dwSerialPort)
-	{
-		m_dwSerialPort = dwSerialPort;
-
-		if (m_vecCOMPorts.empty())
-			ScanCOMPorts();
-
-		if (dwSerialPort >= GetNumSerialPortChoices())
-			m_dwSerialPort = 0;
-	}
+	char*	GetSerialPortName() { return m_ayCurrentSerialPortName; }
+	void	SetSerialPortName(const char* pSerialPortName);
 
 	void	CommTcpSerialAccept();
 	void	CommTcpSerialReceive();
@@ -80,12 +75,16 @@ private:
 
 	//
 
+public:
+	static const UINT SIZEOF_SERIALCHOICE_ITEM = 8*sizeof(char);
+
 private:
+	char	m_ayCurrentSerialPortName[SIZEOF_SERIALCHOICE_ITEM];
+	DWORD	m_dwSerialPort;
+
 	std::vector<UINT> m_vecCOMPorts;
 	char*	m_aySerialPortChoices;
-	static const UINT SIZEOF_SERIALCHOICE_ITEM = 8;
 	UINT	m_uTCPChoiceItemIdx;
-	DWORD	m_dwSerialPort;
 
 	static SSC_DIPSW	m_DIPSWDefault;
 	SSC_DIPSW			m_DIPSWCurrent;

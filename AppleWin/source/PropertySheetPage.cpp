@@ -338,7 +338,11 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 	else
 		REGSAVE(TEXT(REGVALUE_APPLE2_TYPE),NewApple2Type );
 
-	REGSAVE(TEXT("Serial Port")       ,sg_SSC.GetSerialPort());
+	RegSaveString(	TEXT("Configuration"),
+					TEXT(REGVALUE_SERIAL_PORT_NAME),
+					TRUE,
+					sg_SSC.GetSerialPortName() );
+
 	REGSAVE(TEXT("Custom Speed")      ,IsDlgButtonChecked(window,IDC_CUSTOM_SPEED));
 	REGSAVE(TEXT("Emulation Speed")   ,g_dwSpeed);
 

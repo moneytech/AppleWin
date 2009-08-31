@@ -465,9 +465,15 @@ void LoadConfiguration ()
   REGLOAD(TEXT("Joystick 1 Emulation"),&joytype[1]);
   REGLOAD(TEXT("Sound Emulation")     ,&soundtype);
 
-  DWORD dwSerialPort;
-  if (REGLOAD(TEXT("Serial Port"),&dwSerialPort))
-	sg_SSC.SetSerialPort(dwSerialPort);
+  char aySerialPortName[ CSuperSerialCard::SIZEOF_SERIALCHOICE_ITEM ];
+  if (RegLoadString(	TEXT("Configuration"),
+						TEXT(REGVALUE_SERIAL_PORT_NAME),
+						TRUE,
+						aySerialPortName,
+						sizeof(aySerialPortName) ) )
+  {
+	sg_SSC.SetSerialPortName(aySerialPortName);
+  }
 
   REGLOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
   REGLOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
