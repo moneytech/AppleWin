@@ -38,7 +38,7 @@ public:
 	DWORD   CommSetSnapshot(SS_IO_Comms* pSS);
 
 	char*	GetSerialPortChoices();
-	DWORD	GetSerialPort() { return m_dwSerialPort; }
+	DWORD	GetSerialPort() { return m_dwSerialPort; }	// Drop-down list item
 	char*	GetSerialPortName() { return m_ayCurrentSerialPortName; }
 	void	SetSerialPortName(const char* pSerialPortName);
 

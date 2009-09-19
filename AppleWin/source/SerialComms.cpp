@@ -271,7 +271,10 @@ BOOL CSuperSerialCard::CheckComm()
 		else
 		{
 			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
-			wsprintf(portname, TEXT("COM%u"), m_dwSerialPort);
+			const UINT uVecIdx = m_dwSerialPort-1;	// -1 since first drop-down item is "None"
+			_ASSERT(m_dwSerialPort);
+			_ASSERT(uVecIdx < m_vecCOMPorts.size());
+			wsprintf(portname, TEXT("COM%u"), m_vecCOMPorts[uVecIdx]);
 
 			m_hCommHandle = CreateFile(portname,
 									GENERIC_READ | GENERIC_WRITE,
@@ -859,6 +862,7 @@ void CSuperSerialCard::CommDestroy()
 
 //===========================================================================
 
+// newserialport is the drop-down list item
 void CSuperSerialCard::CommSetSerialPort(HWND window, DWORD newserialport)
 {
 	if (m_dwSerialPort == newserialport)
@@ -1253,7 +1257,17 @@ void CSuperSerialCard::SetSerialPortName(const char* pSerialPortName)
 	if (strncmp(TEXT_SERIAL_COM, pSerialPortName, sizeof(TEXT_SERIAL_COM)-1) == 0)
 	{
 		const char* p = &pSerialPortName[ sizeof(TEXT_SERIAL_COM)-1 ];
-		m_dwSerialPort = atoi(p);
+		const int nCOMPort = atoi(p);
+		m_dwSerialPort = 0;
+		for (UINT i=0; i<m_vecCOMPorts.size(); i++)
+		{
+			if (m_vecCOMPorts[i] == nCOMPort)
+			{
+				m_dwSerialPort = i+1;	// +1 since item#0 in the drop-down is "None"
+				break;
+			}
+		}
+		_ASSERT(m_dwSerialPort);
 
 		if (m_dwSerialPort >= GetNumSerialPortChoices())
 			m_dwSerialPort = 0;
