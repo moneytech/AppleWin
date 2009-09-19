@@ -270,10 +270,10 @@ BOOL CSuperSerialCard::CheckComm()
 		}
 		else
 		{
-			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
 			const UINT uVecIdx = m_dwSerialPort-1;	// -1 since first drop-down item is "None"
 			_ASSERT(m_dwSerialPort);
 			_ASSERT(uVecIdx < m_vecCOMPorts.size());
+			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
 			wsprintf(portname, TEXT("COM%u"), m_vecCOMPorts[uVecIdx]);
 
 			m_hCommHandle = CreateFile(portname,
@@ -875,7 +875,7 @@ void CSuperSerialCard::CommSetSerialPort(HWND window, DWORD newserialport)
 		if (m_dwSerialPort == m_uTCPChoiceItemIdx)
 			strcpy(m_ayCurrentSerialPortName, TEXT_SERIAL_TCP);
 		else if (m_dwSerialPort != 0)
-			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_dwSerialPort);
+			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_vecCOMPorts[m_dwSerialPort-1]);	// -1 since first drop-down item is "None"
 		else
 			m_ayCurrentSerialPortName[0] = 0;	// "None"
 	}
