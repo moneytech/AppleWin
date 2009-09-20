@@ -41,6 +41,7 @@ public:
 	DWORD	GetSerialPort() { return m_dwSerialPortItem; }	// Drop-down list item
 	char*	GetSerialPortName() { return m_ayCurrentSerialPortName; }
 	void	SetSerialPortName(const char* pSerialPortName);
+	bool	IsActive() { return (m_hCommHandle != INVALID_HANDLE_VALUE) || (m_hCommListenSocket != INVALID_SOCKET); }
 
 	void	CommTcpSerialAccept();
 	void	CommTcpSerialReceive();

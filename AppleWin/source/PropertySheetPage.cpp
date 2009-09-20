@@ -478,6 +478,8 @@ static BOOL CALLBACK ConfigDlgProc (HWND   window,
       CheckDlgButton(window, IDC_CHECK_HALF_SCAN_LINES, g_uHalfScanLines ? BST_CHECKED : BST_UNCHECKED);
 
 	  FillComboBox(window,IDC_SERIALPORT, sg_SSC.GetSerialPortChoices(), sg_SSC.GetSerialPort());
+	  EnableWindow(GetDlgItem(window, IDC_SERIALPORT), !sg_SSC.IsActive() ? TRUE : FALSE);
+
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
       SendDlgItemMessage(window,IDC_SLIDER_CPU_SPEED,TBM_SETTICFREQ,10,0);

@@ -213,101 +213,101 @@ BOOL CSuperSerialCard::CheckComm()
 	m_dwCommInactivity = 0;
 
 	// check for COM or TCP socket handle, and setup if invalid
-	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
+	if (IsActive())
+		return true;
+
+	if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
 	{
-		if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
+		// init Winsock 1.1 (for Win95, otherwise could use 2.2)
+		WSADATA wsaData;
+		if (WSAStartup(MAKEWORD(1, 1), &wsaData) == 0) // or (2, 2) for Winsock 2.2
 		{
-			// init Winsock 1.1 (for Win95, otherwise could use 2.2)
-			WSADATA wsaData;
-			if (WSAStartup(MAKEWORD(1, 1), &wsaData) == 0) // or (2, 2) for Winsock 2.2
+			if (wsaData.wVersion != 0x0101) // or 0x0202 for Winsock 2.2
 			{
-				if (wsaData.wVersion != 0x0101) // or 0x0202 for Winsock 2.2
-				{
-					WSACleanup();
-					return FALSE;
-				}
-
-				// initialized, so try to create a socket
-				m_hCommListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-				if (m_hCommListenSocket == INVALID_SOCKET)
-				{
-					WSACleanup();
-					return FALSE;
-				}
-
-				// have socket so attempt to bind it
-				SOCKADDR_IN saAddress;
-				saAddress.sin_family = AF_INET;
-				saAddress.sin_port = htons(TCP_SERIAL_PORT); // TODO: get from registry / GUI
-				saAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-				if (bind(m_hCommListenSocket, (LPSOCKADDR)&saAddress, sizeof(saAddress)) == SOCKET_ERROR)
-				{
-					m_hCommListenSocket = INVALID_SOCKET;
-					WSACleanup();
-					return FALSE;
-				}
-
-				// bound, so listen
-				if (listen(m_hCommListenSocket, 1) == SOCKET_ERROR)
-				{
-					m_hCommListenSocket = INVALID_SOCKET;
-					WSACleanup();
-					return FALSE;
-				}
-
-				// now send async events to our app's message handler
-				if (WSAAsyncSelect(
-						/* SOCKET s */ m_hCommListenSocket,
-						/* HWND hWnd */ g_hFrameWindow,
-						/* unsigned int wMsg */ WM_USER_TCP_SERIAL,
-						/* long lEvent */ (FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE)) != 0)
-				{
-					m_hCommListenSocket = INVALID_SOCKET;
-					WSACleanup();
-					return FALSE;
-				}
+				WSACleanup();
+				return FALSE;
 			}
-		}
-		else
-		{
-			_ASSERT(m_dwSerialPortItem);
-			_ASSERT(m_dwSerialPortItem < m_vecSerialPortsItems.size()-1);	// size()-1 is TCP item
-			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
-			wsprintf(portname, TEXT("COM%u"), m_vecSerialPortsItems[m_dwSerialPortItem]);
 
-			m_hCommHandle = CreateFile(portname,
-									GENERIC_READ | GENERIC_WRITE,
-									0,								// exclusive access
-									(LPSECURITY_ATTRIBUTES)NULL,	// default security attributes
-									OPEN_EXISTING,
-									FILE_FLAG_OVERLAPPED,			// required for WaitCommEvent()
-									NULL);
-
-			if (m_hCommHandle != INVALID_HANDLE_VALUE)
+			// initialized, so try to create a socket
+			m_hCommListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (m_hCommListenSocket == INVALID_SOCKET)
 			{
-				//BOOL bRes = SetupComm(m_hCommHandle, 8192, 8192);
-				//_ASSERT(bRes);
-
-				UpdateCommState();
-
-				// ReadIntervalTimeout=MAXDWORD; ReadTotalTimeoutConstant=ReadTotalTimeoutMultiplier=0:
-				// Read operation is to return immediately with the bytes that have already been received,
-				// even if no bytes have been received.
-				COMMTIMEOUTS ct;
-				ZeroMemory(&ct,sizeof(COMMTIMEOUTS));
-				ct.ReadIntervalTimeout = MAXDWORD;
-				SetCommTimeouts(m_hCommHandle,&ct);
-
-				CommThInit();
+				WSACleanup();
+				return FALSE;
 			}
-			else
+
+			// have socket so attempt to bind it
+			SOCKADDR_IN saAddress;
+			saAddress.sin_family = AF_INET;
+			saAddress.sin_port = htons(TCP_SERIAL_PORT); // TODO: get from registry / GUI
+			saAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+			if (bind(m_hCommListenSocket, (LPSOCKADDR)&saAddress, sizeof(saAddress)) == SOCKET_ERROR)
 			{
-				DWORD uError = GetLastError();
+				m_hCommListenSocket = INVALID_SOCKET;
+				WSACleanup();
+				return FALSE;
+			}
+
+			// bound, so listen
+			if (listen(m_hCommListenSocket, 1) == SOCKET_ERROR)
+			{
+				m_hCommListenSocket = INVALID_SOCKET;
+				WSACleanup();
+				return FALSE;
+			}
+
+			// now send async events to our app's message handler
+			if (WSAAsyncSelect(
+					/* SOCKET s */ m_hCommListenSocket,
+					/* HWND hWnd */ g_hFrameWindow,
+					/* unsigned int wMsg */ WM_USER_TCP_SERIAL,
+					/* long lEvent */ (FD_ACCEPT | FD_CONNECT | FD_READ | FD_CLOSE)) != 0)
+			{
+				m_hCommListenSocket = INVALID_SOCKET;
+				WSACleanup();
+				return FALSE;
 			}
 		}
 	}
+	else
+	{
+		_ASSERT(m_dwSerialPortItem);
+		_ASSERT(m_dwSerialPortItem < m_vecSerialPortsItems.size()-1);	// size()-1 is TCP item
+		TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
+		wsprintf(portname, TEXT("COM%u"), m_vecSerialPortsItems[m_dwSerialPortItem]);
 
-	return ((m_hCommHandle != INVALID_HANDLE_VALUE) || (m_hCommListenSocket != INVALID_SOCKET));
+		m_hCommHandle = CreateFile(portname,
+								GENERIC_READ | GENERIC_WRITE,
+								0,								// exclusive access
+								(LPSECURITY_ATTRIBUTES)NULL,	// default security attributes
+								OPEN_EXISTING,
+								FILE_FLAG_OVERLAPPED,			// required for WaitCommEvent()
+								NULL);
+
+		if (m_hCommHandle != INVALID_HANDLE_VALUE)
+		{
+			//BOOL bRes = SetupComm(m_hCommHandle, 8192, 8192);
+			//_ASSERT(bRes);
+
+			UpdateCommState();
+
+			// ReadIntervalTimeout=MAXDWORD; ReadTotalTimeoutConstant=ReadTotalTimeoutMultiplier=0:
+			// Read operation is to return immediately with the bytes that have already been received,
+			// even if no bytes have been received.
+			COMMTIMEOUTS ct;
+			ZeroMemory(&ct,sizeof(COMMTIMEOUTS));
+			ct.ReadIntervalTimeout = MAXDWORD;
+			SetCommTimeouts(m_hCommHandle,&ct);
+
+			CommThInit();
+		}
+		else
+		{
+			DWORD uError = GetLastError();
+		}
+	}
+
+	return IsActive();
 }
 
 //===========================================================================
@@ -867,32 +867,25 @@ void CSuperSerialCard::CommSetSerialPort(HWND hWindow, DWORD dwNewSerialPortItem
 	if (m_dwSerialPortItem == dwNewSerialPortItem)
 		return;
 
-	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
-	{
-		m_dwSerialPortItem = dwNewSerialPortItem;
+	_ASSERT(!IsActive());
+	if (IsActive())
+		return;
 
-		if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
-			strcpy(m_ayCurrentSerialPortName, TEXT_SERIAL_TCP);
-		else if (m_dwSerialPortItem != 0)
-			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_vecSerialPortsItems[m_dwSerialPortItem]);
-		else
-			m_ayCurrentSerialPortName[0] = 0;	// "None"
-	}
+	m_dwSerialPortItem = dwNewSerialPortItem;
+
+	if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
+		strcpy(m_ayCurrentSerialPortName, TEXT_SERIAL_TCP);
+	else if (m_dwSerialPortItem != 0)
+		sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_vecSerialPortsItems[m_dwSerialPortItem]);
 	else
-	{
-		MessageBox(hWindow,
-			TEXT("You cannot change the serial port while it is ")
-			TEXT("in use."),
-			TEXT("Configuration"),
-			MB_ICONEXCLAMATION | MB_SETFOREGROUND);
-	}
+		m_ayCurrentSerialPortName[0] = 0;	// "None"
 }
 
 //===========================================================================
 
 void CSuperSerialCard::CommUpdate(DWORD totalcycles)
 {
-	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
+	if (!IsActive())
 		return;
 
 	if ((m_dwCommInactivity += totalcycles) > 1000000)
@@ -1221,6 +1214,11 @@ void CSuperSerialCard::ScanCOMPorts()
 
 char* CSuperSerialCard::GetSerialPortChoices()
 {
+	if (IsActive())
+		return m_aySerialPortChoices;
+
+	//
+
 	ScanCOMPorts();				// Do this every time in case news ones available (eg. for USB COM ports)
 	delete [] m_aySerialPortChoices;
 	m_aySerialPortChoices = new TCHAR [ GetNumSerialPortChoices() * SIZEOF_SERIALCHOICE_ITEM + 1 ];	// +1 for final NULL item
@@ -1268,7 +1266,7 @@ void CSuperSerialCard::SetSerialPortName(const char* pSerialPortName)
 				break;
 			}
 		}
-		_ASSERT(m_dwSerialPortItem);
+		//_ASSERT(m_dwSerialPortItem);	// EG. Switched a USB COM port from COM7 to COM8 between AppleWin sessions
 
 		if (m_dwSerialPortItem >= GetNumSerialPortChoices())
 		{
