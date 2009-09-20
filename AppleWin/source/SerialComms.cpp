@@ -68,7 +68,7 @@ CSuperSerialCard::CSuperSerialCard() :
 	m_uTCPChoiceItemIdx(0)
 {
 	memset(m_ayCurrentSerialPortName, 0, sizeof(m_ayCurrentSerialPortName));
-	m_dwSerialPort = 0;
+	m_dwSerialPortItem = 0;
 
 	m_hCommHandle = INVALID_HANDLE_VALUE;
 	m_hCommListenSocket = INVALID_SOCKET;
@@ -215,7 +215,7 @@ BOOL CSuperSerialCard::CheckComm()
 	// check for COM or TCP socket handle, and setup if invalid
 	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
 	{
-		if (m_dwSerialPort == m_uTCPChoiceItemIdx)
+		if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
 		{
 			// init Winsock 1.1 (for Win95, otherwise could use 2.2)
 			WSADATA wsaData;
@@ -270,11 +270,10 @@ BOOL CSuperSerialCard::CheckComm()
 		}
 		else
 		{
-			const UINT uVecIdx = m_dwSerialPort-1;	// -1 since first drop-down item is "None"
-			_ASSERT(m_dwSerialPort);
-			_ASSERT(uVecIdx < m_vecCOMPorts.size());
+			_ASSERT(m_dwSerialPortItem);
+			_ASSERT(m_dwSerialPortItem < m_vecSerialPortsItems.size()-1);	// size()-1 is TCP item
 			TCHAR portname[SIZEOF_SERIALCHOICE_ITEM];
-			wsprintf(portname, TEXT("COM%u"), m_vecCOMPorts[uVecIdx]);
+			wsprintf(portname, TEXT("COM%u"), m_vecSerialPortsItems[m_dwSerialPortItem]);
 
 			m_hCommHandle = CreateFile(portname,
 									GENERIC_READ | GENERIC_WRITE,
@@ -862,26 +861,26 @@ void CSuperSerialCard::CommDestroy()
 
 //===========================================================================
 
-// newserialport is the drop-down list item
-void CSuperSerialCard::CommSetSerialPort(HWND window, DWORD newserialport)
+// dwNewSerialPortItem is the drop-down list item
+void CSuperSerialCard::CommSetSerialPort(HWND hWindow, DWORD dwNewSerialPortItem)
 {
-	if (m_dwSerialPort == newserialport)
+	if (m_dwSerialPortItem == dwNewSerialPortItem)
 		return;
 
 	if ((m_hCommHandle == INVALID_HANDLE_VALUE) && (m_hCommListenSocket == INVALID_SOCKET))
 	{
-		m_dwSerialPort = newserialport;
+		m_dwSerialPortItem = dwNewSerialPortItem;
 
-		if (m_dwSerialPort == m_uTCPChoiceItemIdx)
+		if (m_dwSerialPortItem == m_uTCPChoiceItemIdx)
 			strcpy(m_ayCurrentSerialPortName, TEXT_SERIAL_TCP);
-		else if (m_dwSerialPort != 0)
-			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_vecCOMPorts[m_dwSerialPort-1]);	// -1 since first drop-down item is "None"
+		else if (m_dwSerialPortItem != 0)
+			sprintf(m_ayCurrentSerialPortName, TEXT_SERIAL_COM"%d", m_vecSerialPortsItems[m_dwSerialPortItem]);
 		else
 			m_ayCurrentSerialPortName[0] = 0;	// "None"
 	}
 	else
 	{
-		MessageBox(window,
+		MessageBox(hWindow,
 			TEXT("You cannot change the serial port while it is ")
 			TEXT("in use."),
 			TEXT("Configuration"),
@@ -1191,7 +1190,8 @@ void CSuperSerialCard::CommThUninit()
 
 void CSuperSerialCard::ScanCOMPorts()
 {
-	m_vecCOMPorts.clear();
+	m_vecSerialPortsItems.clear();
+	m_vecSerialPortsItems.push_back(SERIALPORTITEM_INVALID_COM_PORT);	// "None"
 
 	for (UINT i=1; i<32; i++)	// Arbitrary upper limit
 	{
@@ -1209,13 +1209,14 @@ void CSuperSerialCard::ScanCOMPorts()
 		if (hCommHandle != INVALID_HANDLE_VALUE)
 		{
 			CloseHandle(hCommHandle);
-			m_vecCOMPorts.push_back(i);
+			m_vecSerialPortsItems.push_back(i);
 		}
 	}
 
 	//
 
-	m_uTCPChoiceItemIdx = m_vecCOMPorts.size()+1;
+	m_vecSerialPortsItems.push_back(SERIALPORTITEM_INVALID_COM_PORT);	// "TCP"
+	m_uTCPChoiceItemIdx = m_vecSerialPortsItems.size()-1;
 }
 
 char* CSuperSerialCard::GetSerialPortChoices()
@@ -1231,9 +1232,9 @@ char* CSuperSerialCard::GetSerialPortChoices()
 	pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("None"));
 	pNextSerialChoice++;		// Skip NULL char
 
-	for (UINT i=0; i<m_vecCOMPorts.size(); i++)
+	for (UINT i=1; i<m_uTCPChoiceItemIdx; i++)
 	{
-		pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("COM%u"), m_vecCOMPorts[i]);
+		pNextSerialChoice += wsprintf(pNextSerialChoice, TEXT("COM%u"), m_vecSerialPortsItems[i]);
 		pNextSerialChoice++;	// Skip NULL char
 	}
 
@@ -1251,35 +1252,38 @@ void CSuperSerialCard::SetSerialPortName(const char* pSerialPortName)
 {
 	strncpy(m_ayCurrentSerialPortName, pSerialPortName, SIZEOF_SERIALCHOICE_ITEM);
 
-	if (m_vecCOMPorts.empty())
+	if (m_vecSerialPortsItems.empty())
 		ScanCOMPorts();
 
 	if (strncmp(TEXT_SERIAL_COM, pSerialPortName, sizeof(TEXT_SERIAL_COM)-1) == 0)
 	{
 		const char* p = &pSerialPortName[ sizeof(TEXT_SERIAL_COM)-1 ];
 		const int nCOMPort = atoi(p);
-		m_dwSerialPort = 0;
-		for (UINT i=0; i<m_vecCOMPorts.size(); i++)
+		m_dwSerialPortItem = 0;
+		for (UINT i=0; i<m_vecSerialPortsItems.size(); i++)
 		{
-			if (m_vecCOMPorts[i] == nCOMPort)
+			if (m_vecSerialPortsItems[i] == nCOMPort)
 			{
-				m_dwSerialPort = i+1;	// +1 since item#0 in the drop-down is "None"
+				m_dwSerialPortItem = i;
 				break;
 			}
 		}
-		_ASSERT(m_dwSerialPort);
+		_ASSERT(m_dwSerialPortItem);
 
-		if (m_dwSerialPort >= GetNumSerialPortChoices())
-			m_dwSerialPort = 0;
+		if (m_dwSerialPortItem >= GetNumSerialPortChoices())
+		{
+			_ASSERT(0);
+			m_dwSerialPortItem = 0;
+		}
 	}
 	else if (strncmp(TEXT_SERIAL_TCP, pSerialPortName, sizeof(TEXT_SERIAL_TCP)-1) == 0)
 	{
-		m_dwSerialPort = m_uTCPChoiceItemIdx;
+		m_dwSerialPortItem = m_uTCPChoiceItemIdx;
 	}
 	else
 	{
 		m_ayCurrentSerialPortName[0] = 0;	// "None"
-		m_dwSerialPort = 0;
+		m_dwSerialPortItem = 0;
 	}
 }
 

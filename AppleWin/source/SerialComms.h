@@ -32,13 +32,13 @@ public:
 	void	CommInitialize(LPBYTE pCxRomPeripheral, UINT uSlot);
 	void    CommReset();
 	void    CommDestroy();
-	void    CommSetSerialPort(HWND,DWORD);
+	void    CommSetSerialPort(HWND hWindow, DWORD dwNewSerialPortItem);
 	void    CommUpdate(DWORD);
 	DWORD   CommGetSnapshot(SS_IO_Comms* pSS);
 	DWORD   CommSetSnapshot(SS_IO_Comms* pSS);
 
 	char*	GetSerialPortChoices();
-	DWORD	GetSerialPort() { return m_dwSerialPort; }	// Drop-down list item
+	DWORD	GetSerialPort() { return m_dwSerialPortItem; }	// Drop-down list item
 	char*	GetSerialPortName() { return m_ayCurrentSerialPortName; }
 	void	SetSerialPortName(const char* pSerialPortName);
 
@@ -70,7 +70,7 @@ private:
 	static DWORD WINAPI	CommThread(LPVOID lpParameter);
 	bool	CommThInit();
 	void	CommThUninit();
-	UINT	GetNumSerialPortChoices() { return m_vecCOMPorts.size()+2; }	// +2 for "None" & "TCP" items
+	UINT	GetNumSerialPortChoices() { return m_vecSerialPortsItems.size(); }
 	void	ScanCOMPorts();
 
 	//
@@ -80,9 +80,10 @@ public:
 
 private:
 	char	m_ayCurrentSerialPortName[SIZEOF_SERIALCHOICE_ITEM];
-	DWORD	m_dwSerialPort;
+	DWORD	m_dwSerialPortItem;
 
-	std::vector<UINT> m_vecCOMPorts;
+	static const UINT SERIALPORTITEM_INVALID_COM_PORT = 0;
+	std::vector<UINT> m_vecSerialPortsItems;	// Includes "None" & "TCP" items
 	char*	m_aySerialPortChoices;
 	UINT	m_uTCPChoiceItemIdx;
 
