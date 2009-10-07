@@ -512,7 +512,18 @@ Update_t CmdHelpSpecific (int nArgs)
 				case PARAM_CAT_BREAKPOINTS: iCmdBegin = CMD_BREAKPOINT      ; iCmdEnd = CMD_BREAKPOINT_SAVE      ; break;
 				case PARAM_CAT_CONFIG     : iCmdBegin = CMD_BENCHMARK       ; iCmdEnd = CMD_CONFIG_SAVE          ; break;
 				case PARAM_CAT_CPU        : iCmdBegin = CMD_ASSEMBLE        ; iCmdEnd = CMD_UNASSEMBLE           ; break;
-				case PARAM_CAT_FLAGS      : iCmdBegin = CMD_FLAG_CLEAR      ; iCmdEnd = CMD_FLAG_SET_N           ; break;
+				case PARAM_CAT_FLAGS      :
+					// iCmdBegin = CMD_FLAG_CLEAR      ; iCmdEnd = CMD_FLAG_SET_N           ; break;
+					// HACK: check if we have an exact command match first
+					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
+					if (nFound && (iCommand != CMD_MEMORY_FILL))
+					{
+						iCmdBegin = CMD_FLAG_CLEAR     ; iCmdEnd = CMD_FLAG_SET_N;
+						bCategory = true;
+					}
+					else
+						bCategory = false;
+					break;
 				case PARAM_CAT_HELP       : iCmdBegin = CMD_HELP_LIST       ; iCmdEnd = CMD_MOTD                 ; break;
 				case PARAM_CAT_KEYBOARD   :
 					// HACK: check if we have an exact command match first
@@ -524,7 +535,18 @@ Update_t CmdHelpSpecific (int nArgs)
 					}
 					bCategory = false;
 					break;
-				case PARAM_CAT_MEMORY     : iCmdBegin = CMD_MEMORY_COMPARE  ; iCmdEnd = CMD_MEMORY_FILL          ; break;
+				case PARAM_CAT_MEMORY     :
+					// iCmdBegin = CMD_MEMORY_COMPARE  ; iCmdEnd = CMD_MEMORY_FILL          ; break;
+					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
+					if (nFound && (iCommand != CMD_MEMORY_MOVE))
+					{
+						iCmdBegin = CMD_MEMORY_COMPARE     ; iCmdEnd = CMD_MEMORY_FILL           ;
+						bCategory = true;
+					}
+					else
+						bCategory = false;
+					break;
+
 				case PARAM_CAT_OUTPUT     :
 					// HACK: check if we have an exact command match first
 					nFound = FindCommand( g_aArgs[iArg].sArg, pFunction, & iCommand );
@@ -1084,6 +1106,9 @@ Update_t CmdHelpSpecific (int nArgs)
 			Colorize( sText, sTemp );
 			ConsolePrint( sText );
 			ConsoleBufferPush( TEXT("  Sets memory to the specified 8-Bit Values (bytes)" ) );
+			Help_Examples();
+			sprintf( sText, "%s  %s 00 4C FF69", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			sprintf( sText, "%s  00:4C FF69", CHC_EXAMPLE ); ConsolePrint( sText );
 			break;
 		case CMD_MEMORY_ENTER_WORD:
 			sprintf( sTemp, " Usage: <address | symbol> #### [#### ... ####]" );
@@ -1096,7 +1121,23 @@ Update_t CmdHelpSpecific (int nArgs)
 			Colorize( sText, sTemp );
 			ConsolePrint( sText );
 			ConsoleBufferPush( TEXT("  Fills the memory range with the specified byte" ) );
-			ConsoleBufferPush( TEXT("  Can't fill IO address $C0xx" ) );
+			sprintf( sTemp, " Note: Can't fill IO addresses %s$%sC0xx", CHC_ARG_SEP, CHC_ADDRESS );
+			Colorize( sText, sTemp );
+			ConsolePrint( sText );
+			Help_Examples();
+			sprintf( sText, "%s  %s 2000:3FFF 00   // Clear HGR page 1", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			sprintf( sText, "%s  %s 4000,2000 00   // Clear HGR page 2", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			sprintf( sText, "%s  %s 2000 3FFF 00   // Clear HGR page 1", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			break;
+		case CMD_MEMORY_MOVE:
+			sprintf( sTemp, " Usage: destination range" );
+			Colorize( sText, sTemp );
+			ConsolePrint( sText );
+			ConsoleBufferPush( TEXT("  Copies bytes specified by the range to the destination starting address." ) );
+			Help_Examples();
+			sprintf( sText, "%s  %s 4000 2000:3FFF   // move HGR page 1 to page 2", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			sprintf( sText, "%s  %s 2001 2000:3FFF   // clear $2000-$3FFF with the byte at $2000", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
+			sprintf( sText, "%s  2001<2000:3FFFM", CHC_EXAMPLE ); ConsolePrint( sText );
 			break;
 //		case CMD_MEM_MINI_DUMP_ASC_1:
 //		case CMD_MEM_MINI_DUMP_ASC_2:
@@ -1210,8 +1251,8 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsoleBufferPush( " Output order is: Hex Bin Dec Char"     );
 			ConsoleBufferPush( "  Note: symbols take piority."          );
 			Help_Examples();
-			ConsoleBufferPush( "i.e. #A (if you don't want accum. val)" );
-			ConsoleBufferPush( "i.e. #F (if you don't want flags val)"  );
+			ConsoleBufferPush( "Note: #A (if you don't want the accumulator value)" );
+			ConsoleBufferPush( "Note: #F (if you don't want the flags value)"  );
 			break;
 		case CMD_OUTPUT_ECHO:
 			Colorize( sText, " Usage: string"    );
@@ -1251,9 +1292,13 @@ Update_t CmdHelpSpecific (int nArgs)
 			wsprintf( sText, "%s   %s LIFE = 2000", CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
 			wsprintf( sText, "%s   %s LIFE"       , CHC_EXAMPLE, pCommand->m_sName ); ConsolePrint( sText );
 			break;
-		case CMD_SYMBOLS_MAIN:
-		case CMD_SYMBOLS_USER:
-		case CMD_SYMBOLS_SRC :
+		case CMD_SYMBOLS_ROM:
+		case CMD_SYMBOLS_APPLESOFT:
+		case CMD_SYMBOLS_ASSEMBLY:
+		case CMD_SYMBOLS_USER_1:
+		case CMD_SYMBOLS_USER_2:
+		case CMD_SYMBOLS_SRC_1:
+		case CMD_SYMBOLS_SRC_2:
 //			ConsoleBufferPush( TEXT(" Usage: [ ON | OFF | symbol | address ]" ) );
 //			ConsoleBufferPush( TEXT(" Usage: [ LOAD [\"filename\"] | SAVE \"filename\"]" ) ); 
 //			ConsoleBufferPush( TEXT("  ON  : Turns symbols on in the disasm window" ) );
@@ -1264,11 +1309,12 @@ Update_t CmdHelpSpecific (int nArgs)
 			Colorize( sText, " Usage: [ <cmd> | symbol | address ]" );
 			ConsolePrint( sText );
 			ConsoleBufferPush( "  Where <cmd> is one of:" );
-			sprintf( sText, "  %s  " ": Turns symbols on in the disasm window"       , g_aParameters[ PARAM_ON    ].m_sName ); ConsoleBufferPush( sText );
-			sprintf( sText, "  %s "  ": Turns symbols off in the disasm window"      , g_aParameters[ PARAM_OFF   ].m_sName ); ConsoleBufferPush( sText );
-			sprintf( sText, "  %s"   ": Loads symbols from last/default \"filename\"", g_aParameters[ PARAM_SAVE  ].m_sName ); ConsoleBufferPush( sText );
-			sprintf( sText, "  %s"   ": Saves symbol table to \"filename\""          , g_aParameters[ PARAM_LOAD  ].m_sName ); ConsoleBufferPush( sText );
-			sprintf( sText, " %s"    ": Clears the symbol table"                     , g_aParameters[ PARAM_CLEAR ].m_sName ); ConsoleBufferPush( sText );
+			sprintf( sText, "%s%-5s%s: Turns symbols on in the disasm window"       , CHC_STRING, g_aParameters[ PARAM_ON    ].m_sName, CHC_DEFAULT ); ConsolePrint( sText );
+			sprintf( sText, "%s%-5s%s: Turns symbols off in the disasm window"      , CHC_STRING, g_aParameters[ PARAM_OFF   ].m_sName, CHC_DEFAULT ); ConsolePrint( sText );
+			sprintf( sText, "%s%-5s%s: Loads symbols from last/default \"filename\"", CHC_STRING, g_aParameters[ PARAM_SAVE  ].m_sName, CHC_DEFAULT ); ConsolePrint( sText );
+			sprintf( sText, "%s%-5s%s: Saves symbol table to \"filename\""          , CHC_STRING, g_aParameters[ PARAM_LOAD  ].m_sName, CHC_DEFAULT ); ConsolePrint( sText );
+			sprintf( sText, "%s%-5s%s: Clears the symbol table"                     , CHC_STRING, g_aParameters[ PARAM_CLEAR ].m_sName, CHC_DEFAULT ); ConsolePrint( sText );
+			sprintf( sText, "%s%-5s%s: Remove symbol"                               , CHC_STRING, g_aTokens[ TOKEN_EXCLAMATION ]      , CHC_DEFAULT ); ConsolePrint( sText );
 			break;
 		case CMD_SYMBOLS_LIST :
 			Colorize( sText, " Usage: symbol" );

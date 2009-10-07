@@ -647,13 +647,16 @@ void DebuggerPrint ( int x, int y, const char *pText )
 	}
 }
 
-
+//===========================================================================
 void DebuggerPrintColor( int x, int y, const conchar_t * pText )
 {
 	int nLeft = x;
 
 	conchar_t g;
 	const conchar_t *pSrc = pText;
+
+	if( !pText)
+		return;
 
 	while (g = (*pSrc))
 	{
@@ -1152,7 +1155,7 @@ void DrawConsoleCursor ()
 }
 
 //===========================================================================
-void GetConsoleRect( const int y, RECT & rect )
+void GetConsoleRect ( const int y, RECT & rect )
 {
 	int nLineHeight = GetConsoleLineHeightPixels();
 
@@ -1170,7 +1173,7 @@ void GetConsoleRect( const int y, RECT & rect )
 }
 
 //===========================================================================
-void DrawConsoleLine( const conchar_t * pText, int y )
+void DrawConsoleLine ( const conchar_t * pText, int y )
 {
 	if (y < 0)
 		return;
@@ -1587,6 +1590,13 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 	int nSpacer = 11; // 9
 	for (iTab = 0; iTab < _NUM_TAB_STOPS; iTab++ )
 	{
+		if (! g_bConfigDisasmAddressView )
+		{
+			if (iTab < TS_IMMEDIATE) // TS_BRANCH)
+			{
+				aTabs[ iTab ] -= 4;
+			}
+		}
 		if (! g_bConfigDisasmOpcodesView)
 		{
 			if (iTab < TS_IMMEDIATE) // TS_BRANCH)
@@ -1712,7 +1722,11 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 //			DebuggerSetColorBG( dc, DebuggerGetColor( FG_DISASM_BOOKMARK ) ); // swapped
 //			DebuggerSetColorFG( dc, DebuggerGetColor( BG_DISASM_BOOKMARK ) ); // swapped
 //		}		
-		PrintTextCursorX( (LPCTSTR) line.sAddress, linerect );
+
+		if( g_bConfigDisasmAddressView )
+		{
+			PrintTextCursorX( (LPCTSTR) line.sAddress, linerect );
+		}
 
 		if (bAddressIsBookmark)
 		{
@@ -1726,6 +1740,8 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 
 		if (g_bConfigDisasmAddressColon)
 			PrintTextCursorX( ":", linerect );
+		else
+			PrintTextCursorX( " ", linerect ); // bugfix, not showing "addr:" doesn't alternate color lines
 
 	// Opcodes
 		linerect.left = (int) aTabs[ TS_OPCODE ];
@@ -2705,6 +2721,12 @@ void DrawSubWindow_Console (Update_t bUpdate)
 			{
 				DebuggerSetColorFG( DebuggerGetColor( FG_CONSOLE_OUTPUT ));
 				DrawConsoleLine( g_aConsoleDisplay[ iLine  ], y );
+			}
+			else
+			{
+				// bugfix: 2.6.1.34
+				// scrolled past top of console... Draw blank line
+				DrawConsoleLine( NULL, y );
 			}
 			iLine++;
 		}
