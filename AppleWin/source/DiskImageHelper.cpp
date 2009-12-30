@@ -62,6 +62,38 @@ LPBYTE CImageBase::ms_pWorkBuffer = NULL;
 
 //-------------------------------------
 
+bool CImageBase::ReadTrack(ImageInfo* pImageInfo, int nTrack)
+{
+	long Offset = pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE;
+
+	if (pImageInfo->file != INVALID_HANDLE_VALUE)
+	{
+		SetFilePointer(pImageInfo->file, Offset, NULL, FILE_BEGIN);
+		DWORD dwBytesRead;
+		ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesRead, NULL);
+	}
+	else if (pImageInfo->hGZFile != NULL)
+	{
+		z_off_t NewOffset = gzseek(pImageInfo->hGZFile, Offset, SEEK_SET);
+		_ASSERT(NewOffset == Offset);
+		if (NewOffset != Offset)
+			return false;
+		int nLen = gzread(pImageInfo->hGZFile, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
+		_ASSERT(nLen == TRACK_DENIBBLIZED_SIZE);
+		if (nLen != TRACK_DENIBBLIZED_SIZE)
+			return false;
+	}
+	else
+	{
+		_ASSERT(0);
+		return false;
+	}
+
+	return true;
+}
+
+//-------------------------------------
+
 LPBYTE CImageBase::Code62(int sector)
 {
 	// CONVERT THE 256 8-BIT BYTES INTO 342 6-BIT BYTES, WHICH WE STORE
@@ -455,10 +487,8 @@ public:
 
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE, NULL, FILE_BEGIN);
 		ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		DWORD dwBytesRead;
-		ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesRead, NULL);
+		ReadTrack(pImageInfo, nTrack);
 		*pNibbles = NibblizeTrack(pTrackImageBuffer, 1, nTrack);
 		if (!enhancedisk)
 			SkewTrack(nTrack, *pNibbles, pTrackImageBuffer);

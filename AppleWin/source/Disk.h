@@ -1,15 +1,21 @@
 #pragma once
 
-#define	DRIVE_1			0
-#define	DRIVE_2			1
+#include "DiskImage.h"
 
-#define	DRIVES			2
-#define	TRACKS_STANDARD	35
-#define	TRACKS_EXTRA	5		// Allow up to a 40-track .dsk image (160KB)
-#define	TRACKS_MAX		(TRACKS_STANDARD+TRACKS_EXTRA)
+enum Drive_e
+{
+	DRIVE_1 = 0,
+	DRIVE_2,
+	NUM_DRIVES
+};
+
+const bool IMAGE_NOT_WRITE_PROTECTED = false;
+const bool IMAGE_WRITE_PROTECTED = true;
+const bool IMAGE_DONT_CREATE = false;
+const bool IMAGE_CREATE = true;
 
 extern BOOL enhancedisk;
-extern string DiskPathFilename[DRIVES];
+extern string DiskPathFilename[NUM_DRIVES];
 
 void    DiskInitialize (); // DiskManagerStartup()
 void    DiskDestroy (); // no, doesn't "destroy" the disk image.  DiskManagerShutdown()
@@ -30,7 +36,7 @@ enum Disk_Status_e
 void    DiskGetLightStatus (int *pDisk1Status_,int *pDisk2Status_);
 
 LPCTSTR DiskGetName (int);
-int     DiskInsert (int,LPCTSTR,BOOL,BOOL);
+ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bWriteProtected, const bool bCreateIfNecessary);
 BOOL    DiskIsSpinning ();
 void    DiskNotifyInvalidImage (LPCTSTR,int);
 void    DiskReset ();
@@ -45,3 +51,5 @@ DWORD   DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot);
 
 void Disk_LoadLastDiskImage( int iDrive );
 void Disk_SaveLastDiskImage( int iDrive );
+
+bool Disk_ImageIsWriteProtected(const int iDrive);

@@ -1,19 +1,20 @@
 #pragma once
 
-#define  NIBBLES     6656
-#define  TRACK_DENIBBLIZED_SIZE  4096
+#define NIBBLES 6656
+#define TRACK_DENIBBLIZED_SIZE (16 * 256)	// #Sectors x Sector-size
 
-BOOL    ImageBoot (HIMAGE);
-void    ImageClose (HIMAGE);
-void    ImageDestroy ();
-void    ImageInitialize ();
+#define	TRACKS_STANDARD	35
+#define	TRACKS_EXTRA	5		// Allow up to a 40-track .dsk image (160KB)
+#define	TRACKS_MAX		(TRACKS_STANDARD+TRACKS_EXTRA)
 
 enum ImageError_e
 {
-	IMAGE_ERROR_BAD_POINTER    =-1,
-	IMAGE_ERROR_NONE           = 0,
-	IMAGE_ERROR_UNABLE_TO_OPEN = 1,
-	IMAGE_ERROR_BAD_SIZE       = 2
+	eIMAGE_ERROR_NONE,
+	eIMAGE_ERROR_BAD_POINTER,
+	eIMAGE_ERROR_BAD_SIZE,
+	eIMAGE_ERROR_UNABLE_TO_OPEN,
+	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
+	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
 };
 
 class CImageBase;
@@ -23,17 +24,25 @@ struct ImageInfo
 	TCHAR		filename[MAX_PATH];
 	CImageBase*	pImageType;
 	HANDLE		file;
+	gzFile		hGZFile;
 	DWORD		offset;
-	BOOL		writeprotected;
+	bool		bWriteProtected;
 	DWORD		headersize;
 	LPBYTE		header;
 	BOOL		validtrack[TRACKS_MAX];
 	UINT		uNumTracks;
 };
 
-int ImageOpen(LPCTSTR imagefilename, HIMAGE *hDiskImage_, BOOL *pWriteProtected_, BOOL bCreateIfNecessary);
+BOOL ImageBoot(HIMAGE);
+void ImageClose(HIMAGE);
+void ImageDestroy(void);
+void ImageInitialize(void);
 
-void ImageReadTrack(HIMAGE,int,int,LPBYTE,int *);
-void ImageWriteTrack(HIMAGE,int,int,LPBYTE,int);
+ImageError_e ImageOpen(LPCTSTR imagefilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary);
+
+void ImageReadTrack(HIMAGE imagehandle, int track, int quartertrack, LPBYTE trackimagebuffer, int* nibbles);
+void ImageWriteTrack(HIMAGE imagehandle, int track, int quartertrack, LPBYTE trackimage, int nibbles);
 
 int ImageGetNumTracks(HIMAGE imagehandle);
+
+bool ImageIsWriteProtected(HIMAGE imagehandle);

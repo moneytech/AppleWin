@@ -43,7 +43,7 @@ static CDiskImageHelper sg_DiskImageHelper;
 
 //===========================================================================
 
-BOOL ImageBoot (HIMAGE imagehandle)
+BOOL ImageBoot(HIMAGE imagehandle)
 {
 	ImageInfo* ptr = (ImageInfo*) imagehandle;
 	BOOL result = 0;
@@ -52,19 +52,21 @@ BOOL ImageBoot (HIMAGE imagehandle)
 		result = ptr->pImageType->Boot(ptr);
 
 	if (result)
-		ptr->writeprotected = 1;
+		ptr->bWriteProtected = 1;
 
 	return result;
 }
 
 //===========================================================================
 
-void ImageClose (HIMAGE imagehandle)
+void ImageClose(HIMAGE imagehandle)
 {
 	ImageInfo* ptr = (ImageInfo*) imagehandle;
 
 	if (ptr->file != INVALID_HANDLE_VALUE)
 		CloseHandle(ptr->file);
+	if (ptr->hGZFile != NULL)
+		gzclose(ptr->hGZFile);
 
 	for (UINT track = 0; track < ptr->uNumTracks; track++)
 	{
@@ -83,7 +85,7 @@ void ImageClose (HIMAGE imagehandle)
 
 //===========================================================================
 
-void ImageDestroy ()
+void ImageDestroy(void)
 {
 	VirtualFree(sg_DiskImageHelper.GetWorkBuffer(), 0, MEM_RELEASE);
 	sg_DiskImageHelper.SetWorkBuffer(NULL);
@@ -91,7 +93,7 @@ void ImageDestroy ()
 
 //===========================================================================
 
-void ImageInitialize ()
+void ImageInitialize(void)
 {
 	LPBYTE pBuffer = (LPBYTE) VirtualAlloc(NULL, TRACK_DENIBBLIZED_SIZE*2, MEM_COMMIT, PAGE_READWRITE);
 	sg_DiskImageHelper.SetWorkBuffer(pBuffer);
@@ -99,25 +101,59 @@ void ImageInitialize ()
 
 //===========================================================================
 
-int ImageOpen (LPCTSTR  imagefilename,
-               HIMAGE  *hDiskImage_,
-               BOOL    *pWriteProtected_,
-               BOOL     bCreateIfNecessary)
+static ImageError_e CheckGZipFile(	LPCTSTR imagefilename,
+									CImageBase*& pImageType,
+									DWORD& dwOffset,
+									gzFile& hGZFile,
+									DWORD& dwSize,
+									bool* pWriteProtected_)
 {
-	if (! (imagefilename && hDiskImage_ && pWriteProtected_ && sg_DiskImageHelper.GetWorkBuffer()))
-		return IMAGE_ERROR_BAD_POINTER;
+	hGZFile = gzopen(imagefilename, "rb");
+	if (hGZFile == NULL)
+		return eIMAGE_ERROR_UNABLE_TO_OPEN_GZ;
 
-    const size_t uStrLen = strlen(imagefilename);
-    if (uStrLen > SUFFIX_LEN && strcmp(imagefilename+uStrLen-SUFFIX_LEN, GZ_SUFFIX) == 0)
+	const UINT MAX_UNCOMPRESSED_SIZE = 512*1024;
+	BYTE* pFileBuffer = new BYTE[MAX_UNCOMPRESSED_SIZE];
+	if (!pFileBuffer)
 	{
-		return IMAGE_ERROR_UNABLE_TO_OPEN;
+		gzclose(hGZFile);
+		return eIMAGE_ERROR_BAD_POINTER;
 	}
 
+	int nLen = gzread(hGZFile, pFileBuffer, MAX_UNCOMPRESSED_SIZE);
+	if (nLen < 0 || nLen == MAX_UNCOMPRESSED_SIZE)
+	{
+		gzclose(hGZFile);
+		delete [] pFileBuffer;
+		return eIMAGE_ERROR_BAD_SIZE;
+	}
+
+	dwSize = nLen;
+
+	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks
+
+	pImageType = sg_DiskImageHelper.Detect(pFileBuffer, nLen, "", dwOffset);
+	delete [] pFileBuffer;
+
+	*pWriteProtected_ = 1;	// GZip files are read-only (for now)
+
+	return eIMAGE_ERROR_NONE;
+}
+
+//-------------------------------------
+
+static ImageError_e CheckNormalFile(	LPCTSTR imagefilename,
+									CImageBase*& pImageType,
+									DWORD& dwOffset,
+									HANDLE& hFile,
+									DWORD& dwSize,
+									bool* pWriteProtected_,
+									const bool bCreateIfNecessary)
+{
 	// TRY TO OPEN THE IMAGE FILE
-	HANDLE file = INVALID_HANDLE_VALUE;
 
 	if (! *pWriteProtected_)
-		file = CreateFile(imagefilename,
+		hFile = CreateFile(imagefilename,
                       GENERIC_READ | GENERIC_WRITE,
                       FILE_SHARE_READ | FILE_SHARE_WRITE,
                       (LPSECURITY_ATTRIBUTES)NULL,
@@ -126,9 +162,9 @@ int ImageOpen (LPCTSTR  imagefilename,
                       NULL);
 
 	// File may have read-only attribute set, so try to open as read-only.
-	if (file == INVALID_HANDLE_VALUE)
+	if (hFile == INVALID_HANDLE_VALUE)
 	{
-		file = CreateFile(
+		hFile = CreateFile(
 			imagefilename,
 			GENERIC_READ,
 			FILE_SHARE_READ,
@@ -137,12 +173,12 @@ int ImageOpen (LPCTSTR  imagefilename,
 			FILE_ATTRIBUTE_NORMAL,
 			NULL );
 		
-		if (file != INVALID_HANDLE_VALUE)
+		if (hFile != INVALID_HANDLE_VALUE)
 			*pWriteProtected_ = 1;
 	}
 
-	if ((file == INVALID_HANDLE_VALUE) && bCreateIfNecessary)
-		file = CreateFile(
+	if ((hFile == INVALID_HANDLE_VALUE) && bCreateIfNecessary)
+		hFile = CreateFile(
 			imagefilename,
 			GENERIC_READ | GENERIC_WRITE,
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -152,8 +188,8 @@ int ImageOpen (LPCTSTR  imagefilename,
 			NULL );
 
 	// IF WE AREN'T ABLE TO OPEN THE FILE, RETURN
-	if (file == INVALID_HANDLE_VALUE)
-		return IMAGE_ERROR_UNABLE_TO_OPEN;
+	if (hFile == INVALID_HANDLE_VALUE)
+		return eIMAGE_ERROR_UNABLE_TO_OPEN;
 
 	// DETERMINE THE FILE'S EXTENSION AND CONVERT IT TO LOWERCASE
 	LPCTSTR imagefileext = imagefilename;
@@ -165,17 +201,15 @@ int ImageOpen (LPCTSTR  imagefilename,
 	_tcsncpy(szExt,imagefileext,_MAX_EXT);
 	CharLowerBuff(szExt,_tcslen(szExt));
 
-	DWORD dwSize = GetFileSize(file, NULL);
-	DWORD dwOffset = 0;
+	dwSize = GetFileSize(hFile, NULL);
 
-	CImageBase* pImageType = NULL;
 	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks
 
 	if (dwSize > 0)
 	{
 		// MAP THE FILE INTO MEMORY FOR USE BY THE DETECTION FUNCTIONS
 		HANDLE mapping = CreateFileMapping(
-			file,
+			hFile,
 			(LPSECURITY_ATTRIBUTES)NULL,
 			PAGE_READONLY,
 			0,0,NULL );
@@ -197,45 +231,83 @@ int ImageOpen (LPCTSTR  imagefilename,
 		pImageType = sg_DiskImageHelper.GetImageForCreation(szExt);
 	}
 
+	return eIMAGE_ERROR_NONE;
+}
+
+//=====================================
+
+ImageError_e ImageOpen(	LPCTSTR imagefilename,
+						HIMAGE* hDiskImage_,
+						bool* pWriteProtected_,
+						const bool bCreateIfNecessary)
+{
+	if (! (imagefilename && hDiskImage_ && pWriteProtected_ && sg_DiskImageHelper.GetWorkBuffer()))
+		return eIMAGE_ERROR_BAD_POINTER;
+
+	CImageBase* pImageType = NULL;
+	DWORD dwOffset = 0;
+	gzFile hGZFile = NULL;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	DWORD dwSize = 0;
+
+    const size_t uStrLen = strlen(imagefilename);
+    if (uStrLen > SUFFIX_LEN && strcmp(imagefilename+uStrLen-SUFFIX_LEN, GZ_SUFFIX) == 0)
+	{
+		ImageError_e Err = CheckGZipFile(imagefilename, pImageType, dwOffset, hGZFile, dwSize, pWriteProtected_);
+		if (Err != eIMAGE_ERROR_NONE)
+			return Err;
+	}
+	else
+	{
+		ImageError_e Err = CheckNormalFile(imagefilename, pImageType, dwOffset, hFile, dwSize, pWriteProtected_, bCreateIfNecessary);
+		if (Err != eIMAGE_ERROR_NONE)
+			return Err;
+	}
+
+	//
+
 	// IF THE FILE MATCHES A KNOWN FORMAT...
-	if (pImageType != NULL)
+	if (pImageType)
 	{
 		// CREATE A RECORD FOR THE FILE, AND RETURN AN IMAGE HANDLE
 		*hDiskImage_ = (HIMAGE) VirtualAlloc(NULL, sizeof(ImageInfo), MEM_COMMIT, PAGE_READWRITE);
 		if (*hDiskImage_)
 		{
-			const UINT uNumTracksInImage = sg_DiskImageHelper.GetNumTracksInImage();
-
 			ZeroMemory(*hDiskImage_, sizeof(ImageInfo));
-			_tcsncpy(((ImageInfo*)*hDiskImage_)->filename, imagefilename, MAX_PATH);
-			((ImageInfo*)*hDiskImage_)->pImageType		= pImageType;
-			((ImageInfo*)*hDiskImage_)->file			= file;
-			((ImageInfo*)*hDiskImage_)->offset			= dwOffset;
-			((ImageInfo*)*hDiskImage_)->writeprotected	= *pWriteProtected_;
-			((ImageInfo*)*hDiskImage_)->uNumTracks		= uNumTracksInImage;
+
+			const UINT uNumTracksInImage = sg_DiskImageHelper.GetNumTracksInImage();
+			ImageInfo* pImageInfo = (ImageInfo*) *hDiskImage_;
+
+			_tcsncpy(pImageInfo->filename, imagefilename, MAX_PATH);
+			pImageInfo->pImageType		= pImageType;
+			pImageInfo->file			= hFile;
+			pImageInfo->hGZFile			= hGZFile;
+			pImageInfo->offset			= dwOffset;
+			pImageInfo->bWriteProtected	= *pWriteProtected_;
+			pImageInfo->uNumTracks		= uNumTracksInImage;
 
 			for (UINT uTrack = 0; uTrack < uNumTracksInImage; uTrack++)
-		        ((ImageInfo*)*hDiskImage_)->validtrack[uTrack] = (dwSize > 0);
+		        pImageInfo->validtrack[uTrack] = (dwSize > 0);
 
-			return IMAGE_ERROR_NONE;
+			return eIMAGE_ERROR_NONE;
 		}
 	}
 
-	CloseHandle(file);
+	CloseHandle(hFile);
 
 	if (dwSize == 0)
 		DeleteFile(imagefilename);
 
-	return IMAGE_ERROR_BAD_SIZE;
+	return eIMAGE_ERROR_BAD_SIZE;
 }
 
 //===========================================================================
 
-void ImageReadTrack (HIMAGE  imagehandle,
-                     int     track,
-                     int     quartertrack,
-                     LPBYTE  trackimagebuffer,
-                     int    *nibbles)
+void ImageReadTrack(	HIMAGE  imagehandle,
+						int     track,
+						int     quartertrack,
+						LPBYTE  trackimagebuffer,
+						int*    nibbles)
 {
 	ImageInfo* ptr = (ImageInfo*) imagehandle;
 	if (ptr->pImageType->AllowRW() && ptr->validtrack[track])
@@ -251,14 +323,14 @@ void ImageReadTrack (HIMAGE  imagehandle,
 
 //===========================================================================
 
-void ImageWriteTrack (HIMAGE imagehandle,
-                      int    track,
-                      int    quartertrack,
-                      LPBYTE trackimage,
-                      int    nibbles)
+void ImageWriteTrack(	HIMAGE imagehandle,
+						int    track,
+						int    quartertrack,
+						LPBYTE trackimage,
+						int    nibbles)
 {
 	ImageInfo* ptr = (ImageInfo*) imagehandle;
-	if (ptr->pImageType->AllowRW() && !ptr->writeprotected)
+	if (ptr->pImageType->AllowRW() && !ptr->bWriteProtected)
 	{
 		ptr->pImageType->Write(ptr, track, quartertrack, trackimage, nibbles);
 		ptr->validtrack[track] = 1;
@@ -271,4 +343,12 @@ int ImageGetNumTracks(HIMAGE imagehandle)
 {
 	ImageInfo* ptr = (ImageInfo*) imagehandle;
 	return ptr ? ptr->uNumTracks : 0;
+}
+
+//===========================================================================
+
+bool ImageIsWriteProtected(HIMAGE imagehandle)
+{
+	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	return ptr ? ptr->bWriteProtected : true;
 }

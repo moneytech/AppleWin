@@ -59,8 +59,8 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 // Public _________________________________________________________________________________________
 
 	BOOL enhancedisk = 1;
-	string DiskPathFilename[];		// dynamic array of strings
-	
+	string DiskPathFilename[NUM_DRIVES];
+
 // Private ________________________________________________________________________________________
 
 	const int MAX_DISK_IMAGE_NAME = 15;
@@ -75,7 +75,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 		LPBYTE trackimage;
 		int    phase;
 		int    byte;
-		BOOL   writeprotected;
+		bool   bWriteProtected;
 		BOOL   trackimagedata;
 		BOOL   trackimagedirty;
 		DWORD  spinning;
@@ -85,7 +85,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 
 static WORD		currdrive       = 0;
 static BOOL		diskaccessed    = 0;
-static Disk_t	g_aFloppyDisk[DRIVES];
+static Disk_t	g_aFloppyDisk[NUM_DRIVES];
 static BYTE		floppylatch     = 0;
 static BOOL		floppymotoron   = 0;
 static BOOL		floppywritemode = 0;
@@ -123,7 +123,7 @@ void Disk_LoadLastDiskImage( int iDrive )
 		//	_tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
 		bSaveDiskImage = false;
 		// Pass in ptr to local copy of filepath, since RemoveDisk() sets DiskPathFilename = ""
-		DiskInsert(iDrive,sFilePath,0,0);
+		DiskInsert(iDrive, sFilePath, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
 		bSaveDiskImage = true;
 	}
 	//else MessageBox(NULL,"Reg Key/Value not found",pRegKey,MB_OK);
@@ -136,7 +136,7 @@ void Disk_SaveLastDiskImage( int iDrive )
 
 	if( bSaveDiskImage )
 	{
-		if( !iDrive )
+		if( iDrive == DRIVE_1 )
 			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_1,1,pFileName );
 		else
 			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_2,1,pFileName );
@@ -161,7 +161,7 @@ Disk_Status_e GetDriveLightStatus( const int iDrive )
 
 		if (pFloppy->spinning)
 		{
-			if (pFloppy->writeprotected)
+			if (pFloppy->bWriteProtected)
 				return DISK_STATUS_PROT;
 
 			if (pFloppy->writelight)
@@ -227,7 +227,7 @@ bool IsDriveValid( const int iDrive )
 	if (iDrive < 0)
 		return false;
 
-	if (iDrive >= DRIVES)
+	if (iDrive >= NUM_DRIVES)
 		return false;
 
 	return true;
@@ -312,7 +312,7 @@ static void WriteTrack (int iDrive)
 	if (pFloppy->track >= ImageGetNumTracks(pFloppy->imagehandle))
 		return;
 
-	if (pFloppy->writeprotected)
+	if (pFloppy->bWriteProtected)
 		return;
 
 	if (pFloppy->trackimage && pFloppy->imagehandle)
@@ -463,7 +463,7 @@ BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCycl
 
 void DiskInitialize ()
 {
-	int loop = DRIVES;
+	int loop = NUM_DRIVES;
 	while (loop--)
 		ZeroMemory(&g_aFloppyDisk[loop],sizeof(Disk_t ));
 
@@ -473,24 +473,24 @@ void DiskInitialize ()
 
 //===========================================================================
 
-int DiskInsert (int iDrive, LPCTSTR imagefilename, BOOL writeprotected, BOOL createifnecessary)
+ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bWriteProtected, const bool bCreateIfNecessary)
 {
 	Disk_t * fptr = &g_aFloppyDisk[iDrive];
 	if (fptr->imagehandle)
 		RemoveDisk(iDrive);
 
 	ZeroMemory(fptr,sizeof(Disk_t ));
-	fptr->writeprotected = writeprotected;
+	fptr->bWriteProtected = bWriteProtected;
 
-	int error = ImageOpen(imagefilename,
+	ImageError_e error = ImageOpen(pszImageFilename,
 		&fptr->imagehandle,
-		&fptr->writeprotected,
-		createifnecessary);
+		&fptr->bWriteProtected,
+		bCreateIfNecessary);
 
-	if (error == IMAGE_ERROR_NONE)
+	if (error == eIMAGE_ERROR_NONE)
 	{
-		GetImageTitle(imagefilename,fptr);
-		DiskPathFilename[iDrive]= imagefilename;
+		GetImageTitle(pszImageFilename, fptr);
+		DiskPathFilename[iDrive] = pszImageFilename;
 
 		//MessageBox( NULL, imagefilename, fptr->imagename, MB_OK );
 		Video_ResetScreenshotCounter( fptr->imagename );
@@ -553,7 +553,7 @@ bool DiskGetProtect( const int iDrive )
 	if (IsDriveValid( iDrive ))
 	{
 		Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
-		if (pFloppy->writeprotected)
+		if (pFloppy->bWriteProtected)
 			return true;
 	}
 	return false;
@@ -566,10 +566,21 @@ void DiskSetProtect( const int iDrive, const bool bWriteProtect )
 	if (IsDriveValid( iDrive ))
 	{
 		Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
-		pFloppy->writeprotected = bWriteProtect;
+		pFloppy->bWriteProtected = bWriteProtect;
 	}
 }
 
+
+//===========================================================================
+
+bool Disk_ImageIsWriteProtected(const int iDrive)
+{
+	if (!IsDriveValid(iDrive))
+		return true;
+
+	Disk_t *pFloppy = &g_aFloppyDisk[iDrive];
+	return ImageIsWriteProtected(pFloppy->imagehandle);
+}
 
 //===========================================================================
 static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULONG) {
@@ -580,7 +591,7 @@ static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULON
   if (!fptr->trackimagedata)
     return 0xFF;
   BYTE result = 0;
-  if ((!floppywritemode) || (!fptr->writeprotected))
+  if ((!floppywritemode) || (!fptr->bWriteProtected))
     if (floppywritemode)
       if (floppylatch & 0x80) {
         *(fptr->trackimage+fptr->byte) = floppylatch;
@@ -625,8 +636,8 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   ofn.lStructSize     = sizeof(OPENFILENAME);
   ofn.hwndOwner       = g_hFrameWindow;
   ofn.hInstance       = g_hInstance;
-  ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
-                        TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po\0")
+  ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz\0")
+                        TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz\0")
                         TEXT("All Files\0*.*\0");
   ofn.lpstrFile       = filename;
   ofn.nMaxFile        = MAX_PATH;
@@ -639,8 +650,8 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 		if ((!ofn.nFileExtension) || !filename[ofn.nFileExtension])
 			_tcscat(filename,TEXT(".DSK"));
 
-		int error = DiskInsert(drive,filename,ofn.Flags & OFN_READONLY,1);
-		if (!error)
+		ImageError_e Error = DiskInsert(drive, filename, ofn.Flags & OFN_READONLY, IMAGE_CREATE);
+		if (Error == eIMAGE_ERROR_NONE)
 		{
 			DiskPathFilename[drive] = filename; 
 			filename[ofn.nFileOffset] = 0;
@@ -651,7 +662,7 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 		}
 		else
 		{
-			DiskNotifyInvalidImage(filename,error);
+			DiskNotifyInvalidImage(filename, Error);
 		}
 	}
 }
@@ -673,7 +684,7 @@ static BYTE __stdcall DiskSetLatchValue (WORD, WORD, BYTE write, BYTE value, ULO
 //===========================================================================
 static BYTE __stdcall DiskSetReadMode (WORD, WORD, BYTE, BYTE, ULONG) {
   floppywritemode = 0;
-  return MemReturnRandomData(g_aFloppyDisk[currdrive].writeprotected);
+  return MemReturnRandomData(g_aFloppyDisk[currdrive].bWriteProtected);
 }
 
 //===========================================================================
@@ -851,7 +862,7 @@ DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 		pSS->Unit[i].track				= g_aFloppyDisk[i].track;
 		pSS->Unit[i].phase				= g_aFloppyDisk[i].phase;
 		pSS->Unit[i].byte				= g_aFloppyDisk[i].byte;
-		pSS->Unit[i].writeprotected		= g_aFloppyDisk[i].writeprotected;
+		pSS->Unit[i].writeprotected		= g_aFloppyDisk[i].bWriteProtected ? TRUE : FALSE;
 		pSS->Unit[i].trackimagedata		= g_aFloppyDisk[i].trackimagedata;
 		pSS->Unit[i].trackimagedirty	= g_aFloppyDisk[i].trackimagedirty;
 		pSS->Unit[i].spinning			= g_aFloppyDisk[i].spinning;
@@ -903,9 +914,7 @@ DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 
 		if(dwAttributes != INVALID_FILE_ATTRIBUTES)
 		{
-			BOOL bWriteProtected = (dwAttributes & FILE_ATTRIBUTE_READONLY) ? TRUE : FALSE;
-
-			if(DiskInsert(i, pSS->Unit[i].szFileName, bWriteProtected, 0))
+			if(DiskInsert(i, pSS->Unit[i].szFileName, dwAttributes & FILE_ATTRIBUTE_READONLY, IMAGE_DONT_CREATE) != eIMAGE_ERROR_NONE)
 				bImageError = true;
 
 			// DiskInsert() sets up:

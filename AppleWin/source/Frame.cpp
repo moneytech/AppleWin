@@ -707,8 +707,9 @@ LRESULT CALLBACK FrameWndProc (
     case WM_DDE_EXECUTE: {
       LPTSTR filename = (LPTSTR)GlobalLock((HGLOBAL)lparam);
 //MessageBox( NULL, filename, "DDE Exec", MB_OK );
-      int error = DiskInsert(0,filename,0,0);
-      if (!error) {
+      ImageError_e Error = DiskInsert(0, filename, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
+      if (Error == eIMAGE_ERROR_NONE)
+	  {
         if (!g_bIsFullScreen)
           DrawButton((HDC)0,BTN_DRIVE1);
         SetForegroundWindow(window);
@@ -718,7 +719,7 @@ LRESULT CALLBACK FrameWndProc (
       }
       else
       {
-        DiskNotifyInvalidImage(filename,error);
+        DiskNotifyInvalidImage(filename, Error);
       }
       GlobalUnlock((HGLOBAL)lparam);
       break;
@@ -759,18 +760,22 @@ LRESULT CALLBACK FrameWndProc (
       rect.right  = rect.left+BUTTONCX+1;
       rect.top    = buttony+BTN_DRIVE2*BUTTONCY+1;
       rect.bottom = rect.top+BUTTONCY;
-      int error = DiskInsert(PtInRect(&rect,point) ? 1 : 0,filename,0,0);
-      if (!error) {
+      ImageError_e Error = DiskInsert(PtInRect(&rect,point) ? 1 : 0, filename, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
+      if (Error == eIMAGE_ERROR_NONE)
+	  {
         if (!g_bIsFullScreen)
           DrawButton((HDC)0,PtInRect(&rect,point) ? BTN_DRIVE2 : BTN_DRIVE1);
         rect.top = buttony+BTN_DRIVE1*BUTTONCY+1;
-        if (!PtInRect(&rect,point)) {
+        if (!PtInRect(&rect,point))
+		{
           SetForegroundWindow(window);
           ProcessButtonClick(BTN_RUN);
         }
       }
       else
-        DiskNotifyInvalidImage(filename,error);
+	  {
+        DiskNotifyInvalidImage(filename, Error);
+	  }
       DragFinish((HDROP)wparam);
       break;
     }
@@ -1529,14 +1534,21 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	// coordinates of the mouse click to screen coordinates. 
 	ClientToScreen(hwnd, (LPPOINT) &pt); 
 
-	int iMenuItem = ID_DISKMENU_WRITEPROTECTION_OFF;
-	if (DiskGetProtect( iDrive ))
-		iMenuItem = ID_DISKMENU_WRITEPROTECTION_ON;
+	// Check menu depending on current floppy protection
+	{
+		int iMenuItem = ID_DISKMENU_WRITEPROTECTION_OFF;
+		if (DiskGetProtect( iDrive ))
+			iMenuItem = ID_DISKMENU_WRITEPROTECTION_ON;
 
-	CheckMenuItem( hmenu,
-		iMenuItem,
-		MF_CHECKED // MF_BYPOSITION     
-	);
+		CheckMenuItem(hmenu, iMenuItem, MF_CHECKED);
+	}
+
+	if (Disk_ImageIsWriteProtected(iDrive))
+	{
+		// If image-file is read-only (or a gzip) then disable these menu items
+		EnableMenuItem(hmenu, ID_DISKMENU_WRITEPROTECTION_ON, MF_GRAYED);
+		EnableMenuItem(hmenu, ID_DISKMENU_WRITEPROTECTION_OFF, MF_GRAYED);
+	}
 
 	// Draw and track the shortcut menu.  
 	int iCommand = TrackPopupMenu(

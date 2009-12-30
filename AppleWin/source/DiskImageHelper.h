@@ -25,6 +25,9 @@ public:
 	virtual char* GetRejectExtensions(void) = 0;
 
 protected:
+	bool ReadTrack(ImageInfo* pImageInfo, int nTrack);
+	//bool WriteTrack(ImageInfo* pImageInfo, int nTrack);
+
 	LPBYTE Code62(int sector);
 	void Decode62(LPBYTE imageptr);
 	void DenibblizeTrack (LPBYTE trackimage, BOOL dosorder, int nibbles);

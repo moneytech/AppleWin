@@ -575,8 +575,8 @@ void LoadConfiguration ()
 	RegLoadString(TEXT(REG_PREFS),TEXT(REGVALUE_PREF_START_DIR),1,g_sCurrentDir,MAX_PATH);
 	SetCurrentImageDir();
 
-	Disk_LoadLastDiskImage(0);
-	Disk_LoadLastDiskImage(1);
+	Disk_LoadLastDiskImage(DRIVE_1);
+	Disk_LoadLastDiskImage(DRIVE_2);
 
 	dwTmp = 10;
 	REGLOAD(TEXT(REGVALUE_PRINTER_IDLE_LIMIT), &dwTmp);
@@ -734,7 +734,7 @@ LPSTR GetNextArg(LPSTR lpCmdLine)
 
 //---------------------------------------------------------------------------
 
-int DoDiskInsert(int nDrive, LPSTR szFileName)
+static int DoDiskInsert(int nDrive, LPSTR szFileName)
 {
 	DWORD dwAttributes = GetFileAttributes(szFileName);
 	if(dwAttributes == INVALID_FILE_ATTRIBUTES)
@@ -742,9 +742,8 @@ int DoDiskInsert(int nDrive, LPSTR szFileName)
 		return -1;
 	}
 
-	BOOL bWriteProtected = (dwAttributes & FILE_ATTRIBUTE_READONLY) ? TRUE : FALSE;
-
-	return DiskInsert(nDrive, szFileName, bWriteProtected, 0);
+	ImageError_e Error = DiskInsert(nDrive, szFileName, dwAttributes & FILE_ATTRIBUTE_READONLY, IMAGE_DONT_CREATE);
+	return (Error == eIMAGE_ERROR_NONE) ? 0 : 1;
 }
 
 //---------------------------------------------------------------------------
@@ -921,16 +920,16 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 //MessageBox( NULL, szImageName_drive1, "Disk 1", MB_OK );
 //MessageBox( NULL, szImageName_drive2, "Disk 2", MB_OK );
 
-	int nError = 0;
+	int nError = 0;	// TODO: Show error MsgBox if we get a DiskInsert error
 	if(szImageName_drive1)
 	{
-		nError = DoDiskInsert(0, szImageName_drive1);
+		nError = DoDiskInsert(DRIVE_1, szImageName_drive1);
 		FrameRefreshStatus(DRAW_LEDS | DRAW_BUTTON_DRIVES);
 		bBoot = true;
 	}
 	if(szImageName_drive2)
 	{
-		nError |= DoDiskInsert(1, szImageName_drive2);
+		nError |= DoDiskInsert(DRIVE_2, szImageName_drive2);
 	}
 
 	//
