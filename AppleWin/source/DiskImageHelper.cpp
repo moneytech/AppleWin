@@ -50,7 +50,7 @@ BYTE CImageBase::ms_DiskByte[0x40] =
 	0xF7,0xF9,0xFA,0xFB,0xFC,0xFD,0xFE,0xFF
 };
 
-BYTE CImageBase::ms_SectorNumber[3][0x10] =
+BYTE CImageBase::ms_SectorNumber[NUM_SECTOR_ORDERS][0x10] =
 {
 	{0x00,0x08,0x01,0x09,0x02,0x0A,0x03,0x0B, 0x04,0x0C,0x05,0x0D,0x06,0x0E,0x07,0x0F},
 	{0x00,0x07,0x0E,0x06,0x0D,0x05,0x0C,0x04, 0x0B,0x03,0x0A,0x02,0x09,0x01,0x08,0x0F},
@@ -62,15 +62,17 @@ LPBYTE CImageBase::ms_pWorkBuffer = NULL;
 
 //-------------------------------------
 
-bool CImageBase::ReadTrack(ImageInfo* pImageInfo, int nTrack)
+bool CImageBase::ReadTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize)
 {
-	long Offset = pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE;
+	ZeroMemory(pTrackBuffer, uTrackSize);
+
+	long Offset = pImageInfo->offset + nTrack * uTrackSize;
+	DWORD dwBytesRead;
 
 	if (pImageInfo->file != INVALID_HANDLE_VALUE)
 	{
 		SetFilePointer(pImageInfo->file, Offset, NULL, FILE_BEGIN);
-		DWORD dwBytesRead;
-		ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesRead, NULL);
+		ReadFile(pImageInfo->file, pTrackBuffer, uTrackSize, &dwBytesRead, NULL);
 	}
 	else if (pImageInfo->hGZFile != NULL)
 	{
@@ -78,16 +80,48 @@ bool CImageBase::ReadTrack(ImageInfo* pImageInfo, int nTrack)
 		_ASSERT(NewOffset == Offset);
 		if (NewOffset != Offset)
 			return false;
-		int nLen = gzread(pImageInfo->hGZFile, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		_ASSERT(nLen == TRACK_DENIBBLIZED_SIZE);
-		if (nLen != TRACK_DENIBBLIZED_SIZE)
-			return false;
+		int nLen = gzread(pImageInfo->hGZFile, pTrackBuffer, uTrackSize);
+		dwBytesRead = (DWORD) nLen;
 	}
 	else
 	{
 		_ASSERT(0);
 		return false;
 	}
+
+	_ASSERT(dwBytesRead == uTrackSize);
+	if (dwBytesRead != uTrackSize)
+		return false;
+
+	return true;
+}
+
+//-------------------------------------
+
+bool CImageBase::WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize)
+{
+	long Offset = pImageInfo->offset + nTrack * uTrackSize;
+	DWORD dwBytesWritten;
+
+	if (pImageInfo->file != INVALID_HANDLE_VALUE)
+	{
+		SetFilePointer(pImageInfo->file, Offset, NULL, FILE_BEGIN);
+		WriteFile(pImageInfo->file, pTrackBuffer, uTrackSize, &dwBytesWritten, NULL);
+	}
+	else if (pImageInfo->hGZFile != NULL)
+	{
+		_ASSERT(0);	// TODO
+		return false;
+	}
+	else
+	{
+		_ASSERT(0);
+		return false;
+	}
+
+	_ASSERT(dwBytesWritten == uTrackSize);
+	if (dwBytesWritten != uTrackSize)
+		return false;
 
 	return true;
 }
@@ -227,7 +261,7 @@ void CImageBase::Decode62(LPBYTE imageptr)
 
 //-------------------------------------
 
-void CImageBase::DenibblizeTrack(LPBYTE trackimage, BOOL dosorder, int nibbles)
+void CImageBase::DenibblizeTrack(LPBYTE trackimage, SectorOrder_e SectorOrder, int nibbles)
 {
 	ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 
@@ -274,7 +308,7 @@ void CImageBase::DenibblizeTrack(LPBYTE trackimage, BOOL dosorder, int nibbles)
 			}
 			else if (byteval[2] == 0xAD)
 			{
-				Decode62(ms_pWorkBuffer+(ms_SectorNumber[dosorder][sector] << 8));
+				Decode62(ms_pWorkBuffer+(ms_SectorNumber[SectorOrder][sector] << 8));
 				sector = 0;
 			}
 		}
@@ -283,7 +317,7 @@ void CImageBase::DenibblizeTrack(LPBYTE trackimage, BOOL dosorder, int nibbles)
 
 //-------------------------------------
 
-DWORD CImageBase::NibblizeTrack(LPBYTE trackimagebuffer, BOOL dosorder, int track)
+DWORD CImageBase::NibblizeTrack(LPBYTE trackimagebuffer, SectorOrder_e SectorOrder, int track)
 {
 	ZeroMemory(ms_pWorkBuffer+TRACK_DENIBBLIZED_SIZE, TRACK_DENIBBLIZED_SIZE);
 	LPBYTE imageptr = trackimagebuffer;
@@ -334,7 +368,7 @@ DWORD CImageBase::NibblizeTrack(LPBYTE trackimagebuffer, BOOL dosorder, int trac
 		*(imageptr++) = 0xD5;
 		*(imageptr++) = 0xAA;
 		*(imageptr++) = 0xAD;
-		CopyMemory(imageptr, Code62(ms_SectorNumber[dosorder][sector]), 343);
+		CopyMemory(imageptr, Code62(ms_SectorNumber[SectorOrder][sector]), 343);
 		imageptr += 343;
 		*(imageptr++) = 0xDE;
 		*(imageptr++) = 0xAA;
@@ -487,9 +521,8 @@ public:
 
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
-		ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		ReadTrack(pImageInfo, nTrack);
-		*pNibbles = NibblizeTrack(pTrackImageBuffer, 1, nTrack);
+		ReadTrack(pImageInfo, nTrack, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
+		*pNibbles = NibblizeTrack(pTrackImageBuffer, eDOSOrder, nTrack);
 		if (!enhancedisk)
 			SkewTrack(nTrack, *pNibbles, pTrackImageBuffer);
 	}
@@ -497,10 +530,8 @@ public:
 	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
 	{
 		ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		DenibblizeTrack(pTrackImage, 1, nNibbles);
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE, NULL,FILE_BEGIN);
-		DWORD dwBytesWritten;
-		WriteFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesWritten, NULL);
+		DenibblizeTrack(pTrackImage, eDOSOrder, nNibbles);
+		WriteTrack(pImageInfo, nTrack, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 	}
 
 	virtual bool AllowCreate(void) { return true; }
@@ -524,6 +555,7 @@ public:
 		if (strncmp((const char *)pImage, "SIMSYSTEM_IIE", 13) || (*(pImage+13) > 3))
 			return eMismatch;
 
+		ms_uNumTracksInImage = TRACKS_STANDARD;	// Assume default # tracks
 		return eMatch;
 	}
 
@@ -552,7 +584,7 @@ public:
 			ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 			DWORD bytesread;
 			ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &bytesread, NULL);
-			*pNibbles = NibblizeTrack(pTrackImageBuffer, 2, nTrack);
+			*pNibbles = NibblizeTrack(pTrackImageBuffer, eSIMSYSTEMOrder, nTrack);
 		}
 		// OTHERWISE, IF THIS IMAGE CONTAINS NIBBLE INFORMATION, READ IT DIRECTLY INTO THE TRACK BUFFER
 		else 
@@ -612,20 +644,23 @@ public:
 
 	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
 	{
-		return (dwImageSize == NIB1_TRACK_SIZE*TRACKS_STANDARD) ? eMatch : eMismatch;
+		if (dwImageSize != NIB1_TRACK_SIZE*TRACKS_STANDARD)
+			return eMismatch;
+
+		ms_uNumTracksInImage = TRACKS_STANDARD;
+		return eMatch;
 	}
 
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*NIB1_TRACK_SIZE, NULL, FILE_BEGIN);
-		ReadFile(pImageInfo->file, pTrackImageBuffer, NIB1_TRACK_SIZE, (DWORD*)pNibbles, NULL);
+		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB1_TRACK_SIZE);
+		*pNibbles = NIB1_TRACK_SIZE;
 	}
 
 	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*NIB1_TRACK_SIZE, NULL, FILE_BEGIN);
-		DWORD dwBytesWritten;
-		WriteFile(pImageInfo->file, pTrackImage, nNibbles, &dwBytesWritten, NULL);
+		_ASSERT(nNibbles == NIB1_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
+		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
 	}
 
 	virtual bool AllowCreate(void) { return true; }
@@ -648,20 +683,23 @@ public:
 
 	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
 	{
-		return (dwImageSize == NIB2_TRACK_SIZE*TRACKS_STANDARD) ? eMatch : eMismatch;
+		if (dwImageSize != NIB2_TRACK_SIZE*TRACKS_STANDARD)
+			return eMismatch;
+
+		ms_uNumTracksInImage = TRACKS_STANDARD;
+		return eMatch;
 	}
 
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*NIB2_TRACK_SIZE, NULL, FILE_BEGIN);
-		ReadFile(pImageInfo->file, pTrackImageBuffer, NIB2_TRACK_SIZE, (DWORD*)pNibbles, NULL);
+		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB2_TRACK_SIZE);
+		*pNibbles = NIB2_TRACK_SIZE;
 	}
 
 	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*NIB2_TRACK_SIZE, NULL, FILE_BEGIN);
-		DWORD dwBytesWritten;
-		WriteFile(pImageInfo->file, pTrackImage, nNibbles, &dwBytesWritten, NULL);
+		_ASSERT(nNibbles == NIB2_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
+		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
 	}
 
 	virtual eImageType GetType(void) { return eImageNIB2; }
@@ -713,11 +751,8 @@ public:
 
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE, NULL,FILE_BEGIN);
-		ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		DWORD dwBytesRead;
-		ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesRead, NULL);
-		*pNibbles = NibblizeTrack(pTrackImageBuffer, 0, nTrack);
+		ReadTrack(pImageInfo, nTrack, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
+		*pNibbles = NibblizeTrack(pTrackImageBuffer, eProDOSOrder, nTrack);
 		if (!enhancedisk)
 			SkewTrack(nTrack, *pNibbles, pTrackImageBuffer);
 	}
@@ -725,10 +760,8 @@ public:
 	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
 	{
 		ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-		DenibblizeTrack(pTrackImage, 0, nNibbles);
-		SetFilePointer(pImageInfo->file, pImageInfo->offset+nTrack*TRACK_DENIBBLIZED_SIZE, NULL,FILE_BEGIN);
-		DWORD dwBytesWritten;
-		WriteFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &dwBytesWritten, NULL);
+		DenibblizeTrack(pTrackImage, eProDOSOrder, nNibbles);
+		WriteTrack(pImageInfo, nTrack, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 	}
 
 	virtual eImageType GetType(void) { return eImagePO; }

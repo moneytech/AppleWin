@@ -80,7 +80,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 		BOOL   trackimagedirty;
 		DWORD  spinning;
 		DWORD  writelight;
-		int    nibbles;
+		int    nibbles;		// Init'd by ImageReadTrack()
 	};
 
 static WORD		currdrive       = 0;
@@ -384,7 +384,8 @@ static BYTE __stdcall DiskControlStepper (WORD, WORD address, BYTE, BYTE, ULONG)
   {
     fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
 	const int nNumTracksInImage = ImageGetNumTracks(fptr->imagehandle);
-    int newtrack = MIN(nNumTracksInImage-1, fptr->phase >> 1); // (round half tracks down)
+    const int newtrack = (nNumTracksInImage == 0) ? 0
+												  : MIN(nNumTracksInImage-1, fptr->phase >> 1); // (round half tracks down)
     LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
     if (newtrack != fptr->track)
     {

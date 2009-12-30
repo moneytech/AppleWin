@@ -12,6 +12,7 @@ enum ImageError_e
 	eIMAGE_ERROR_NONE,
 	eIMAGE_ERROR_BAD_POINTER,
 	eIMAGE_ERROR_BAD_SIZE,
+	eIMAGE_ERROR_UNSUPPORTED,
 	eIMAGE_ERROR_UNABLE_TO_OPEN,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
@@ -28,21 +29,20 @@ struct ImageInfo
 	DWORD		offset;
 	bool		bWriteProtected;
 	DWORD		headersize;
-	LPBYTE		header;
+	LPBYTE		header;		// SIMSYSTEM IIe only
 	BOOL		validtrack[TRACKS_MAX];
 	UINT		uNumTracks;
 };
 
-BOOL ImageBoot(HIMAGE);
-void ImageClose(HIMAGE);
+BOOL ImageBoot(const HIMAGE hDiskImage);
+void ImageClose(const HIMAGE hDiskImage);
 void ImageDestroy(void);
 void ImageInitialize(void);
 
-ImageError_e ImageOpen(LPCTSTR imagefilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary);
+ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary);
 
-void ImageReadTrack(HIMAGE imagehandle, int track, int quartertrack, LPBYTE trackimagebuffer, int* nibbles);
-void ImageWriteTrack(HIMAGE imagehandle, int track, int quartertrack, LPBYTE trackimage, int nibbles);
+void ImageReadTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles);
+void ImageWriteTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles);
 
-int ImageGetNumTracks(HIMAGE imagehandle);
-
-bool ImageIsWriteProtected(HIMAGE imagehandle);
+int ImageGetNumTracks(const HIMAGE hDiskImage);
+bool ImageIsWriteProtected(const HIMAGE hDiskImage);

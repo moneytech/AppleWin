@@ -24,14 +24,16 @@ public:
 	virtual char* GetCreateExtensions(void) = 0;
 	virtual char* GetRejectExtensions(void) = 0;
 
+	enum SectorOrder_e {eProDOSOrder, eDOSOrder, eSIMSYSTEMOrder, NUM_SECTOR_ORDERS};
+
 protected:
-	bool ReadTrack(ImageInfo* pImageInfo, int nTrack);
-	//bool WriteTrack(ImageInfo* pImageInfo, int nTrack);
+	bool ReadTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize);
+	bool WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize);
 
 	LPBYTE Code62(int sector);
 	void Decode62(LPBYTE imageptr);
-	void DenibblizeTrack (LPBYTE trackimage, BOOL dosorder, int nibbles);
-	DWORD NibblizeTrack (LPBYTE trackimagebuffer, BOOL dosorder, int track);
+	void DenibblizeTrack (LPBYTE trackimage, SectorOrder_e SectorOrder, int nibbles);
+	DWORD NibblizeTrack (LPBYTE trackimagebuffer, SectorOrder_e SectorOrder, int track);
 	void SkewTrack (int track, int nibbles, LPBYTE trackimagebuffer);
 	bool IsValidImageSize(DWORD uImageSize);
 
@@ -41,7 +43,7 @@ public:
 
 protected:
 	static BYTE ms_DiskByte[0x40];
-	static BYTE ms_SectorNumber[3][0x10];
+	static BYTE ms_SectorNumber[NUM_SECTOR_ORDERS][0x10];
 };
 
 

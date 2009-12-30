@@ -43,9 +43,9 @@ static CDiskImageHelper sg_DiskImageHelper;
 
 //===========================================================================
 
-BOOL ImageBoot(HIMAGE imagehandle)
+BOOL ImageBoot(const HIMAGE hDiskImage)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 	BOOL result = 0;
 
 	if (ptr->pImageType->AllowBoot())
@@ -59,9 +59,9 @@ BOOL ImageBoot(HIMAGE imagehandle)
 
 //===========================================================================
 
-void ImageClose(HIMAGE imagehandle)
+void ImageClose(const HIMAGE hDiskImage)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 
 	if (ptr->file != INVALID_HANDLE_VALUE)
 		CloseHandle(ptr->file);
@@ -134,6 +134,9 @@ static ImageError_e CheckGZipFile(	LPCTSTR imagefilename,
 
 	pImageType = sg_DiskImageHelper.Detect(pFileBuffer, nLen, "", dwOffset);
 	delete [] pFileBuffer;
+
+	if (pImageType && pImageType->GetType() == eImageIIE)
+		return eIMAGE_ERROR_UNSUPPORTED;
 
 	*pWriteProtected_ = 1;	// GZip files are read-only (for now)
 
@@ -303,52 +306,60 @@ ImageError_e ImageOpen(	LPCTSTR imagefilename,
 
 //===========================================================================
 
-void ImageReadTrack(	HIMAGE  imagehandle,
-						int     track,
-						int     quartertrack,
-						LPBYTE  trackimagebuffer,
-						int*    nibbles)
+void ImageReadTrack(	const HIMAGE hDiskImage,
+						const int nTrack,
+						const int nQuarterTrack,
+						LPBYTE pTrackImageBuffer,
+						int* pNibbles)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
-	if (ptr->pImageType->AllowRW() && ptr->validtrack[track])
+	_ASSERT(nTrack >= 0);
+	if (nTrack < 0)
+		return;
+
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
+	if (ptr->pImageType->AllowRW() && ptr->validtrack[nTrack])
 	{
-		ptr->pImageType->Read(ptr, track, quartertrack, trackimagebuffer, nibbles);
+		ptr->pImageType->Read(ptr, nTrack, nQuarterTrack, pTrackImageBuffer, pNibbles);
 	}
 	else
 	{
-		for (*nibbles = 0; *nibbles < NIBBLES; (*nibbles)++)
-			trackimagebuffer[*nibbles] = (BYTE)(rand() & 0xFF);
+		for (*pNibbles = 0; *pNibbles < NIBBLES; (*pNibbles)++)
+			pTrackImageBuffer[*pNibbles] = (BYTE)(rand() & 0xFF);
 	}
 }
 
 //===========================================================================
 
-void ImageWriteTrack(	HIMAGE imagehandle,
-						int    track,
-						int    quartertrack,
-						LPBYTE trackimage,
-						int    nibbles)
+void ImageWriteTrack(	const HIMAGE hDiskImage,
+						const int nTrack,
+						const int nQuarterTrack,
+						LPBYTE pTrackImage,
+						const int nNibbles)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	_ASSERT(nTrack >= 0);
+	if (nTrack < 0)
+		return;
+
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 	if (ptr->pImageType->AllowRW() && !ptr->bWriteProtected)
 	{
-		ptr->pImageType->Write(ptr, track, quartertrack, trackimage, nibbles);
-		ptr->validtrack[track] = 1;
+		ptr->pImageType->Write(ptr, nTrack, nQuarterTrack, pTrackImage, nNibbles);
+		ptr->validtrack[nTrack] = 1;
 	}
 }
 
 //===========================================================================
 
-int ImageGetNumTracks(HIMAGE imagehandle)
+int ImageGetNumTracks(const HIMAGE hDiskImage)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 	return ptr ? ptr->uNumTracks : 0;
 }
 
 //===========================================================================
 
-bool ImageIsWriteProtected(HIMAGE imagehandle)
+bool ImageIsWriteProtected(const HIMAGE hDiskImage)
 {
-	ImageInfo* ptr = (ImageInfo*) imagehandle;
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 	return ptr ? ptr->bWriteProtected : true;
 }
