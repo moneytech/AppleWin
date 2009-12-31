@@ -480,12 +480,13 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 	if (fptr->imagehandle)
 		RemoveDisk(iDrive);
 
+	ZeroMemory(fptr,sizeof(Disk_t ));
+
 	const DWORD dwAttributes = GetFileAttributes(pszImageFilename);
 	if(dwAttributes == INVALID_FILE_ATTRIBUTES)
-		return eIMAGE_ERROR_BAD_FILE;
-
-	ZeroMemory(fptr,sizeof(Disk_t ));
-	fptr->bWriteProtected = bForceWriteProtected ? true : (dwAttributes & FILE_ATTRIBUTE_READONLY);
+		fptr->bWriteProtected = false;	// Assume this is a new file to create
+	else
+		fptr->bWriteProtected = bForceWriteProtected ? true : (dwAttributes & FILE_ATTRIBUTE_READONLY);
 
 	ImageError_e Error = ImageOpen(pszImageFilename,
 		&fptr->imagehandle,

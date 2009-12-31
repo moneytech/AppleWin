@@ -405,6 +405,7 @@ bool CImageBase::IsValidImageSize(DWORD uImageSize)
 	}
 	else
 	{
+		// TODO: Applewin.chm mentions images of size 143,616 bytes ("Disk Image Formats")
 		bValidSize = (  ((uImageSize >= 143105) && (uImageSize <= 143364)) ||
 						 (uImageSize == 143403) ||
 						 (uImageSize == 143488) );

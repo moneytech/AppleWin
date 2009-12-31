@@ -283,7 +283,7 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 	CharLowerBuff(szExt,_tcslen(szExt));
 
 	DWORD dwSize = GetFileSize(hFile, NULL);
-	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks - done before Detect()
+	sg_DiskImageHelper.SetNumTracksInImage(TRACKS_STANDARD);	// Assume default # tracks - done before Detect()
 
 	CImageBase* pImageType = NULL;
 	DWORD dwOffset = 0;
