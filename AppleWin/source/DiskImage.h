@@ -12,30 +12,17 @@ enum ImageError_e
 	eIMAGE_ERROR_NONE,
 	eIMAGE_ERROR_BAD_POINTER,
 	eIMAGE_ERROR_BAD_SIZE,
+	eIMAGE_ERROR_BAD_FILE,
 	eIMAGE_ERROR_UNSUPPORTED,
+	eIMAGE_ERROR_GZ,
 	eIMAGE_ERROR_ZIP,
 	eIMAGE_ERROR_UNABLE_TO_OPEN,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
 };
 
-class CImageBase;
-
-struct ImageInfo
-{
-	TCHAR		filename[MAX_PATH];
-	CImageBase*	pImageType;
-	HANDLE		file;
-	gzFile		hGZFile;
-	unzFile		hZipFile;
-	DWORD		offset;
-	bool		bWriteProtected;
-	BOOL		validtrack[TRACKS_MAX];
-	UINT		uNumTracks;
-};
-
 BOOL ImageBoot(const HIMAGE hDiskImage);
-void ImageClose(const HIMAGE hDiskImage);
+void ImageClose(const HIMAGE hDiskImage, const bool bOpenError=false);
 void ImageDestroy(void);
 void ImageInitialize(void);
 

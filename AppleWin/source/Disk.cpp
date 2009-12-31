@@ -123,7 +123,7 @@ void Disk_LoadLastDiskImage( int iDrive )
 		//	_tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
 		g_bSaveDiskImage = false;
 		// Pass in ptr to local copy of filepath, since RemoveDisk() sets DiskPathFilename = ""
-		DiskInsert(iDrive, sFilePath, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
+		DiskInsert(iDrive, sFilePath, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
 		g_bSaveDiskImage = true;
 	}
 	//else MessageBox(NULL,"Reg Key/Value not found",pRegKey,MB_OK);
@@ -474,21 +474,25 @@ void DiskInitialize ()
 
 //===========================================================================
 
-ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bWriteProtected, const bool bCreateIfNecessary)
+ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bForceWriteProtected, const bool bCreateIfNecessary)
 {
 	Disk_t * fptr = &g_aFloppyDisk[iDrive];
 	if (fptr->imagehandle)
 		RemoveDisk(iDrive);
 
-	ZeroMemory(fptr,sizeof(Disk_t ));
-	fptr->bWriteProtected = bWriteProtected;
+	const DWORD dwAttributes = GetFileAttributes(pszImageFilename);
+	if(dwAttributes == INVALID_FILE_ATTRIBUTES)
+		return eIMAGE_ERROR_BAD_FILE;
 
-	ImageError_e error = ImageOpen(pszImageFilename,
+	ZeroMemory(fptr,sizeof(Disk_t ));
+	fptr->bWriteProtected = bForceWriteProtected ? true : (dwAttributes & FILE_ATTRIBUTE_READONLY);
+
+	ImageError_e Error = ImageOpen(pszImageFilename,
 		&fptr->imagehandle,
 		&fptr->bWriteProtected,
 		bCreateIfNecessary);
 
-	if (error == eIMAGE_ERROR_NONE)
+	if (Error == eIMAGE_ERROR_NONE)
 	{
 		GetImageTitle(pszImageFilename, fptr);
 		DiskPathFilename[iDrive] = pszImageFilename;
@@ -503,7 +507,7 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 
 	Disk_SaveLastDiskImage( iDrive );
 	
-	return error;
+	return Error;
 }
 
 //===========================================================================
@@ -536,6 +540,14 @@ void DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error)
 			pszImageFilename);
 		break;
 
+	case eIMAGE_ERROR_BAD_FILE:
+		wsprintf(
+			szBuffer,
+			TEXT("Unable to use the file %s\nbecause the ")
+			TEXT("OS can't access it."),
+			pszImageFilename);
+		break;
+
 	case eIMAGE_ERROR_UNSUPPORTED:
 		wsprintf(
 			szBuffer,
@@ -544,11 +556,12 @@ void DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error)
 			pszImageFilename);
 		break;
 
+	case eIMAGE_ERROR_GZ:
 	case eIMAGE_ERROR_ZIP:
 		wsprintf(
 			szBuffer,
-			TEXT("Unable to use the zip file %s\nbecause the ")
-			TEXT("zip disk image is corrupt/unsupported."),
+			TEXT("Unable to use the compressed file %s\nbecause the ")
+			TEXT("compressed disk image is corrupt/unsupported."),
 			pszImageFilename);
 		break;
 
@@ -612,31 +625,47 @@ bool Disk_IsDriveEmpty(const int iDrive)
 }
 
 //===========================================================================
-static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULONG) {
-  Disk_t * fptr = &g_aFloppyDisk[currdrive];
-  diskaccessed = 1;
-  if ((!fptr->trackimagedata) && fptr->imagehandle)
-    ReadTrack(currdrive);
-  if (!fptr->trackimagedata)
-    return 0xFF;
-  BYTE result = 0;
-  if ((!floppywritemode) || (!fptr->bWriteProtected))
-    if (floppywritemode)
-      if (floppylatch & 0x80) {
-        *(fptr->trackimage+fptr->byte) = floppylatch;
-        fptr->trackimagedirty = 1;
-      }
-      else
-        return 0;
-    else
-      result = *(fptr->trackimage+fptr->byte);
-  if (0)
-  {
-    LOG_DISK("nib %4X = %2X\r", fptr->byte, result);
-  }
-  if (++fptr->byte >= fptr->nibbles)
-    fptr->byte = 0;
-  return result;
+static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULONG)
+{
+	Disk_t * fptr = &g_aFloppyDisk[currdrive];
+
+	diskaccessed = 1;
+
+	if (!fptr->trackimagedata && fptr->imagehandle)
+		ReadTrack(currdrive);
+
+	if (!fptr->trackimagedata)
+		return 0xFF;
+
+	BYTE result = 0;
+
+	if (!floppywritemode || !fptr->bWriteProtected)
+	{
+		if (floppywritemode)
+		{
+			if (floppylatch & 0x80)
+			{
+				*(fptr->trackimage+fptr->byte) = floppylatch;
+				fptr->trackimagedirty = 1;
+			}
+			else
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			result = *(fptr->trackimage+fptr->byte);
+		}
+	}
+
+	if (0)
+		{ LOG_DISK("nib %4X = %2X\r", fptr->byte, result); }
+
+	if (++fptr->byte >= fptr->nibbles)
+		fptr->byte = 0;
+
+	return result;
 }
 
 //===========================================================================
@@ -650,29 +679,29 @@ void DiskReset()
 //===========================================================================
 void DiskSelectImage (int drive, LPSTR pszFilename)
 {
-  TCHAR directory[MAX_PATH] = TEXT("");
-  TCHAR filename[MAX_PATH];
-  TCHAR title[40];
+	TCHAR directory[MAX_PATH] = TEXT("");
+	TCHAR filename[MAX_PATH];
+	TCHAR title[40];
 
-  strcpy(filename, pszFilename);
+	strcpy(filename, pszFilename);
 
-  RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,directory,MAX_PATH);
-  _tcscpy(title,TEXT("Select Disk Image For Drive "));
-  _tcscat(title,drive ? TEXT("2") : TEXT("1"));
+	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,directory,MAX_PATH);
+	_tcscpy(title,TEXT("Select Disk Image For Drive "));
+	_tcscat(title,drive ? TEXT("2") : TEXT("1"));
 
-  OPENFILENAME ofn;
-  ZeroMemory(&ofn,sizeof(OPENFILENAME));
-  ofn.lStructSize     = sizeof(OPENFILENAME);
-  ofn.hwndOwner       = g_hFrameWindow;
-  ofn.hInstance       = g_hInstance;
-  ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
-                        TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz,*.zip)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
-                        TEXT("All Files\0*.*\0");
-  ofn.lpstrFile       = filename;
-  ofn.nMaxFile        = MAX_PATH;
-  ofn.lpstrInitialDir = directory;
-  ofn.Flags           = OFN_PATHMUSTEXIST;
-  ofn.lpstrTitle      = title;
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn,sizeof(OPENFILENAME));
+	ofn.lStructSize     = sizeof(OPENFILENAME);
+	ofn.hwndOwner       = g_hFrameWindow;
+	ofn.hInstance       = g_hInstance;
+	ofn.lpstrFilter     =	TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
+							TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz,*.zip)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
+							TEXT("All Files\0*.*\0");
+	ofn.lpstrFile       = filename;
+	ofn.nMaxFile        = MAX_PATH;
+	ofn.lpstrInitialDir = directory;
+	ofn.Flags           = OFN_PATHMUSTEXIST;
+	ofn.lpstrTitle      = title;
 
 	if (GetOpenFileName(&ofn))
 	{

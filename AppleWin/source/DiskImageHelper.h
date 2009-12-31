@@ -5,6 +5,25 @@ struct ImageInfo;
 enum eImageType { eImageUNKNOWN, eImageAPL, eImageDO,  eImageIIE,  eImageNIB1,  eImageNIB2,  eImagePO,  eImagePRG };
 enum eDetectResult {eMismatch, ePossibleMatch, eMatch};
 
+class CImageBase;
+enum FileType_e { eFileNormal, eFileGZip, eFileZip };
+
+struct ImageInfo
+{
+	TCHAR		szFilename[MAX_PATH];
+	CImageBase*	pImageType;
+	FileType_e	FileType;
+	HANDLE		hFile;
+	DWORD		uOffset;
+	bool		bWriteProtected;
+	BYTE		ValidTrack[TRACKS_MAX];
+	UINT		uNumTracks;
+	BYTE*		pImageBuffer;
+	UINT		uImageSize;
+};
+
+//-------------------------------------
+
 class CImageBase
 {
 public:
@@ -19,6 +38,7 @@ public:
 	virtual bool AllowBoot(void) { return false; }		// Only:    APL and PRG
 	virtual bool AllowRW(void) { return true; }			// All but: APL and PRG
 	virtual bool AllowCreate(void) { return false; }	// WE CREATE ONLY DOS ORDER (DO) OR 6656-NIBBLE (NIB) FORMAT FILES
+	virtual UINT GetTrackSizeForCreate(void) { return 0; }
 
 	virtual eImageType GetType(void) = 0;
 	virtual char* GetCreateExtensions(void) = 0;
@@ -46,6 +66,7 @@ protected:
 	static BYTE ms_SectorNumber[NUM_SECTOR_ORDERS][0x10];
 };
 
+//-------------------------------------
 
 class CDiskImageHelper
 {

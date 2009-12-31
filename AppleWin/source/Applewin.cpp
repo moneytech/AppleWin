@@ -736,13 +736,7 @@ LPSTR GetNextArg(LPSTR lpCmdLine)
 
 static int DoDiskInsert(int nDrive, LPSTR szFileName)
 {
-	DWORD dwAttributes = GetFileAttributes(szFileName);
-	if(dwAttributes == INVALID_FILE_ATTRIBUTES)
-	{
-		return -1;
-	}
-
-	ImageError_e Error = DiskInsert(nDrive, szFileName, dwAttributes & FILE_ATTRIBUTE_READONLY, IMAGE_DONT_CREATE);
+	ImageError_e Error = DiskInsert(nDrive, szFileName, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
 	return (Error == eIMAGE_ERROR_NONE) ? 0 : 1;
 }
 

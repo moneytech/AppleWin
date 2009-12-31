@@ -707,7 +707,7 @@ LRESULT CALLBACK FrameWndProc (
     case WM_DDE_EXECUTE: {
       LPTSTR filename = (LPTSTR)GlobalLock((HGLOBAL)lparam);
 //MessageBox( NULL, filename, "DDE Exec", MB_OK );
-      ImageError_e Error = DiskInsert(0, filename, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
+      ImageError_e Error = DiskInsert(0, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
       if (Error == eIMAGE_ERROR_NONE)
 	  {
         if (!g_bIsFullScreen)
@@ -760,7 +760,7 @@ LRESULT CALLBACK FrameWndProc (
       rect.right  = rect.left+BUTTONCX+1;
       rect.top    = buttony+BTN_DRIVE2*BUTTONCY+1;
       rect.bottom = rect.top+BUTTONCY;
-      ImageError_e Error = DiskInsert(PtInRect(&rect,point) ? 1 : 0, filename, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
+      ImageError_e Error = DiskInsert(PtInRect(&rect,point) ? DRIVE_2 : DRIVE_1, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
       if (Error == eIMAGE_ERROR_NONE)
 	  {
         if (!g_bIsFullScreen)

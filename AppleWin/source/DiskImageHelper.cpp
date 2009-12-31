@@ -64,70 +64,8 @@ LPBYTE CImageBase::ms_pWorkBuffer = NULL;
 
 bool CImageBase::ReadTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize)
 {
-	ZeroMemory(pTrackBuffer, uTrackSize);
-
-	long Offset = pImageInfo->offset + nTrack * uTrackSize;
-	DWORD dwBytesRead;
-
-	if (pImageInfo->file != INVALID_HANDLE_VALUE)
-	{
-		SetFilePointer(pImageInfo->file, Offset, NULL, FILE_BEGIN);
-		ReadFile(pImageInfo->file, pTrackBuffer, uTrackSize, &dwBytesRead, NULL);
-	}
-	else if (pImageInfo->hGZFile != NULL)
-	{
-		z_off_t NewOffset = gzseek(pImageInfo->hGZFile, Offset, SEEK_SET);
-		_ASSERT(NewOffset == Offset);
-		if (NewOffset != Offset)
-			return false;
-		int nLen = gzread(pImageInfo->hGZFile, pTrackBuffer, uTrackSize);
-		dwBytesRead = (DWORD) nLen;
-	}
-	else if (pImageInfo->hZipFile != NULL)
-	{
-		int nRes = unzOpenCurrentFile(pImageInfo->hZipFile);
-		if (nRes != UNZ_OK)
-			return false;
-
-		if (pImageInfo->offset)
-		{
-			int nLen = unzReadCurrentFile(pImageInfo->hZipFile, pTrackBuffer, pImageInfo->offset);
-			if (nLen != pImageInfo->offset)
-			{
-				unzCloseCurrentFile(pImageInfo->hZipFile);
-				return false;
-			}
-
-			Offset -= pImageInfo->offset;
-		}
-
-		// Last read is for our track
-		do
-		{
-			int nLen = unzReadCurrentFile(pImageInfo->hZipFile, pTrackBuffer, uTrackSize);
-			if (nLen != uTrackSize)
-			{
-				unzCloseCurrentFile(pImageInfo->hZipFile);
-				return false;
-			}
-
-			Offset -= uTrackSize;
-		}
-		while (Offset >= 0);
-
-		unzCloseCurrentFile(pImageInfo->hZipFile);
-
-		dwBytesRead = (DWORD) uTrackSize;
-	}
-	else
-	{
-		_ASSERT(0);
-		return false;
-	}
-
-	_ASSERT(dwBytesRead == uTrackSize);
-	if (dwBytesRead != uTrackSize)
-		return false;
+	const long Offset = pImageInfo->uOffset + nTrack * uTrackSize;
+	memcpy(pTrackBuffer, &pImageInfo->pImageBuffer[Offset], uTrackSize);
 
 	return true;
 }
@@ -136,20 +74,36 @@ bool CImageBase::ReadTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrac
 
 bool CImageBase::WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrackBuffer, const UINT uTrackSize)
 {
-	long Offset = pImageInfo->offset + nTrack * uTrackSize;
-	DWORD dwBytesWritten;
+	const long Offset = pImageInfo->uOffset + nTrack * uTrackSize;
+	memcpy(&pImageInfo->pImageBuffer[Offset], pTrackBuffer, uTrackSize);
 
-	if (pImageInfo->file != INVALID_HANDLE_VALUE)
+	if (pImageInfo->FileType == eFileNormal && pImageInfo->hFile != INVALID_HANDLE_VALUE)
 	{
-		SetFilePointer(pImageInfo->file, Offset, NULL, FILE_BEGIN);
-		WriteFile(pImageInfo->file, pTrackBuffer, uTrackSize, &dwBytesWritten, NULL);
+		SetFilePointer(pImageInfo->hFile, Offset, NULL, FILE_BEGIN);
+
+		DWORD dwBytesWritten;
+		WriteFile(pImageInfo->hFile, pTrackBuffer, uTrackSize, &dwBytesWritten, NULL);
+		_ASSERT(dwBytesWritten == uTrackSize);
+		if (dwBytesWritten != uTrackSize)
+			return false;
 	}
-	else if (pImageInfo->hGZFile != NULL)
+	else if (pImageInfo->FileType == eFileGZip)
 	{
-		_ASSERT(0);	// TODO
-		return false;
+		// Write entire compressed image each time (dirty track change or dirty disk removal)
+		gzFile hGZFile = gzopen(pImageInfo->szFilename, "wb");
+		if (hGZFile == NULL)
+			return false;
+
+		int nLen = gzwrite(hGZFile, pImageInfo->pImageBuffer, pImageInfo->uImageSize);
+		if (nLen != pImageInfo->uImageSize)
+			return false;
+
+		int nRes = gzclose(hGZFile);
+		hGZFile = NULL;
+		if (nRes != Z_OK)
+			return false;
 	}
-	else if (pImageInfo->hZipFile != NULL)
+	else if (pImageInfo->FileType == eFileZip)
 	{
 		_ASSERT(0);	// TODO
 		return false;
@@ -159,10 +113,6 @@ bool CImageBase::WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTra
 		_ASSERT(0);
 		return false;
 	}
-
-	_ASSERT(dwBytesWritten == uTrackSize);
-	if (dwBytesWritten != uTrackSize)
-		return false;
 
 	return true;
 }
@@ -477,12 +427,12 @@ public:
 
 	virtual bool Boot(ImageInfo* ptr)
 	{
-		SetFilePointer(ptr->file, 0, NULL, FILE_BEGIN);
+		SetFilePointer(ptr->hFile, 0, NULL, FILE_BEGIN);
 		WORD address = 0;
 		WORD length  = 0;
 		DWORD bytesread;
-		ReadFile(ptr->file, &address, sizeof(WORD), &bytesread, NULL);
-		ReadFile(ptr->file, &length , sizeof(WORD), &bytesread, NULL);
+		ReadFile(ptr->hFile, &address, sizeof(WORD), &bytesread, NULL);
+		ReadFile(ptr->hFile, &length , sizeof(WORD), &bytesread, NULL);
 		if ((((WORD)(address+length)) <= address) ||
 			(address >= 0xC000) ||
 			(address+length-1 >= 0xC000))
@@ -490,7 +440,7 @@ public:
 			return false;
 		}
 
-		ReadFile(ptr->file, mem+address, length, &bytesread, NULL);
+		ReadFile(ptr->hFile, mem+address, length, &bytesread, NULL);
 		int loop = 192;
 		while (loop--)
 			*(memdirty+loop) = 0xFF;
@@ -576,6 +526,7 @@ public:
 	}
 
 	virtual bool AllowCreate(void) { return true; }
+	virtual UINT GetTrackSizeForCreate(void) { return TRACK_DENIBBLIZED_SIZE; }
 
 	virtual eImageType GetType(void) { return eImageDO; }
 	virtual char* GetCreateExtensions(void) { return ".do;.dsk"; }
@@ -613,18 +564,18 @@ public:
 			}
 			ZeroMemory(m_pHeader, 88);
 			DWORD dwBytesRead;
-			SetFilePointer(pImageInfo->file, 0, NULL,FILE_BEGIN);
-			ReadFile(pImageInfo->file, m_pHeader, 88, &dwBytesRead, NULL);
+			SetFilePointer(pImageInfo->hFile, 0, NULL,FILE_BEGIN);
+			ReadFile(pImageInfo->hFile, m_pHeader, 88, &dwBytesRead, NULL);
 		}
 
 		// IF THIS IMAGE CONTAINS USER DATA, READ THE TRACK AND NIBBLIZE IT
 		if (*(m_pHeader+13) <= 2)
 		{
 			ConvertSectorOrder(m_pHeader+14);
-			SetFilePointer(pImageInfo->file, nTrack*TRACK_DENIBBLIZED_SIZE+30, NULL, FILE_BEGIN);
+			SetFilePointer(pImageInfo->hFile, nTrack*TRACK_DENIBBLIZED_SIZE+30, NULL, FILE_BEGIN);
 			ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 			DWORD bytesread;
-			ReadFile(pImageInfo->file, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &bytesread, NULL);
+			ReadFile(pImageInfo->hFile, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &bytesread, NULL);
 			*pNibbles = NibblizeTrack(pTrackImageBuffer, eSIMSYSTEMOrder, nTrack);
 		}
 		// OTHERWISE, IF THIS IMAGE CONTAINS NIBBLE INFORMATION, READ IT DIRECTLY INTO THE TRACK BUFFER
@@ -634,10 +585,10 @@ public:
 			LONG Offset = 88;
 			while (nTrack--)
 				Offset += *(LPWORD)(m_pHeader+nTrack*2+14);
-			SetFilePointer(pImageInfo->file, Offset, NULL,FILE_BEGIN);
+			SetFilePointer(pImageInfo->hFile, Offset, NULL,FILE_BEGIN);
 			ZeroMemory(pTrackImageBuffer, *pNibbles);
 			DWORD dwBytesRead;
-			ReadFile(pImageInfo->file, pTrackImageBuffer, *pNibbles, &dwBytesRead, NULL);
+			ReadFile(pImageInfo->hFile, pTrackImageBuffer, *pNibbles, &dwBytesRead, NULL);
 		}
 	}
 
@@ -708,6 +659,7 @@ public:
 	}
 
 	virtual bool AllowCreate(void) { return true; }
+	virtual UINT GetTrackSizeForCreate(void) { return NIB1_TRACK_SIZE; }
 
 	virtual eImageType GetType(void) { return eImageNIB1; }
 	virtual char* GetCreateExtensions(void) { return ".nib"; }
@@ -823,14 +775,14 @@ public:
 
 	virtual bool Boot(ImageInfo* pImageInfo)
 	{
-		SetFilePointer(pImageInfo->file, 5, NULL, FILE_BEGIN);
+		SetFilePointer(pImageInfo->hFile, 5, NULL, FILE_BEGIN);
 
 		WORD address = 0;
 		WORD length  = 0;
 		DWORD bytesread;
 
-		ReadFile(pImageInfo->file, &address, sizeof(WORD), &bytesread, NULL);
-		ReadFile(pImageInfo->file, &length , sizeof(WORD), &bytesread, NULL);
+		ReadFile(pImageInfo->hFile, &address, sizeof(WORD), &bytesread, NULL);
+		ReadFile(pImageInfo->hFile, &length , sizeof(WORD), &bytesread, NULL);
 
 		length <<= 1;
 		if ((((WORD)(address+length)) <= address) ||
@@ -840,8 +792,8 @@ public:
 			return false;
 		}
 
-		SetFilePointer(pImageInfo->file,128,NULL,FILE_BEGIN);
-		ReadFile(pImageInfo->file, mem+address, length, &bytesread, NULL);
+		SetFilePointer(pImageInfo->hFile,128,NULL,FILE_BEGIN);
+		ReadFile(pImageInfo->hFile, mem+address, length, &bytesread, NULL);
 
 		int loop = 192;
 		while (loop--)

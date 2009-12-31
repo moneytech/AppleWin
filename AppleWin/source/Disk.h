@@ -9,16 +9,16 @@ enum Drive_e
 	NUM_DRIVES
 };
 
-const bool IMAGE_NOT_WRITE_PROTECTED = false;
-const bool IMAGE_WRITE_PROTECTED = true;
+const bool IMAGE_USE_FILES_WRITE_PROTECT_STATUS = false;
+const bool IMAGE_FORCE_WRITE_PROTECTED = true;
 const bool IMAGE_DONT_CREATE = false;
 const bool IMAGE_CREATE = true;
 
 extern BOOL enhancedisk;
 extern string DiskPathFilename[NUM_DRIVES];
 
-void    DiskInitialize (); // DiskManagerStartup()
-void    DiskDestroy (); // no, doesn't "destroy" the disk image.  DiskManagerShutdown()
+void    DiskInitialize (); // DiskIIManagerStartup()
+void    DiskDestroy (); // no, doesn't "destroy" the disk image.  DiskIIManagerShutdown()
 
 void    DiskBoot ();
 void    DiskEject( const int iDrive );
@@ -36,7 +36,7 @@ enum Disk_Status_e
 void    DiskGetLightStatus (int *pDisk1Status_,int *pDisk2Status_);
 
 LPCTSTR DiskGetName (int);
-ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bWriteProtected, const bool bCreateIfNecessary);
+ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bForceWriteProtected, const bool bCreateIfNecessary);
 BOOL    DiskIsSpinning ();
 void    DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error);
 void    DiskReset ();
