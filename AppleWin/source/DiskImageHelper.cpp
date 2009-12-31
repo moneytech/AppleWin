@@ -83,6 +83,42 @@ bool CImageBase::ReadTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTrac
 		int nLen = gzread(pImageInfo->hGZFile, pTrackBuffer, uTrackSize);
 		dwBytesRead = (DWORD) nLen;
 	}
+	else if (pImageInfo->hZipFile != NULL)
+	{
+		int nRes = unzOpenCurrentFile(pImageInfo->hZipFile);
+		if (nRes != UNZ_OK)
+			return false;
+
+		if (pImageInfo->offset)
+		{
+			int nLen = unzReadCurrentFile(pImageInfo->hZipFile, pTrackBuffer, pImageInfo->offset);
+			if (nLen != pImageInfo->offset)
+			{
+				unzCloseCurrentFile(pImageInfo->hZipFile);
+				return false;
+			}
+
+			Offset -= pImageInfo->offset;
+		}
+
+		// Last read is for our track
+		do
+		{
+			int nLen = unzReadCurrentFile(pImageInfo->hZipFile, pTrackBuffer, uTrackSize);
+			if (nLen != uTrackSize)
+			{
+				unzCloseCurrentFile(pImageInfo->hZipFile);
+				return false;
+			}
+
+			Offset -= uTrackSize;
+		}
+		while (Offset >= 0);
+
+		unzCloseCurrentFile(pImageInfo->hZipFile);
+
+		dwBytesRead = (DWORD) uTrackSize;
+	}
 	else
 	{
 		_ASSERT(0);
@@ -109,6 +145,11 @@ bool CImageBase::WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTra
 		WriteFile(pImageInfo->file, pTrackBuffer, uTrackSize, &dwBytesWritten, NULL);
 	}
 	else if (pImageInfo->hGZFile != NULL)
+	{
+		_ASSERT(0);	// TODO
+		return false;
+	}
+	else if (pImageInfo->hZipFile != NULL)
 	{
 		_ASSERT(0);	// TODO
 		return false;
@@ -547,8 +588,8 @@ public:
 class CIIeImage : public CImageBase
 {
 public:
-	CIIeImage(void) {}
-	virtual ~CIIeImage(void) {}
+	CIIeImage(void) : m_pHeader(NULL) {}
+	virtual ~CIIeImage(void) { delete [] m_pHeader; }
 
 	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
 	{
@@ -562,24 +603,24 @@ public:
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
 	{
 		// IF WE HAVEN'T ALREADY DONE SO, READ THE IMAGE FILE HEADER
-		if (!pImageInfo->header)
+		if (!m_pHeader)
 		{
-			pImageInfo->header = (LPBYTE) VirtualAlloc(NULL, 88, MEM_COMMIT, PAGE_READWRITE);
-			if (!pImageInfo->header)
+			m_pHeader = (LPBYTE) VirtualAlloc(NULL, 88, MEM_COMMIT, PAGE_READWRITE);
+			if (!m_pHeader)
 			{
 				*pNibbles = 0;
 				return;
 			}
-			ZeroMemory(pImageInfo->header, 88);
-			DWORD bytesread;
+			ZeroMemory(m_pHeader, 88);
+			DWORD dwBytesRead;
 			SetFilePointer(pImageInfo->file, 0, NULL,FILE_BEGIN);
-			ReadFile(pImageInfo->file, pImageInfo->header, 88, &bytesread, NULL);
+			ReadFile(pImageInfo->file, m_pHeader, 88, &dwBytesRead, NULL);
 		}
 
 		// IF THIS IMAGE CONTAINS USER DATA, READ THE TRACK AND NIBBLIZE IT
-		if (*(pImageInfo->header+13) <= 2)
+		if (*(m_pHeader+13) <= 2)
 		{
-			ConvertSectorOrder(pImageInfo->header+14);
+			ConvertSectorOrder(m_pHeader+14);
 			SetFilePointer(pImageInfo->file, nTrack*TRACK_DENIBBLIZED_SIZE+30, NULL, FILE_BEGIN);
 			ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
 			DWORD bytesread;
@@ -589,14 +630,14 @@ public:
 		// OTHERWISE, IF THIS IMAGE CONTAINS NIBBLE INFORMATION, READ IT DIRECTLY INTO THE TRACK BUFFER
 		else 
 		{
-			*pNibbles = *(LPWORD)(pImageInfo->header+nTrack*2+14);
-			DWORD offset = 88;
+			*pNibbles = *(LPWORD)(m_pHeader+nTrack*2+14);
+			LONG Offset = 88;
 			while (nTrack--)
-				offset += *(LPWORD)(pImageInfo->header+nTrack*2+14);
-			SetFilePointer(pImageInfo->file,offset,NULL,FILE_BEGIN);
+				Offset += *(LPWORD)(m_pHeader+nTrack*2+14);
+			SetFilePointer(pImageInfo->file, Offset, NULL,FILE_BEGIN);
 			ZeroMemory(pTrackImageBuffer, *pNibbles);
-			DWORD bytesread;
-			ReadFile(pImageInfo->file, pTrackImageBuffer, *pNibbles, &bytesread, NULL);
+			DWORD dwBytesRead;
+			ReadFile(pImageInfo->file, pTrackImageBuffer, *pNibbles, &dwBytesRead, NULL);
 		}
 	}
 
@@ -629,6 +670,9 @@ private:
 			ms_SectorNumber[2][loop] = found;
 		}
 	}
+
+private:
+	LPBYTE m_pHeader;
 };
 
 //-------------------------------------

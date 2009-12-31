@@ -1507,8 +1507,6 @@ void ProcessButtonClick (int button)
 
 void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive) 
 {		
-	HMENU hmenu;            // menu template
-	HMENU hmenuTrackPopup;  // shortcut menu
 	//This is the default installation path of CiderPress. It shall not be left blank, otherwise  an explorer window will be open.
 	TCHAR PathToCiderPress[MAX_PATH] = "C:\\Program Files\\faddenSoft\\CiderPress\\CiderPress.exe";
 	RegLoadString(TEXT("Configuration"), REGVALUE_CIDERPRESSLOC, 1, PathToCiderPress,MAX_PATH);
@@ -1522,13 +1520,13 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 		
 	//  Load the menu template containing the shortcut menu from the 
 	//  application's resources. 
-	hmenu = LoadMenu(g_hInstance, MAKEINTRESOURCE(ID_MENU_DISK_POPUP)); 
+	HMENU hmenu = LoadMenu(g_hInstance, MAKEINTRESOURCE(ID_MENU_DISK_POPUP));	// menu template
 	if (hmenu == NULL) 
 		return; 
 
-	// Get the first shortcut menu in the menu template. This is the 
-	// menu that TrackPopupMenu displays. 
-	hmenuTrackPopup = GetSubMenu(hmenu, 0); 
+	// Get the first shortcut menu in the menu template.
+	// This is the menu that TrackPopupMenu displays. 
+	HMENU hmenuTrackPopup = GetSubMenu(hmenu, 0);	// shortcut menu
 
 	// TrackPopup uses screen coordinates, so convert the 
 	// coordinates of the mouse click to screen coordinates. 
@@ -1542,6 +1540,9 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 
 		CheckMenuItem(hmenu, iMenuItem, MF_CHECKED);
 	}
+
+	if (Disk_IsDriveEmpty(iDrive))
+		EnableMenuItem(hmenu, ID_DISKMENU_EJECT, MF_GRAYED);
 
 	if (Disk_ImageIsWriteProtected(iDrive))
 	{
@@ -1572,44 +1573,43 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 		//if(!filename1.compare("\"\"") == false) //Do not use this, for some reason it does not work!!!
 		if(!filename1.compare(sFileNameEmpty) )		
 		{
-			int MB_Result = 0;
-			MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
-			if (MB_Result == 6) //6= Yes
+			int MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
+			if (MB_Result == IDYES)
 			{
 				if (FileExists (PathToCiderPress ))
 				{
 					HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
 				}
 				else					
-					{
+				{
 					MessageBox( NULL,
-				"CiderPress not found!\n"
-				"Please install CiderPress in case it is not \n"
-				"or set the path to it from Configuration/Disk otherwise."
-					, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
-					}
+						"CiderPress not found!\n"
+						"Please install CiderPress in case it is not \n"
+						"or set the path to it from Configuration/Disk otherwise."
+							, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
 				}
 			}
+		}
 		else
 		{
 			if (FileExists (PathToCiderPress ))
 			{
-			HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , NULL, SW_SHOWNORMAL);
+				HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, filename1.c_str() , NULL, SW_SHOWNORMAL);
 			}
 			else
 			{
-			MessageBox( NULL,
-				"CiderPress not found!\n"
-				"Please install CiderPress in case it is not \n"
-				"or set the path to it from Configuration/Disk otherwise."
-				, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
+				MessageBox( NULL,
+					"CiderPress not found!\n"
+					"Please install CiderPress in case it is not \n"
+					"or set the path to it from Configuration/Disk otherwise."
+					, "CiderPress not found" ,MB_ICONINFORMATION|MB_OK);
 			}
 		}
-
-
-	// Destroy the menu. 
-	DestroyMenu(hmenu); 
 	}
+
+	// Destroy the menu.
+	BOOL bRes = DestroyMenu(hmenu);
+	_ASSERT(bRes);
 }
 
 

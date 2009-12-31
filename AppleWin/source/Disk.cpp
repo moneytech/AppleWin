@@ -70,7 +70,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 	{
 		TCHAR  imagename[ MAX_DISK_IMAGE_NAME + 1 ];
 		TCHAR  fullname [ MAX_DISK_FULL_NAME  + 1 ];
-		HIMAGE imagehandle;
+		HIMAGE imagehandle;					// Init'd by DiskInsert() -> ImageOpen()
 		int    track;
 		LPBYTE trackimage;
 		int    phase;
@@ -80,7 +80,7 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 		BOOL   trackimagedirty;
 		DWORD  spinning;
 		DWORD  writelight;
-		int    nibbles;		// Init'd by ImageReadTrack()
+		int    nibbles;						// Init'd by ReadTrack() -> ImageReadTrack()
 	};
 
 static WORD		currdrive       = 0;
@@ -89,8 +89,8 @@ static Disk_t	g_aFloppyDisk[NUM_DRIVES];
 static BYTE		floppylatch     = 0;
 static BOOL		floppymotoron   = 0;
 static BOOL		floppywritemode = 0;
-static WORD		phases; // state bits for stepper magnet phases 0 - 3
-static bool		bSaveDiskImage = true;
+static WORD		phases;						// state bits for stepper magnet phases 0 - 3
+static bool		g_bSaveDiskImage = true;	// Save the DiskImage name to Registry
 
 static void CheckSpinning();
 static Disk_Status_e GetDriveLightStatus( const int iDrive );
@@ -121,10 +121,10 @@ void Disk_LoadLastDiskImage( int iDrive )
 #endif
 
 		//	_tcscat(imagefilename,TEXT("MASTER.DSK")); // TODO: Should remember last disk by user
-		bSaveDiskImage = false;
+		g_bSaveDiskImage = false;
 		// Pass in ptr to local copy of filepath, since RemoveDisk() sets DiskPathFilename = ""
 		DiskInsert(iDrive, sFilePath, IMAGE_NOT_WRITE_PROTECTED, IMAGE_DONT_CREATE);
-		bSaveDiskImage = true;
+		g_bSaveDiskImage = true;
 	}
 	//else MessageBox(NULL,"Reg Key/Value not found",pRegKey,MB_OK);
 }
@@ -134,7 +134,7 @@ void Disk_SaveLastDiskImage( int iDrive )
 {
 	const char *pFileName = DiskPathFilename[iDrive].c_str();
 
-	if( bSaveDiskImage )
+	if( g_bSaveDiskImage )
 	{
 		if( iDrive == DRIVE_1 )
 			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_1,1,pFileName );
@@ -403,13 +403,13 @@ static BYTE __stdcall DiskControlStepper (WORD, WORD address, BYTE, BYTE, ULONG)
 //===========================================================================
 void DiskDestroy ()
 {
-	bSaveDiskImage = false;
+	g_bSaveDiskImage = false;
 	RemoveDisk(0);
 
-	bSaveDiskImage = false;
+	g_bSaveDiskImage = false;
 	RemoveDisk(1);
 
-	bSaveDiskImage = true;
+	g_bSaveDiskImage = true;
 }
 
 //===========================================================================
@@ -513,26 +513,43 @@ BOOL DiskIsSpinning ()
 }
 
 //===========================================================================
-void DiskNotifyInvalidImage (LPCTSTR imagefilename,int error)
+void DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error)
 {
-	TCHAR buffer[MAX_PATH+128];
+	TCHAR szBuffer[MAX_PATH+128];
 
-	switch (error)
+	switch (Error)
 	{
-
-	case 1:
+	case eIMAGE_ERROR_UNABLE_TO_OPEN:
+	case eIMAGE_ERROR_UNABLE_TO_OPEN_GZ:
+	case eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP:
 		wsprintf(
-			buffer,
+			szBuffer,
 			TEXT("Unable to open the file %s."),
-			(LPCTSTR)imagefilename);
+			pszImageFilename);
 		break;
 
-	case 2:
+	case eIMAGE_ERROR_BAD_SIZE:
 		wsprintf(
-			buffer,
+			szBuffer,
+			TEXT("Unable to use the file %s\nbecause the ")
+			TEXT("disk image is an unsupported size."),
+			pszImageFilename);
+		break;
+
+	case eIMAGE_ERROR_UNSUPPORTED:
+		wsprintf(
+			szBuffer,
 			TEXT("Unable to use the file %s\nbecause the ")
 			TEXT("disk image format is not recognized."),
-			(LPCTSTR)imagefilename);
+			pszImageFilename);
+		break;
+
+	case eIMAGE_ERROR_ZIP:
+		wsprintf(
+			szBuffer,
+			TEXT("Unable to use the zip file %s\nbecause the ")
+			TEXT("zip disk image is corrupt/unsupported."),
+			pszImageFilename);
 		break;
 
 	default:
@@ -542,7 +559,7 @@ void DiskNotifyInvalidImage (LPCTSTR imagefilename,int error)
 
 	MessageBox(
 		g_hFrameWindow,
-		buffer,
+		szBuffer,
 		g_pAppTitle,
 		MB_ICONEXCLAMATION | MB_SETFOREGROUND);
 }
@@ -581,6 +598,17 @@ bool Disk_ImageIsWriteProtected(const int iDrive)
 
 	Disk_t *pFloppy = &g_aFloppyDisk[iDrive];
 	return ImageIsWriteProtected(pFloppy->imagehandle);
+}
+
+//===========================================================================
+
+bool Disk_IsDriveEmpty(const int iDrive)
+{
+	if (!IsDriveValid(iDrive))
+		return true;
+
+	Disk_t *pFloppy = &g_aFloppyDisk[iDrive];
+	return pFloppy->imagehandle == NULL;
 }
 
 //===========================================================================
@@ -637,8 +665,8 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
   ofn.lStructSize     = sizeof(OPENFILENAME);
   ofn.hwndOwner       = g_hFrameWindow;
   ofn.hInstance       = g_hInstance;
-  ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz\0")
-                        TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz\0")
+  ofn.lpstrFilter     = TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
+                        TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz,*.zip)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
                         TEXT("All Files\0*.*\0");
   ofn.lpstrFile       = filename;
   ofn.nMaxFile        = MAX_PATH;
@@ -857,7 +885,7 @@ DWORD DiskGetSnapshot(SS_CARD_DISK2* pSS, DWORD dwSlot)
 	pSS->floppymotoron		= floppymotoron;
 	pSS->floppywritemode	= floppywritemode;
 
-	for(UINT i=0; i<2; i++)
+	for(UINT i=0; i<NUM_DRIVES; i++)
 	{
 		strcpy(pSS->Unit[i].szFileName, g_aFloppyDisk[i].fullname);
 		pSS->Unit[i].track				= g_aFloppyDisk[i].track;
@@ -894,7 +922,7 @@ DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 	floppymotoron	= pSS->floppymotoron;
 	floppywritemode	= pSS->floppywritemode;
 
-	for(UINT i=0; i<2; i++)
+	for(UINT i=0; i<NUM_DRIVES; i++)
 	{
 		bool bImageError = false;
 

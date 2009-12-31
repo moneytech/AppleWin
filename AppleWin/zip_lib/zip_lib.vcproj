@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="zlib"
-	ProjectGUID="{7935B998-C713-42AE-8F6D-9FF9080A1B1B}"
-	RootNamespace="zlib"
+	Name="zip_lib"
+	ProjectGUID="{709278B8-C583-4BD8-90DE-4E4F35A3BD8B}"
+	RootNamespace="zip_lib"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -41,9 +41,10 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="..\zlib"
 				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS"
 				MinimalRebuild="true"
-				BasicRuntimeChecks="0"
+				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -104,6 +105,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
+				AdditionalIncludeDirectories="..\zlib"
 				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -149,100 +151,52 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\adler32.c"
+				RelativePath=".\crypt.h"
 				>
 			</File>
 			<File
-				RelativePath=".\compress.c"
+				RelativePath=".\ioapi.c"
 				>
 			</File>
 			<File
-				RelativePath=".\crc32.c"
+				RelativePath=".\ioapi.h"
 				>
 			</File>
 			<File
-				RelativePath=".\crc32.h"
+				RelativePath=".\iowin32.c"
 				>
 			</File>
 			<File
-				RelativePath=".\deflate.c"
+				RelativePath=".\iowin32.h"
 				>
 			</File>
 			<File
-				RelativePath=".\deflate.h"
+				RelativePath=".\mztools.c"
 				>
 			</File>
 			<File
-				RelativePath=".\gzio.c"
+				RelativePath=".\mztools.h"
 				>
 			</File>
 			<File
-				RelativePath=".\infback.c"
+				RelativePath=".\unzip.c"
 				>
 			</File>
 			<File
-				RelativePath=".\inffast.c"
+				RelativePath=".\unzip.h"
 				>
 			</File>
 			<File
-				RelativePath=".\inffast.h"
+				RelativePath=".\zip.c"
 				>
 			</File>
 			<File
-				RelativePath=".\inffixed.h"
-				>
-			</File>
-			<File
-				RelativePath=".\inflate.c"
-				>
-			</File>
-			<File
-				RelativePath=".\inflate.h"
-				>
-			</File>
-			<File
-				RelativePath=".\inftrees.c"
-				>
-			</File>
-			<File
-				RelativePath=".\inftrees.h"
-				>
-			</File>
-			<File
-				RelativePath=".\trees.c"
-				>
-			</File>
-			<File
-				RelativePath=".\trees.h"
-				>
-			</File>
-			<File
-				RelativePath=".\uncompr.c"
-				>
-			</File>
-			<File
-				RelativePath=".\zconf.h"
-				>
-			</File>
-			<File
-				RelativePath=".\zconf.in.h"
-				>
-			</File>
-			<File
-				RelativePath=".\zlib.h"
-				>
-			</File>
-			<File
-				RelativePath=".\zutil.c"
-				>
-			</File>
-			<File
-				RelativePath=".\zutil.h"
+				RelativePath=".\zip.h"
 				>
 			</File>
 		</Filter>
 		<File
-			RelativePath=".\README"
+			RelativePath=".\ChangeLogUnzip"
 			>
 		</File>
 	</Files>

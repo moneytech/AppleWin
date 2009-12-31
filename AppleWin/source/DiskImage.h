@@ -13,6 +13,7 @@ enum ImageError_e
 	eIMAGE_ERROR_BAD_POINTER,
 	eIMAGE_ERROR_BAD_SIZE,
 	eIMAGE_ERROR_UNSUPPORTED,
+	eIMAGE_ERROR_ZIP,
 	eIMAGE_ERROR_UNABLE_TO_OPEN,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
@@ -26,10 +27,9 @@ struct ImageInfo
 	CImageBase*	pImageType;
 	HANDLE		file;
 	gzFile		hGZFile;
+	unzFile		hZipFile;
 	DWORD		offset;
 	bool		bWriteProtected;
-	DWORD		headersize;
-	LPBYTE		header;		// SIMSYSTEM IIe only
 	BOOL		validtrack[TRACKS_MAX];
 	UINT		uNumTracks;
 };

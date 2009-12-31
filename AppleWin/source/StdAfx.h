@@ -32,6 +32,8 @@
 #include <vector>
 
 #include "zlib.h"
+#include "unzip.h"
+#include "iowin32.h"
 
 #include "Common.h"
 #include "Structs.h"

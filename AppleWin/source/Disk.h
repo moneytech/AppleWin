@@ -38,7 +38,7 @@ void    DiskGetLightStatus (int *pDisk1Status_,int *pDisk2Status_);
 LPCTSTR DiskGetName (int);
 ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bWriteProtected, const bool bCreateIfNecessary);
 BOOL    DiskIsSpinning ();
-void    DiskNotifyInvalidImage (LPCTSTR,int);
+void    DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error);
 void    DiskReset ();
 bool    DiskGetProtect( const int iDrive );
 void    DiskSetProtect( const int iDrive, const bool bWriteProtect );
@@ -53,3 +53,4 @@ void Disk_LoadLastDiskImage( int iDrive );
 void Disk_SaveLastDiskImage( int iDrive );
 
 bool Disk_ImageIsWriteProtected(const int iDrive);
+bool Disk_IsDriveEmpty(const int iDrive);

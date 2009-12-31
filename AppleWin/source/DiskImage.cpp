@@ -33,10 +33,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 
 
-#ifndef GZ_SUFFIX
-#  define GZ_SUFFIX ".gz"
-#endif
-#define SUFFIX_LEN (sizeof(GZ_SUFFIX)-1)
+#define GZ_SUFFIX ".gz"
+#define GZ_SUFFIX_LEN (sizeof(GZ_SUFFIX)-1)
+
+#define ZIP_SUFFIX ".zip"
+#define ZIP_SUFFIX_LEN (sizeof(ZIP_SUFFIX)-1)
 
 
 static CDiskImageHelper sg_DiskImageHelper;
@@ -67,6 +68,8 @@ void ImageClose(const HIMAGE hDiskImage)
 		CloseHandle(ptr->file);
 	if (ptr->hGZFile != NULL)
 		gzclose(ptr->hGZFile);
+	if (ptr->hZipFile != NULL)
+		unzClose(ptr->hZipFile);
 
 	for (UINT track = 0; track < ptr->uNumTracks; track++)
 	{
@@ -76,9 +79,6 @@ void ImageClose(const HIMAGE hDiskImage)
 			break;
 		}
 	}
-
-	if (ptr->header)
-		VirtualFree(ptr->header, 0, MEM_RELEASE);
 
 	VirtualFree(ptr, 0, MEM_RELEASE);
 }
@@ -128,17 +128,96 @@ static ImageError_e CheckGZipFile(	LPCTSTR imagefilename,
 		return eIMAGE_ERROR_BAD_SIZE;
 	}
 
+	//
+
 	dwSize = nLen;
 
 	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks
 
-	pImageType = sg_DiskImageHelper.Detect(pFileBuffer, nLen, "", dwOffset);
+	pImageType = sg_DiskImageHelper.Detect(pFileBuffer, dwSize, "", dwOffset);
 	delete [] pFileBuffer;
 
 	if (pImageType && pImageType->GetType() == eImageIIE)
 		return eIMAGE_ERROR_UNSUPPORTED;
 
 	*pWriteProtected_ = 1;	// GZip files are read-only (for now)
+
+	return eIMAGE_ERROR_NONE;
+}
+
+//-------------------------------------
+
+static ImageError_e CheckZipFile(	LPCTSTR imagefilename,
+									CImageBase*& pImageType,
+									DWORD& dwOffset,
+									unzFile& hZipFile,
+									DWORD& dwSize,
+									bool* pWriteProtected_)
+{
+	zlib_filefunc_def ffunc;
+	fill_win32_filefunc(&ffunc);
+	hZipFile = unzOpen2(imagefilename,&ffunc);
+	if (hZipFile == NULL)
+		return eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP;
+
+	unz_global_info global_info;
+	int nRes = unzGetGlobalInfo(hZipFile, &global_info);
+	if (nRes != UNZ_OK)
+		return eIMAGE_ERROR_ZIP;
+
+	nRes = unzGoToFirstFile(hZipFile);
+	if (nRes != UNZ_OK)
+		return eIMAGE_ERROR_ZIP;
+
+	unz_file_info file_info;
+	char szFilename[MAX_PATH];
+	char szExtraField[MAX_PATH];
+	char szComment[MAX_PATH];
+	nRes = unzGetCurrentFileInfo(hZipFile, &file_info, szFilename, MAX_PATH, szExtraField, MAX_PATH, szComment, MAX_PATH);
+	if (nRes != UNZ_OK)
+		return eIMAGE_ERROR_ZIP;
+
+	const UINT uFileSize = file_info.uncompressed_size;
+	BYTE* pFileBuffer = new BYTE[uFileSize];
+	if (!pFileBuffer)
+	{
+		unzClose(hZipFile);
+		return eIMAGE_ERROR_BAD_POINTER;
+	}
+
+	nRes = unzOpenCurrentFile(hZipFile);
+	if (nRes != UNZ_OK)
+		return eIMAGE_ERROR_ZIP;
+
+	int nLen = unzReadCurrentFile(hZipFile, pFileBuffer, uFileSize);
+	if (nLen < 0)
+	{
+		unzCloseCurrentFile(hZipFile);	// Must CloseCurrentFile before Close
+		unzClose(hZipFile);
+		return eIMAGE_ERROR_UNSUPPORTED;
+	}
+
+	nRes = unzCloseCurrentFile(hZipFile);
+	if (nRes != UNZ_OK)
+		return eIMAGE_ERROR_ZIP;
+
+	//
+
+	dwSize = nLen;
+
+	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks
+
+	pImageType = sg_DiskImageHelper.Detect(pFileBuffer, dwSize, "", dwOffset);
+	delete [] pFileBuffer;
+
+	if (pImageType && pImageType->GetType() == eImageIIE)
+	{
+		unzCloseCurrentFile(hZipFile);	// Must CloseCurrentFile before Close
+		unzClose(hZipFile);
+		return eIMAGE_ERROR_UNSUPPORTED;
+	}
+
+	*pWriteProtected_ = 1;	// Zip files are read-only (for now)
 
 	return eIMAGE_ERROR_NONE;
 }
@@ -250,13 +329,20 @@ ImageError_e ImageOpen(	LPCTSTR imagefilename,
 	CImageBase* pImageType = NULL;
 	DWORD dwOffset = 0;
 	gzFile hGZFile = NULL;
+	unzFile hZipFile = NULL;
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	DWORD dwSize = 0;
 
     const size_t uStrLen = strlen(imagefilename);
-    if (uStrLen > SUFFIX_LEN && strcmp(imagefilename+uStrLen-SUFFIX_LEN, GZ_SUFFIX) == 0)
+    if (uStrLen > GZ_SUFFIX_LEN && strcmp(imagefilename+uStrLen-GZ_SUFFIX_LEN, GZ_SUFFIX) == 0)
 	{
 		ImageError_e Err = CheckGZipFile(imagefilename, pImageType, dwOffset, hGZFile, dwSize, pWriteProtected_);
+		if (Err != eIMAGE_ERROR_NONE)
+			return Err;
+	}
+    else if (uStrLen > ZIP_SUFFIX_LEN && strcmp(imagefilename+uStrLen-ZIP_SUFFIX_LEN, ZIP_SUFFIX) == 0)
+	{
+		ImageError_e Err = CheckZipFile(imagefilename, pImageType, dwOffset, hZipFile, dwSize, pWriteProtected_);
 		if (Err != eIMAGE_ERROR_NONE)
 			return Err;
 	}
@@ -285,6 +371,7 @@ ImageError_e ImageOpen(	LPCTSTR imagefilename,
 			pImageInfo->pImageType		= pImageType;
 			pImageInfo->file			= hFile;
 			pImageInfo->hGZFile			= hGZFile;
+			pImageInfo->hZipFile		= hZipFile;
 			pImageInfo->offset			= dwOffset;
 			pImageInfo->bWriteProtected	= *pWriteProtected_;
 			pImageInfo->uNumTracks		= uNumTracksInImage;
