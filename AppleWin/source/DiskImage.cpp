@@ -148,7 +148,7 @@ static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInf
 
 //-------------------------------------
 
-static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_)
+static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_, std::string& strArchiveFilename)
 {
 	zlib_filefunc_def ffunc;
 	fill_win32_filefunc(&ffunc);
@@ -168,11 +168,12 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 
 	unz_file_info file_info;
 	char szFilename[MAX_PATH];
-	char szExtraField[MAX_PATH];
-	char szComment[MAX_PATH];
-	nRes = unzGetCurrentFileInfo(hZipFile, &file_info, szFilename, MAX_PATH, szExtraField, MAX_PATH, szComment, MAX_PATH);
+	memset(szFilename, 0, sizeof(szFilename));
+	nRes = unzGetCurrentFileInfo(hZipFile, &file_info, szFilename, MAX_PATH, NULL, 0, NULL, 0);
 	if (nRes != UNZ_OK)
 		return eIMAGE_ERROR_ZIP;
+
+	strArchiveFilename = szFilename;
 
 	const UINT uFileSize = file_info.uncompressed_size;
 	pImageInfo->pImageBuffer = new BYTE[uFileSize];
@@ -346,7 +347,8 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 						HIMAGE* hDiskImage_,
 						bool* pWriteProtected_,
-						const bool bCreateIfNecessary)
+						const bool bCreateIfNecessary,
+						std::string& strArchiveFilename)
 {
 	if (! (pszImageFilename && hDiskImage_ && pWriteProtected_ && sg_DiskImageHelper.GetWorkBuffer()))
 		return eIMAGE_ERROR_BAD_POINTER;
@@ -371,7 +373,7 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 	}
     else if (uStrLen > ZIP_SUFFIX_LEN && strcmp(pszImageFilename+uStrLen-ZIP_SUFFIX_LEN, ZIP_SUFFIX) == 0)
 	{
-		Err = CheckZipFile(pszImageFilename, pImageInfo, pWriteProtected_);
+		Err = CheckZipFile(pszImageFilename, pImageInfo, pWriteProtected_, strArchiveFilename);
 	}
 	else
 	{
@@ -420,7 +422,7 @@ void ImageReadTrack(	const HIMAGE hDiskImage,
 	}
 	else
 	{
-		for (*pNibbles = 0; *pNibbles < NIBBLES; (*pNibbles)++)
+		for (*pNibbles = 0; *pNibbles < NIBBLES_PER_TRACK; (*pNibbles)++)
 			pTrackImageBuffer[*pNibbles] = (BYTE)(rand() & 0xFF);
 	}
 }

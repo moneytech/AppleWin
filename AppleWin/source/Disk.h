@@ -22,7 +22,7 @@ void    DiskDestroy (); // no, doesn't "destroy" the disk image.  DiskIIManagerS
 
 void    DiskBoot ();
 void    DiskEject( const int iDrive );
-LPCTSTR DiskGetFullName (int);
+LPCTSTR DiskGetFullName(const int iDrive);
 
 
 enum Disk_Status_e
@@ -35,7 +35,7 @@ enum Disk_Status_e
 };
 void    DiskGetLightStatus (int *pDisk1Status_,int *pDisk2Status_);
 
-LPCTSTR DiskGetName (int);
+LPCTSTR DiskGetName(const int iDrive);
 ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool bForceWriteProtected, const bool bCreateIfNecessary);
 BOOL    DiskIsSpinning ();
 void    DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error);

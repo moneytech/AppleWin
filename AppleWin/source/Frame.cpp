@@ -1148,7 +1148,7 @@ LRESULT CALLBACK FrameWndProc (
 		}
 		break;
 
-    case WM_NOTIFY:
+    case WM_NOTIFY:	// Tooltips for Drive buttons
       if(((LPNMTTDISPINFO)lparam)->hdr.hwndFrom == tooltipwindow &&
          ((LPNMTTDISPINFO)lparam)->hdr.code == TTN_GETDISPINFO)
         ((LPNMTTDISPINFO)lparam)->lpszText =

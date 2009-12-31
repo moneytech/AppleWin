@@ -58,8 +58,8 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 
 // Public _________________________________________________________________________________________
 
-	BOOL enhancedisk = 1;
-	string DiskPathFilename[NUM_DRIVES];
+	BOOL enhancedisk = 1;					// TODO: Make static & add accessor funcs
+	string DiskPathFilename[NUM_DRIVES];	// TODO: Move this into Disk_t & add accessor funcs
 
 // Private ________________________________________________________________________________________
 
@@ -68,8 +68,8 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 
 	struct Disk_t
 	{
-		TCHAR  imagename[ MAX_DISK_IMAGE_NAME + 1 ];
-		TCHAR  fullname [ MAX_DISK_FULL_NAME  + 1 ];
+		TCHAR  imagename[ MAX_DISK_IMAGE_NAME + 1 ];	// <FILENAME> (ie. no extension)
+		TCHAR  fullname [ MAX_DISK_FULL_NAME  + 1 ];	// <FILENAME.EXT>
 		HIMAGE imagehandle;					// Init'd by DiskInsert() -> ImageOpen()
 		int    track;
 		LPBYTE trackimage;
@@ -433,11 +433,11 @@ void DiskEject( const int iDrive )
 
 
 //===========================================================================
-LPCTSTR DiskGetFullName (int drive) {
-  return g_aFloppyDisk[drive].fullname;
+
+LPCTSTR DiskGetFullName(const int iDrive)
+{
+	return g_aFloppyDisk[iDrive].fullname;
 }
-
-
 
 //===========================================================================
 void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
@@ -452,10 +452,11 @@ void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 }
 
 //===========================================================================
-LPCTSTR DiskGetName (int drive) {
-  return g_aFloppyDisk[drive].imagename;
-}
 
+LPCTSTR DiskGetName(const int iDrive)
+{
+	return g_aFloppyDisk[iDrive].imagename;
+}
 
 //===========================================================================
 
@@ -488,14 +489,21 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 	else
 		fptr->bWriteProtected = bForceWriteProtected ? true : (dwAttributes & FILE_ATTRIBUTE_READONLY);
 
+	std::string strArchiveFilename;	// Get the filename from the ZIP archive
+
 	ImageError_e Error = ImageOpen(pszImageFilename,
 		&fptr->imagehandle,
 		&fptr->bWriteProtected,
-		bCreateIfNecessary);
+		bCreateIfNecessary,
+		strArchiveFilename);
 
 	if (Error == eIMAGE_ERROR_NONE)
 	{
-		GetImageTitle(pszImageFilename, fptr);
+		if (strArchiveFilename.empty())
+			GetImageTitle(pszImageFilename, fptr);
+		else
+			GetImageTitle(strArchiveFilename.c_str(), fptr);
+
 		DiskPathFilename[iDrive] = pszImageFilename;
 
 		//MessageBox( NULL, imagefilename, fptr->imagename, MB_OK );

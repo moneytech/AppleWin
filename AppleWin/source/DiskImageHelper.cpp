@@ -636,7 +636,7 @@ public:
 	CNib1Image(void) {}
 	virtual ~CNib1Image(void) {}
 
-	static const UINT NIB1_TRACK_SIZE = NIBBLES;
+	static const UINT NIB1_TRACK_SIZE = NIBBLES_PER_TRACK;
 
 	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
 	{

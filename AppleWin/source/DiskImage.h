@@ -1,6 +1,6 @@
 #pragma once
 
-#define NIBBLES 6656
+#define NIBBLES_PER_TRACK 0x1A00
 #define TRACK_DENIBBLIZED_SIZE (16 * 256)	// #Sectors x Sector-size
 
 #define	TRACKS_STANDARD	35
@@ -26,7 +26,7 @@ void ImageClose(const HIMAGE hDiskImage, const bool bOpenError=false);
 void ImageDestroy(void);
 void ImageInitialize(void);
 
-ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary);
+ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary, std::string& strArchiveFilename);
 
 void ImageReadTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles);
 void ImageWriteTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles);
