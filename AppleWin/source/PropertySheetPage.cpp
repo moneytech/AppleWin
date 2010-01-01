@@ -975,13 +975,15 @@ static BOOL CALLBACK DiskDlgProc (HWND   window,
 		switch (LOWORD(wparam))
 		{
 		case IDC_DISK1:
-			DiskSelect(0);
-			SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(0));
+			DiskSelect(DRIVE_1);
+			SendDlgItemMessage(window,IDC_EDIT_DISK1,WM_SETTEXT,0,(LPARAM)DiskGetFullName(DRIVE_1));
+			FrameRefreshStatus(DRAW_BUTTON_DRIVES);
 			break;
 
 		case IDC_DISK2:
-			DiskSelect(1);
-			SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(1));
+			DiskSelect(DRIVE_2);
+			SendDlgItemMessage(window,IDC_EDIT_DISK2,WM_SETTEXT,0,(LPARAM)DiskGetFullName(DRIVE_2));
+			FrameRefreshStatus(DRAW_BUTTON_DRIVES);
 			break;
 
 		case IDC_HDD1:
@@ -1072,7 +1074,7 @@ static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 	TCHAR szFilename[MAX_PATH];
 	
 	// Attempt to use drive1's image name as the name for the .aws file
-	LPCTSTR pDiskName0 = DiskGetName(0);
+	LPCTSTR pDiskName0 = DiskGetBaseName(DRIVE_1);
 	if (pDiskName0 && pDiskName0[0])
 	{
 		strcpy(szFilename, pDiskName0);

@@ -319,9 +319,10 @@ static void DrawButton (HDC passdc, int number) {
     SetTextColor(dc,RGB(0,0,0));
     SetTextAlign(dc,TA_CENTER | TA_TOP);
     SetBkMode(dc,TRANSPARENT);
+	LPCTSTR pszBaseName = DiskGetBaseName(number-BTN_DRIVE1);
     ExtTextOut(dc,x+offset+22,rect.top,ETO_CLIPPED,&rect,
-               DiskGetName(number-BTN_DRIVE1),
-               MIN(8,_tcslen(DiskGetName(number-BTN_DRIVE1))),
+               pszBaseName,
+               MIN(8,_tcslen(pszBaseName)),
                NULL);
   }
   if (!passdc)
@@ -707,7 +708,7 @@ LRESULT CALLBACK FrameWndProc (
     case WM_DDE_EXECUTE: {
       LPTSTR filename = (LPTSTR)GlobalLock((HGLOBAL)lparam);
 //MessageBox( NULL, filename, "DDE Exec", MB_OK );
-      ImageError_e Error = DiskInsert(0, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
+      ImageError_e Error = DiskInsert(DRIVE_1, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
       if (Error == eIMAGE_ERROR_NONE)
 	  {
         if (!g_bIsFullScreen)
@@ -719,7 +720,7 @@ LRESULT CALLBACK FrameWndProc (
       }
       else
       {
-        DiskNotifyInvalidImage(filename, Error);
+        DiskNotifyInvalidImage(DRIVE_1, filename, Error);
       }
       GlobalUnlock((HGLOBAL)lparam);
       break;
@@ -760,7 +761,8 @@ LRESULT CALLBACK FrameWndProc (
       rect.right  = rect.left+BUTTONCX+1;
       rect.top    = buttony+BTN_DRIVE2*BUTTONCY+1;
       rect.bottom = rect.top+BUTTONCY;
-      ImageError_e Error = DiskInsert(PtInRect(&rect,point) ? DRIVE_2 : DRIVE_1, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
+	  const int iDrive = PtInRect(&rect,point) ? DRIVE_2 : DRIVE_1;
+      ImageError_e Error = DiskInsert(iDrive, filename, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
       if (Error == eIMAGE_ERROR_NONE)
 	  {
         if (!g_bIsFullScreen)
@@ -774,7 +776,7 @@ LRESULT CALLBACK FrameWndProc (
       }
       else
 	  {
-        DiskNotifyInvalidImage(filename, Error);
+        DiskNotifyInvalidImage(iDrive, filename, Error);
 	  }
       DragFinish((HDROP)wparam);
       break;
@@ -1152,7 +1154,7 @@ LRESULT CALLBACK FrameWndProc (
       if(((LPNMTTDISPINFO)lparam)->hdr.hwndFrom == tooltipwindow &&
          ((LPNMTTDISPINFO)lparam)->hdr.code == TTN_GETDISPINFO)
         ((LPNMTTDISPINFO)lparam)->lpszText =
-          (LPTSTR)DiskGetFullName(((LPNMTTDISPINFO)lparam)->hdr.idFrom);
+          (LPTSTR)DiskGetFullDiskFilename(((LPNMTTDISPINFO)lparam)->hdr.idFrom);
       break;
 
     case WM_PAINT:

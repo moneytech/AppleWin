@@ -31,14 +31,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 #include "..\resource\resource.h"
 
-static BYTE __stdcall DiskControlMotor (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskControlStepper (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskEnable (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskReadWrite (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskSetLatchValue (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskSetReadMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-
 #define LOG_DISK_ENABLED 0
 
 // __VA_ARGS__ not supported on MSVC++ .NET 7.x
@@ -69,7 +61,8 @@ static BYTE __stdcall DiskSetWriteMode (WORD pc, WORD addr, BYTE bWrite, BYTE d,
 	struct Disk_t
 	{
 		TCHAR  imagename[ MAX_DISK_IMAGE_NAME + 1 ];	// <FILENAME> (ie. no extension)
-		TCHAR  fullname [ MAX_DISK_FULL_NAME  + 1 ];	// <FILENAME.EXT>
+		TCHAR  fullname [ MAX_DISK_FULL_NAME  + 1 ];	// <FILENAME.EXT> or <FILENAME.zip>  : This is persisted to the snapshot file
+		string strFilenameInZip;						// 0x00           or <FILENAME.EXT>
 		HIMAGE imagehandle;					// Init'd by DiskInsert() -> ImageOpen()
 		int    track;
 		LPBYTE trackimage;
@@ -102,7 +95,8 @@ static void WriteTrack (int drive);
 // ________________________________________________________________________________________________
 
 //===========================================================================
-void Disk_LoadLastDiskImage( int iDrive )
+
+void Disk_LoadLastDiskImage(const int iDrive)
 {
 	char sFilePath[ MAX_PATH + 1];
 	sFilePath[0] = 0;
@@ -130,7 +124,8 @@ void Disk_LoadLastDiskImage( int iDrive )
 }
 
 //===========================================================================
-void Disk_SaveLastDiskImage( int iDrive )
+
+void Disk_SaveLastDiskImage(const int iDrive)
 {
 	const char *pFileName = DiskPathFilename[iDrive].c_str();
 
@@ -144,7 +139,9 @@ void Disk_SaveLastDiskImage( int iDrive )
 }
 
 //===========================================================================
-void CheckSpinning () {
+
+static void CheckSpinning(void)
+{
   DWORD modechange = (floppymotoron && !g_aFloppyDisk[currdrive].spinning);
   if (floppymotoron)
     g_aFloppyDisk[currdrive].spinning = 20000;
@@ -153,7 +150,8 @@ void CheckSpinning () {
 }
 
 //===========================================================================
-Disk_Status_e GetDriveLightStatus( const int iDrive )
+
+static Disk_Status_e GetDriveLightStatus(const int iDrive)
 {
 	if (IsDriveValid( iDrive ))
 	{
@@ -177,7 +175,8 @@ Disk_Status_e GetDriveLightStatus( const int iDrive )
 }
 
 //===========================================================================
-void GetImageTitle (LPCTSTR imagefilename, Disk_t * fptr)
+
+static void GetImageTitle(LPCTSTR imagefilename, Disk_t* fptr)
 {
 	TCHAR   imagetitle[ MAX_DISK_FULL_NAME+1 ];
 	LPCTSTR startpos = imagefilename;
@@ -222,17 +221,11 @@ void GetImageTitle (LPCTSTR imagefilename, Disk_t * fptr)
 
 
 //===========================================================================
-bool IsDriveValid( const int iDrive )
+
+static bool IsDriveValid(const int iDrive)
 {
-	if (iDrive < 0)
-		return false;
-
-	if (iDrive >= NUM_DRIVES)
-		return false;
-
-	return true;
+	return (iDrive >= 0 && iDrive < NUM_DRIVES);
 }
-
 
 //===========================================================================
 
@@ -298,6 +291,7 @@ static void RemoveDisk (int iDrive)
 
 	memset( pFloppy->imagename, 0, MAX_DISK_IMAGE_NAME+1 );
 	memset( pFloppy->fullname , 0, MAX_DISK_FULL_NAME +1 );
+	pFloppy->strFilenameInZip = "";
 	DiskPathFilename[iDrive] = "";
 
 	Disk_SaveLastDiskImage( iDrive );
@@ -434,11 +428,29 @@ void DiskEject( const int iDrive )
 
 //===========================================================================
 
+// Return the file or zip name
+// . Used by Property Sheet Page (Disk)
 LPCTSTR DiskGetFullName(const int iDrive)
 {
 	return g_aFloppyDisk[iDrive].fullname;
 }
 
+// Return the filename
+// . Used by Drive Buttons' tooltips
+LPCTSTR DiskGetFullDiskFilename(const int iDrive)
+{
+	if (!g_aFloppyDisk[iDrive].strFilenameInZip.empty())
+		return g_aFloppyDisk[iDrive].strFilenameInZip.c_str();
+
+	return DiskGetFullName(iDrive);
+}
+
+// Return the imagename
+// . Used by Drive Button's icons & Property Sheet Page (Save snapshot)
+LPCTSTR DiskGetBaseName(const int iDrive)
+{
+	return g_aFloppyDisk[iDrive].imagename;
+}
 //===========================================================================
 void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 {
@@ -452,16 +464,6 @@ void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 }
 
 //===========================================================================
-
-LPCTSTR DiskGetName(const int iDrive)
-{
-	return g_aFloppyDisk[iDrive].imagename;
-}
-
-//===========================================================================
-
-BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
 void DiskInitialize ()
 {
@@ -489,20 +491,15 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 	else
 		fptr->bWriteProtected = bForceWriteProtected ? true : (dwAttributes & FILE_ATTRIBUTE_READONLY);
 
-	std::string strArchiveFilename;	// Get the filename from the ZIP archive
-
 	ImageError_e Error = ImageOpen(pszImageFilename,
 		&fptr->imagehandle,
 		&fptr->bWriteProtected,
 		bCreateIfNecessary,
-		strArchiveFilename);
+		fptr->strFilenameInZip);
 
 	if (Error == eIMAGE_ERROR_NONE)
 	{
-		if (strArchiveFilename.empty())
-			GetImageTitle(pszImageFilename, fptr);
-		else
-			GetImageTitle(strArchiveFilename.c_str(), fptr);
+		GetImageTitle(pszImageFilename, fptr);
 
 		DiskPathFilename[iDrive] = pszImageFilename;
 
@@ -526,7 +523,7 @@ BOOL DiskIsSpinning ()
 }
 
 //===========================================================================
-void DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error)
+void DiskNotifyInvalidImage(const int iDrive, LPCTSTR pszImageFilename, const ImageError_e Error)
 {
 	TCHAR szBuffer[MAX_PATH+128];
 
@@ -563,6 +560,16 @@ void DiskNotifyInvalidImage(LPCTSTR pszImageFilename, const ImageError_e Error)
 			TEXT("Unable to use the file %s\nbecause the ")
 			TEXT("disk image format is not recognized."),
 			pszImageFilename);
+		break;
+
+	case eIMAGE_ERROR_UNSUPPORTED_MULTI_ZIP:
+		wsprintf(
+			szBuffer,
+			TEXT("Unable to use the file %s\nbecause the ")
+			TEXT("first file (%s) in this multi-zip archive is not recognized.\n")
+			TEXT("Try unzipping and using the disk images directly.\n"),
+			pszImageFilename,
+			g_aFloppyDisk[iDrive].strFilenameInZip.c_str());
 		break;
 
 	case eIMAGE_ERROR_GZ:
@@ -729,15 +736,16 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 		}
 		else
 		{
-			DiskNotifyInvalidImage(filename, Error);
+			DiskNotifyInvalidImage(drive, filename, Error);
 		}
 	}
 }
 
 //===========================================================================
-void DiskSelect (int drive)
+
+void DiskSelect(const int iDrive)
 {
-	DiskSelectImage(drive, TEXT(""));
+	DiskSelectImage(iDrive, TEXT(""));
 }
 
 //===========================================================================
@@ -813,8 +821,8 @@ bool DiskDriveSwap()
 
 //===========================================================================
 
-static BYTE __stdcall Disk_IORead(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-static BYTE __stdcall Disk_IOWrite(WORD pc, BYTE addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall Disk_IORead(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+static BYTE __stdcall Disk_IOWrite(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
 
 // TODO: LoadRom_Disk_Floppy()
 void DiskLoadRom(LPBYTE pCxRomPeripheral, UINT uSlot)
@@ -996,11 +1004,11 @@ DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 		g_aFloppyDisk[i].track				= pSS->Unit[i].track;
 		g_aFloppyDisk[i].phase				= pSS->Unit[i].phase;
 		g_aFloppyDisk[i].byte				= pSS->Unit[i].byte;
-//		g_aFloppyDisk[i].writeprotected	= pSS->Unit[i].writeprotected;
-		g_aFloppyDisk[i].trackimagedata	= pSS->Unit[i].trackimagedata;
+//		g_aFloppyDisk[i].writeprotected		= pSS->Unit[i].writeprotected;
+		g_aFloppyDisk[i].trackimagedata		= pSS->Unit[i].trackimagedata;
 		g_aFloppyDisk[i].trackimagedirty	= pSS->Unit[i].trackimagedirty;
 		g_aFloppyDisk[i].spinning			= pSS->Unit[i].spinning;
-		g_aFloppyDisk[i].writelight		= pSS->Unit[i].writelight;
+		g_aFloppyDisk[i].writelight			= pSS->Unit[i].writelight;
 		g_aFloppyDisk[i].nibbles			= pSS->Unit[i].nibbles;
 
 		//
@@ -1018,7 +1026,7 @@ DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 
 		if(bImageError)
 		{
-			g_aFloppyDisk[i].trackimagedata	= 0;
+			g_aFloppyDisk[i].trackimagedata		= 0;
 			g_aFloppyDisk[i].trackimagedirty	= 0;
 			g_aFloppyDisk[i].nibbles			= 0;
 		}

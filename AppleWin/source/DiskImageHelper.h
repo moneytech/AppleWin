@@ -10,16 +10,18 @@ enum FileType_e { eFileNormal, eFileGZip, eFileZip };
 
 struct ImageInfo
 {
-	TCHAR		szFilename[MAX_PATH];
-	CImageBase*	pImageType;
-	FileType_e	FileType;
-	HANDLE		hFile;
-	DWORD		uOffset;
-	bool		bWriteProtected;
-	BYTE		ValidTrack[TRACKS_MAX];
-	UINT		uNumTracks;
-	BYTE*		pImageBuffer;
-	UINT		uImageSize;
+	TCHAR			szFilename[MAX_PATH];
+	CImageBase*		pImageType;
+	FileType_e		FileType;
+	HANDLE			hFile;
+	DWORD			uOffset;
+	bool			bWriteProtected;
+	BYTE			ValidTrack[TRACKS_MAX];
+	UINT			uNumTracks;
+	BYTE*			pImageBuffer;
+	UINT			uImageSize;
+	char			szFilenameInZip[MAX_PATH];
+	zip_fileinfo	zipFileInfo;
 };
 
 //-------------------------------------

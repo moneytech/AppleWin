@@ -105,8 +105,27 @@ bool CImageBase::WriteTrack(ImageInfo* pImageInfo, const int nTrack, LPBYTE pTra
 	}
 	else if (pImageInfo->FileType == eFileZip)
 	{
-		_ASSERT(0);	// TODO
-		return false;
+		// Write entire compressed image each time (dirty track change or dirty disk removal)
+		// NB. Only support Zip archives with a single file
+		zipFile hZipFile = zipOpen(pImageInfo->szFilename, APPEND_STATUS_CREATE);
+		if (hZipFile == NULL)
+			return false;
+
+		int nRes = zipOpenNewFileInZip(hZipFile, pImageInfo->szFilenameInZip, &pImageInfo->zipFileInfo, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED);
+		if (nRes != ZIP_OK)
+			return false;
+
+		nRes = zipWriteInFileInZip(hZipFile, pImageInfo->pImageBuffer, pImageInfo->uImageSize);
+		if (nRes != ZIP_OK)
+			return false;
+
+		nRes = zipCloseFileInZip(hZipFile);
+		if (nRes != ZIP_OK)
+			return false;
+
+		nRes = zipClose(hZipFile, NULL);
+		if (nRes != ZIP_OK)
+			return false;
 	}
 	else
 	{

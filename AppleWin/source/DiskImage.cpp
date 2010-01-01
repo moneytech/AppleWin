@@ -148,7 +148,7 @@ static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInf
 
 //-------------------------------------
 
-static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_, std::string& strArchiveFilename)
+static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_, std::string& strFilenameInZip)
 {
 	zlib_filefunc_def ffunc;
 	fill_win32_filefunc(&ffunc);
@@ -172,8 +172,6 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 	nRes = unzGetCurrentFileInfo(hZipFile, &file_info, szFilename, MAX_PATH, NULL, 0, NULL, 0);
 	if (nRes != UNZ_OK)
 		return eIMAGE_ERROR_ZIP;
-
-	strArchiveFilename = szFilename;
 
 	const UINT uFileSize = file_info.uncompressed_size;
 	pImageInfo->pImageBuffer = new BYTE[uFileSize];
@@ -200,6 +198,13 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 	if (nRes != UNZ_OK)
 		return eIMAGE_ERROR_ZIP;
 
+	strncpy(pImageInfo->szFilenameInZip, szFilename, MAX_PATH);
+	memcpy(&pImageInfo->zipFileInfo.tmz_date, &file_info.tmu_date, sizeof(file_info.tmu_date));
+	pImageInfo->zipFileInfo.dosDate     = file_info.dosDate;
+	pImageInfo->zipFileInfo.internal_fa = file_info.internal_fa;
+	pImageInfo->zipFileInfo.external_fa = file_info.external_fa;
+	strFilenameInZip = szFilename;
+
 	//
 
 	DWORD dwSize = nLen;
@@ -209,13 +214,19 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 	CImageBase* pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, "", dwOffset);
 
 	if (!pImageType)
+	{
+		if (global_info.number_entry > 1)
+			return eIMAGE_ERROR_UNSUPPORTED_MULTI_ZIP;
+
 		return eIMAGE_ERROR_UNSUPPORTED;
+	}
 
 	const eImageType Type = pImageType->GetType();
 	if (Type == eImageAPL || Type == eImageIIE || Type == eImagePRG)
 		return eIMAGE_ERROR_UNSUPPORTED;
 
-	*pWriteProtected_ = 1;	// Zip files are read-only (for now)
+	if (global_info.number_entry > 1)
+		*pWriteProtected_ = 1;	// Zip archives with multiple files are read-only (for now)
 
 	pImageInfo->FileType = eFileZip;
 	pImageInfo->uOffset = dwOffset;
@@ -380,7 +391,7 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 		Err = CheckNormalFile(pszImageFilename, pImageInfo, pWriteProtected_, bCreateIfNecessary);
 	}
 
-	if (!pImageInfo->pImageType)
+	if (pImageInfo->pImageType == NULL && Err == eIMAGE_ERROR_NONE)
 		Err = eIMAGE_ERROR_UNSUPPORTED;
 
 	if (Err != eIMAGE_ERROR_NONE)

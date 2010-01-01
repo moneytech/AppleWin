@@ -16,6 +16,7 @@ enum ImageError_e
 	eIMAGE_ERROR_UNSUPPORTED,
 	eIMAGE_ERROR_GZ,
 	eIMAGE_ERROR_ZIP,
+	eIMAGE_ERROR_UNSUPPORTED_MULTI_ZIP,
 	eIMAGE_ERROR_UNABLE_TO_OPEN,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
@@ -26,7 +27,7 @@ void ImageClose(const HIMAGE hDiskImage, const bool bOpenError=false);
 void ImageDestroy(void);
 void ImageInitialize(void);
 
-ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary, std::string& strArchiveFilename);
+ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary, std::string& strFilenameInZip);
 
 void ImageReadTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles);
 void ImageWriteTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles);

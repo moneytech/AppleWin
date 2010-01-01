@@ -33,6 +33,7 @@
 
 #include "zlib.h"
 #include "unzip.h"
+#include "zip.h"
 #include "iowin32.h"
 
 #include "Common.h"
