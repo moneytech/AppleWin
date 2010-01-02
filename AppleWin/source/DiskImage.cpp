@@ -33,13 +33,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #pragma  hdrstop
 
 
-#define GZ_SUFFIX ".gz"
-#define GZ_SUFFIX_LEN (sizeof(GZ_SUFFIX)-1)
-
-#define ZIP_SUFFIX ".zip"
-#define ZIP_SUFFIX_LEN (sizeof(ZIP_SUFFIX)-1)
-
-
 static CDiskImageHelper sg_DiskImageHelper;
 
 //===========================================================================
@@ -253,7 +246,7 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 	if (! *pWriteProtected_)
 		hFile = CreateFile(pszImageFilename,
                       GENERIC_READ | GENERIC_WRITE,
-                      FILE_SHARE_READ | FILE_SHARE_WRITE,
+                      FILE_SHARE_READ,
                       (LPSECURITY_ATTRIBUTES)NULL,
                       OPEN_EXISTING,
                       FILE_ATTRIBUTE_NORMAL,
@@ -279,7 +272,7 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 		hFile = CreateFile(
 			pszImageFilename,
 			GENERIC_READ | GENERIC_WRITE,
-			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			FILE_SHARE_READ,
 			(LPSECURITY_ATTRIBUTES)NULL,
 			CREATE_NEW,
 			FILE_ATTRIBUTE_NORMAL,
@@ -365,7 +358,7 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 						HIMAGE* hDiskImage_,
 						bool* pWriteProtected_,
 						const bool bCreateIfNecessary,
-						std::string& strArchiveFilename)
+						std::string& strFilenameInZip)
 {
 	if (! (pszImageFilename && hDiskImage_ && pWriteProtected_ && sg_DiskImageHelper.GetWorkBuffer()))
 		return eIMAGE_ERROR_BAD_POINTER;
@@ -390,7 +383,7 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 	}
     else if (uStrLen > ZIP_SUFFIX_LEN && strcmp(pszImageFilename+uStrLen-ZIP_SUFFIX_LEN, ZIP_SUFFIX) == 0)
 	{
-		Err = CheckZipFile(pszImageFilename, pImageInfo, pWriteProtected_, strArchiveFilename);
+		Err = CheckZipFile(pszImageFilename, pImageInfo, pWriteProtected_, strFilenameInZip);
 	}
 	else
 	{

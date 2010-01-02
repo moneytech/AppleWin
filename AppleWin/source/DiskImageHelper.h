@@ -1,6 +1,11 @@
 #pragma once
 
-struct ImageInfo;
+#define GZ_SUFFIX ".gz"
+#define GZ_SUFFIX_LEN (sizeof(GZ_SUFFIX)-1)
+
+#define ZIP_SUFFIX ".zip"
+#define ZIP_SUFFIX_LEN (sizeof(ZIP_SUFFIX)-1)
+
 
 enum eImageType { eImageUNKNOWN, eImageDO, eImagePO, eImageNIB1, eImageNIB2, eImageHDV, eImageIIE, eImageAPL, eImagePRG };
 enum eDetectResult {eMismatch, ePossibleMatch, eMatch};
@@ -16,18 +21,22 @@ struct ImageInfo
 	HANDLE			hFile;
 	DWORD			uOffset;
 	bool			bWriteProtected;
-	BYTE			ValidTrack[TRACKS_MAX];
-	UINT			uNumTracks;
-	BYTE*			pImageBuffer;
 	UINT			uImageSize;
 	char			szFilenameInZip[MAX_PATH];
 	zip_fileinfo	zipFileInfo;
 	UINT			uNumEntriesInZip;
+	// Floppy only
+	BYTE			ValidTrack[TRACKS_MAX];
+	UINT			uNumTracks;
+	BYTE*			pImageBuffer;
 };
 
 //-------------------------------------
 
+#define HD_BLOCK_SIZE 512
+
 #define UNIDISK35_800K_SIZE (800*1024)	// UniDisk 3.5"
+#define HARDDISK_32M_SIZE (HD_BLOCK_SIZE * 65536)
 
 #define DEFAULT_VOLUME_NUMBER 254
 
@@ -38,9 +47,11 @@ public:
 	virtual ~CImageBase(void) {}
 
 	virtual bool Boot(ImageInfo* pImageInfo) { return false; }
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize) = 0;
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt) = 0;
 	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles) { }
+	virtual BOOL Read(ImageInfo* pImageInfo, UINT nBlock, LPBYTE pBuffer) { return FALSE; }
 	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles) { }
+	virtual BOOL Write(ImageInfo* pImageInfo, UINT nBlock, LPBYTE pBuffer) { return FALSE; }
 
 	virtual bool AllowBoot(void) { return false; }		// Only:    APL and PRG
 	virtual bool AllowRW(void) { return true; }			// All but: APL and PRG
@@ -104,7 +115,7 @@ private:
 class C2IMGHelper : public CHdrHelper
 {
 public:
-	C2IMGHelper(void) {}
+	C2IMGHelper(const bool bIsFloppy) : m_bIsFloppy(bIsFloppy) {}
 	virtual ~C2IMGHelper(void) {}
 	virtual eDetectResult DetectHdr(LPBYTE& pImage, DWORD& dwImageSize, DWORD& dwOffset);
 	virtual UINT GetMaxHdrSize(void) { return sizeof(Header2IMG); }
@@ -153,30 +164,31 @@ private:
 	};
 
 	Header2IMG m_Hdr;
+	bool m_bIsFloppy;
 };
 
 #pragma pack(pop)
 
 //-------------------------------------
 
-class CDiskImageHelper
+class CImageHelperBase
 {
 public:
-	CDiskImageHelper(void);
-	virtual ~CDiskImageHelper(void);
+	CImageHelperBase(const bool bIsFloppy) :
+		m_2IMGHelper(bIsFloppy),
+		m_Result2IMG(eMismatch)
+	{
+	}
+	virtual ~CImageHelperBase(void)
+	{
+		for (UINT i=0; i<m_vecImageTypes.size(); i++)
+			delete m_vecImageTypes[i];
+	}
 
-	CImageBase* Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_);
-	CImageBase* GetImageForCreation(const TCHAR* pszExt);
+	virtual CImageBase* Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_) = 0;
+	virtual CImageBase* GetImageForCreation(const TCHAR* pszExt) = 0;
 
-	UINT GetNumTracksInImage(CImageBase* pImageType) { return pImageType->m_uNumTracksInImage; }
-	void SetNumTracksInImage(CImageBase* pImageType, UINT uNumTracks) { pImageType->m_uNumTracksInImage = uNumTracks; }
-
-	LPBYTE GetWorkBuffer(void) { return CImageBase::ms_pWorkBuffer; }
-	void SetWorkBuffer(LPBYTE pBuffer) { CImageBase::ms_pWorkBuffer = pBuffer; }
-
-	UINT GetMaxFloppyImageSize(void);
-
-private:
+protected:
 	UINT GetNumImages(void) { return m_vecImageTypes.size(); };
 	CImageBase* GetImage(UINT uIndex) { _ASSERT(uIndex<GetNumImages()); return m_vecImageTypes[uIndex]; }
 	CImageBase* GetImage(eImageType Type)
@@ -192,13 +204,51 @@ private:
 		return NULL;
 	}
 
-	void SkipMacBinaryHdr(LPBYTE& pImage, DWORD& dwSize, DWORD& dwOffset);
-
-private:
+protected:
 	typedef std::vector<CImageBase*> VECIMAGETYPE;
 	VECIMAGETYPE m_vecImageTypes;
 
-	CMacBinaryHelper m_MacBinaryHelper;
 	C2IMGHelper m_2IMGHelper;
 	eDetectResult m_Result2IMG;
+};
+
+//-------------------------------------
+
+class CDiskImageHelper : public CImageHelperBase
+{
+public:
+	CDiskImageHelper(void);
+	virtual ~CDiskImageHelper(void) {}
+
+	virtual CImageBase* Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_);
+	virtual CImageBase* GetImageForCreation(const TCHAR* pszExt);
+
+	UINT GetNumTracksInImage(CImageBase* pImageType) { return pImageType->m_uNumTracksInImage; }
+	void SetNumTracksInImage(CImageBase* pImageType, UINT uNumTracks) { pImageType->m_uNumTracksInImage = uNumTracks; }
+
+	LPBYTE GetWorkBuffer(void) { return CImageBase::ms_pWorkBuffer; }
+	void SetWorkBuffer(LPBYTE pBuffer) { CImageBase::ms_pWorkBuffer = pBuffer; }
+
+	UINT GetMaxFloppyImageSize(void);
+
+private:
+	void SkipMacBinaryHdr(LPBYTE& pImage, DWORD& dwSize, DWORD& dwOffset);
+
+private:
+	CMacBinaryHelper m_MacBinaryHelper;
+};
+
+//-------------------------------------
+
+class CHardDiskImageHelper : public CImageHelperBase
+{
+public:
+	CHardDiskImageHelper(void);
+	virtual ~CHardDiskImageHelper(void) {}
+
+	virtual CImageBase* Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_);
+	virtual CImageBase* GetImageForCreation(const TCHAR* pszExt);
+
+	UINT GetMaxHardDiskImageSize(void);
+	UINT GetMinDetectSize(void);
 };

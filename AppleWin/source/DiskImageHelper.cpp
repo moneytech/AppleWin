@@ -443,7 +443,7 @@ public:
 	CDoImage(void) {}
 	virtual ~CDoImage(void) {}
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		if (!IsValidImageSize(dwImageSize))
 			return eMismatch;
@@ -510,7 +510,7 @@ public:
 	CPoImage(void) {}
 	virtual ~CPoImage(void) {}
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		if (!IsValidImageSize(dwImageSize))
 			return eMismatch;
@@ -574,7 +574,7 @@ public:
 
 	static const UINT NIB1_TRACK_SIZE = NIBBLES_PER_TRACK;
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		if (dwImageSize != NIB1_TRACK_SIZE*TRACKS_STANDARD)
 			return eMismatch;
@@ -614,7 +614,7 @@ public:
 
 	static const UINT NIB2_TRACK_SIZE = 6384;
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		if (dwImageSize != NIB2_TRACK_SIZE*TRACKS_STANDARD)
 			return eMismatch;
@@ -642,31 +642,44 @@ public:
 
 //-------------------------------------
 
-// HDV image - used to trap inserting a .hdv (or a non-140K .2mg)
+// HDV image
 class CHDVImage : public CImageBase
 {
 public:
 	CHDVImage(void) {}
 	virtual ~CHDVImage(void) {}
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
-		if (dwImageSize < UNIDISK35_800K_SIZE)	// Actually a .hdv image can be any size (so if Ext == ".hdv" then accept any size)
+		m_uNumTracksInImage = dwImageSize / TRACK_DENIBBLIZED_SIZE;	// Set to non-zero
+
+		// An HDV image can be any size (so if Ext == ".hdv" then accept any size)
+		if (*pszExt && !_tcscmp(pszExt, ".hdv"))
+			return eMatch;
+
+		if (dwImageSize < UNIDISK35_800K_SIZE)
 			return eMismatch;
 
-		m_uNumTracksInImage = dwImageSize / TRACK_DENIBBLIZED_SIZE;	// Set to non-zero
 		return eMatch;
 	}
 
-	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
+	virtual BOOL Read(ImageInfo* pImageInfo, UINT nBlock, LPBYTE pBuffer)
 	{
-		_ASSERT(0);
+		long Offset = pImageInfo->uOffset + nBlock * HD_BLOCK_SIZE;
+		SetFilePointer(pImageInfo->hFile, Offset, NULL, FILE_BEGIN);
+		DWORD dwBytesRead;
+		return ReadFile(pImageInfo->hFile, pBuffer, HD_BLOCK_SIZE, &dwBytesRead, NULL);
 	}
 
-	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
+	virtual BOOL Write(ImageInfo* pImageInfo, UINT nBlock, LPBYTE pBuffer)
 	{
-		_ASSERT(0);
+		long Offset = pImageInfo->uOffset + nBlock * HD_BLOCK_SIZE;
+		SetFilePointer(pImageInfo->hFile, Offset, NULL, FILE_BEGIN);
+		DWORD dwBytesWritten;
+		return WriteFile(pImageInfo->hFile, pBuffer, HD_BLOCK_SIZE, &dwBytesWritten, NULL);
 	}
+
+	virtual bool AllowCreate(void) { return true; }
 
 	virtual eImageType GetType(void) { return eImageHDV; }
 	virtual char* GetCreateExtensions(void) { return ".hdv"; }
@@ -682,7 +695,7 @@ public:
 	CIIeImage(void) : m_pHeader(NULL) {}
 	virtual ~CIIeImage(void) { delete [] m_pHeader; }
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		if (strncmp((const char *)pImage, "SIMSYSTEM_IIE", 13) || (*(pImage+13) > 3))
 			return eMismatch;
@@ -799,7 +812,7 @@ public:
 		return true;
 	}
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		DWORD dwLength = *(LPWORD)(pImage+2);
 		bool bRes = (((dwLength+4) == dwImageSize) ||
@@ -854,7 +867,7 @@ public:
 		return true;
 	}
 
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize, const TCHAR* pszExt)
 	{
 		return (*(LPDWORD)pImage == 0x214C470A) ? eMatch : eMismatch;	// "!LG\x0A"
 	}
@@ -917,14 +930,21 @@ eDetectResult C2IMGHelper::DetectHdr(LPBYTE& pImage, DWORD& dwImageSize, DWORD& 
 		break;
 	case e2IMGFormatProDOS:
 		{
-			if (pHdr->DiskDataLength < TRACKS_STANDARD*TRACK_DENIBBLIZED_SIZE)
-				return eMismatch;
+			if (m_bIsFloppy)
+			{
+				if (pHdr->DiskDataLength < TRACKS_STANDARD*TRACK_DENIBBLIZED_SIZE)
+					return eMismatch;
 
-			if (pHdr->DiskDataLength == UNIDISK35_800K_SIZE)
-				return eMismatch;
+				if (pHdr->DiskDataLength <= TRACKS_MAX*TRACK_DENIBBLIZED_SIZE)
+					return eMatch;
 
-			if (pHdr->DiskDataLength > UNIDISK35_800K_SIZE)	// HDD image?
+				if (pHdr->DiskDataLength == UNIDISK35_800K_SIZE)	// TODO: For //c+,  eg. Prince of Persia (Original 3.5 floppy for IIc+).2MG
+					return eMismatch;
+
 				return eMismatch;
+			}
+
+			return eMatch;
 		}
 		break;
 	case e2IMGFormatNIBData:
@@ -957,36 +977,29 @@ bool C2IMGHelper::IsLocked(void)
 //-----------------------------------------------------------------------------
 
 CDiskImageHelper::CDiskImageHelper(void) :
-	m_Result2IMG(eMismatch)
+	CImageHelperBase(true)
 {
 	m_vecImageTypes.push_back( new CDoImage );
 	m_vecImageTypes.push_back( new CPoImage );
 	m_vecImageTypes.push_back( new CNib1Image );
 	m_vecImageTypes.push_back( new CNib2Image );
-	m_vecImageTypes.push_back( new CHDVImage );
+	m_vecImageTypes.push_back( new CHDVImage );		// Used to trap inserting a small .hdv (or a non-140K .2mg) into a floppy drive! Small means <GetMaxFloppyImageSize()
 	m_vecImageTypes.push_back( new CIIeImage );
 	m_vecImageTypes.push_back( new CAplImage );
 	m_vecImageTypes.push_back( new CPrgImage );
-}
-
-CDiskImageHelper::~CDiskImageHelper(void)
-{
-	for (UINT i=0; i<m_vecImageTypes.size(); i++)
-		delete m_vecImageTypes[i];
 }
 
 CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_)
 {
 	dwOffset = 0;
 	m_MacBinaryHelper.DetectHdr(pImage, dwSize, dwOffset);
-	m_Result2IMG = m_2IMGHelper.DetectHdr(pImage, dwSize, dwOffset);	// TODO: Return: VolNumber, Locked
+	m_Result2IMG = m_2IMGHelper.DetectHdr(pImage, dwSize, dwOffset);
 
 	// CALL THE DETECTION FUNCTIONS IN ORDER, LOOKING FOR A MATCH
 	eImageType ImageType = eImageUNKNOWN;
 	eImageType PossibleType = eImageUNKNOWN;
 
-	UINT uLoop = 0;
-	while ((uLoop < GetNumImages()) && (ImageType == eImageUNKNOWN))
+	for (UINT uLoop=0; uLoop < GetNumImages() && ImageType == eImageUNKNOWN; uLoop++)
 	{
 		if (*pszExt && _tcsstr(GetImage(uLoop)->GetRejectExtensions(), pszExt))
 		{
@@ -994,7 +1007,7 @@ CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* p
 		}
 		else
 		{
-			eDetectResult Result = GetImage(uLoop)->Detect(pImage, dwSize);
+			eDetectResult Result = GetImage(uLoop)->Detect(pImage, dwSize, pszExt);
 			if (Result == eMatch)
 				ImageType = GetImage(uLoop)->GetType();
 			else if ((Result == ePossibleMatch) && (PossibleType == eImageUNKNOWN))
@@ -1052,5 +1065,82 @@ CImageBase* CDiskImageHelper::GetImageForCreation(const TCHAR* pszExt)
 
 UINT CDiskImageHelper::GetMaxFloppyImageSize(void)
 {
+	// TODO: This doesn't account for .2mg files with comments after the disk-image
 	return UNIDISK35_800K_SIZE + m_MacBinaryHelper.GetMaxHdrSize() + m_2IMGHelper.GetMaxHdrSize();
+}
+
+//-----------------------------------------------------------------------------
+
+CHardDiskImageHelper::CHardDiskImageHelper(void) :
+	CImageHelperBase(false)
+{
+	m_vecImageTypes.push_back( new CHDVImage );
+}
+
+CImageBase* CHardDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_)
+{
+	dwOffset = 0;
+	m_Result2IMG = m_2IMGHelper.DetectHdr(pImage, dwSize, dwOffset);
+
+	eImageType ImageType = eImageUNKNOWN;
+
+	for (UINT uLoop=0; uLoop < GetNumImages() && ImageType == eImageUNKNOWN; uLoop++)
+	{
+		if (*pszExt && _tcsstr(GetImage(uLoop)->GetRejectExtensions(), pszExt))
+		{
+			uLoop++;
+		}
+		else
+		{
+			eDetectResult Result = GetImage(uLoop)->Detect(pImage, dwSize, pszExt);
+			if (Result == eMatch)
+				ImageType = GetImage(uLoop)->GetType();
+
+			_ASSERT(Result != ePossibleMatch);
+
+			uLoop++;
+		}
+	}
+
+	CImageBase* pImageType = GetImage(ImageType);
+
+	if (pImageType)
+	{
+		if (m_Result2IMG == eMatch)
+		{
+			if (m_2IMGHelper.IsLocked() && !*pWriteProtected_)
+				*pWriteProtected_ = 1;
+		}
+	}
+
+	return pImageType;
+}
+
+CImageBase* CHardDiskImageHelper::GetImageForCreation(const TCHAR* pszExt)
+{
+	// Only HDV file supported
+	for (UINT uLoop = 0; uLoop <= GetNumImages(); uLoop++)
+	{
+		if (!GetImage(uLoop)->AllowCreate())
+			continue;
+
+		if (*pszExt && _tcsstr(GetImage(uLoop)->GetCreateExtensions(), pszExt))
+		{
+			CImageBase* pImageType = GetImage(uLoop);
+			return pImageType;
+		}
+	}
+
+	return NULL;
+}
+
+UINT CHardDiskImageHelper::GetMaxHardDiskImageSize(void)
+{
+	// TODO: This doesn't account for .2mg files with comments after the disk-image
+	return HARDDISK_32M_SIZE + m_2IMGHelper.GetMaxHdrSize();
+}
+
+UINT CHardDiskImageHelper::GetMinDetectSize(void)
+{
+	return m_2IMGHelper.GetMaxHdrSize();
 }
