@@ -57,7 +57,6 @@ BYTE CImageBase::ms_SectorNumber[NUM_SECTOR_ORDERS][0x10] =
 	{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
 };
 
-UINT CImageBase::ms_uNumTracksInImage = 0;
 LPBYTE CImageBase::ms_pWorkBuffer = NULL;
 
 //-------------------------------------
@@ -350,17 +349,16 @@ DWORD CImageBase::NibblizeTrack(LPBYTE trackimagebuffer, SectorOrder_e SectorOrd
 		*(imageptr++) = 0xD5;
 		*(imageptr++) = 0xAA;
 		*(imageptr++) = 0x96;
-#define VOLUME 0xFE
 #define CODE44A(a) ((((a) >> 1) & 0x55) | 0xAA)
 #define CODE44B(a) (((a) & 0x55) | 0xAA)
-		*(imageptr++) = CODE44A(VOLUME);
-		*(imageptr++) = CODE44B(VOLUME);
+		*(imageptr++) = CODE44A(m_uVolumeNumber);
+		*(imageptr++) = CODE44B(m_uVolumeNumber);
 		*(imageptr++) = CODE44A((BYTE)track);
 		*(imageptr++) = CODE44B((BYTE)track);
 		*(imageptr++) = CODE44A(sector);
 		*(imageptr++) = CODE44B(sector);
-		*(imageptr++) = CODE44A(VOLUME ^ ((BYTE)track) ^ sector);
-		*(imageptr++) = CODE44B(VOLUME ^ ((BYTE)track) ^ sector);
+		*(imageptr++) = CODE44A(m_uVolumeNumber ^ ((BYTE)track) ^ sector);
+		*(imageptr++) = CODE44B(m_uVolumeNumber ^ ((BYTE)track) ^ sector);
 #undef CODE44A
 #undef CODE44B
 		*(imageptr++) = 0xDE;
@@ -408,7 +406,7 @@ void CImageBase::SkewTrack(int track, int nibbles, LPBYTE trackimagebuffer)
 
 bool CImageBase::IsValidImageSize(DWORD uImageSize)
 {
-	ms_uNumTracksInImage = 0;
+	m_uNumTracksInImage = 0;
 
 	if ((TRACKS_MAX>TRACKS_STANDARD) && (uImageSize > TRACKS_MAX*TRACK_DENIBBLIZED_SIZE))
 		return false;	// >160KB
@@ -431,62 +429,12 @@ bool CImageBase::IsValidImageSize(DWORD uImageSize)
 	}
 
 	if (bValidSize)
-		ms_uNumTracksInImage = uImageSize / TRACK_DENIBBLIZED_SIZE;
+		m_uNumTracksInImage = uImageSize / TRACK_DENIBBLIZED_SIZE;
 
 	return bValidSize;
 }
 
 //===========================================================================
-
-// RAW PROGRAM IMAGE (APL) FORMAT IMPLEMENTATION
-class CAplImage : public CImageBase
-{
-public:
-	CAplImage(void) {}
-	virtual ~CAplImage(void) {}
-
-	virtual bool Boot(ImageInfo* ptr)
-	{
-		SetFilePointer(ptr->hFile, 0, NULL, FILE_BEGIN);
-		WORD address = 0;
-		WORD length  = 0;
-		DWORD bytesread;
-		ReadFile(ptr->hFile, &address, sizeof(WORD), &bytesread, NULL);
-		ReadFile(ptr->hFile, &length , sizeof(WORD), &bytesread, NULL);
-		if ((((WORD)(address+length)) <= address) ||
-			(address >= 0xC000) ||
-			(address+length-1 >= 0xC000))
-		{
-			return false;
-		}
-
-		ReadFile(ptr->hFile, mem+address, length, &bytesread, NULL);
-		int loop = 192;
-		while (loop--)
-			*(memdirty+loop) = 0xFF;
-
-		regs.pc = address;
-		return true;
-	}
-
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
-	{
-		DWORD dwLength = *(LPWORD)(pImage+2);
-		bool bRes = (((dwLength+4) == dwImageSize) ||
-					((dwLength+4+((256-((dwLength+4) & 255)) & 255)) == dwImageSize));
-
-		return !bRes ? eMismatch : ePossibleMatch;
-	}
-
-	virtual bool AllowBoot(void) { return true; }
-	virtual bool AllowRW(void) { return false; }
-
-	virtual eImageType GetType(void) { return eImageAPL; }
-	virtual char* GetCreateExtensions(void) { return ".apl"; }
-	virtual char* GetRejectExtensions(void) { return ".do;.dsk;.iie;.nib;.po"; }
-};
-
-//-------------------------------------
 
 // DOS ORDER (DO) FORMAT IMPLEMENTATION
 class CDoImage : public CImageBase
@@ -555,176 +503,6 @@ public:
 
 //-------------------------------------
 
-// SIMSYSTEM IIE (IIE) FORMAT IMPLEMENTATION
-class CIIeImage : public CImageBase
-{
-public:
-	CIIeImage(void) : m_pHeader(NULL) {}
-	virtual ~CIIeImage(void) { delete [] m_pHeader; }
-
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
-	{
-		if (strncmp((const char *)pImage, "SIMSYSTEM_IIE", 13) || (*(pImage+13) > 3))
-			return eMismatch;
-
-		ms_uNumTracksInImage = TRACKS_STANDARD;	// Assume default # tracks
-		return eMatch;
-	}
-
-	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
-	{
-		// IF WE HAVEN'T ALREADY DONE SO, READ THE IMAGE FILE HEADER
-		if (!m_pHeader)
-		{
-			m_pHeader = (LPBYTE) VirtualAlloc(NULL, 88, MEM_COMMIT, PAGE_READWRITE);
-			if (!m_pHeader)
-			{
-				*pNibbles = 0;
-				return;
-			}
-			ZeroMemory(m_pHeader, 88);
-			DWORD dwBytesRead;
-			SetFilePointer(pImageInfo->hFile, 0, NULL,FILE_BEGIN);
-			ReadFile(pImageInfo->hFile, m_pHeader, 88, &dwBytesRead, NULL);
-		}
-
-		// IF THIS IMAGE CONTAINS USER DATA, READ THE TRACK AND NIBBLIZE IT
-		if (*(m_pHeader+13) <= 2)
-		{
-			ConvertSectorOrder(m_pHeader+14);
-			SetFilePointer(pImageInfo->hFile, nTrack*TRACK_DENIBBLIZED_SIZE+30, NULL, FILE_BEGIN);
-			ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
-			DWORD bytesread;
-			ReadFile(pImageInfo->hFile, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &bytesread, NULL);
-			*pNibbles = NibblizeTrack(pTrackImageBuffer, eSIMSYSTEMOrder, nTrack);
-		}
-		// OTHERWISE, IF THIS IMAGE CONTAINS NIBBLE INFORMATION, READ IT DIRECTLY INTO THE TRACK BUFFER
-		else 
-		{
-			*pNibbles = *(LPWORD)(m_pHeader+nTrack*2+14);
-			LONG Offset = 88;
-			while (nTrack--)
-				Offset += *(LPWORD)(m_pHeader+nTrack*2+14);
-			SetFilePointer(pImageInfo->hFile, Offset, NULL,FILE_BEGIN);
-			ZeroMemory(pTrackImageBuffer, *pNibbles);
-			DWORD dwBytesRead;
-			ReadFile(pImageInfo->hFile, pTrackImageBuffer, *pNibbles, &dwBytesRead, NULL);
-		}
-	}
-
-	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
-	{
-		// note: unimplemented
-	}
-
-	virtual eImageType GetType(void) { return eImageIIE; }
-	virtual char* GetCreateExtensions(void) { return ".iie"; }
-	virtual char* GetRejectExtensions(void) { return ".do.;.nib;.po;.prg"; }
-
-private:
-	void ConvertSectorOrder(LPBYTE sourceorder)
-	{
-		int loop = 16;
-		while (loop--)
-		{
-			BYTE found = 0xFF;
-			int  loop2 = 16;
-			while (loop2-- && (found == 0xFF))
-			{
-				if (*(sourceorder+loop2) == loop)
-					found = loop2;
-			}
-
-			if (found == 0xFF)
-				found = 0;
-
-			ms_SectorNumber[2][loop] = found;
-		}
-	}
-
-private:
-	LPBYTE m_pHeader;
-};
-
-//-------------------------------------
-
-// NIBBLIZED 6656-NIBBLE (NIB) FORMAT IMPLEMENTATION
-class CNib1Image : public CImageBase
-{
-public:
-	CNib1Image(void) {}
-	virtual ~CNib1Image(void) {}
-
-	static const UINT NIB1_TRACK_SIZE = NIBBLES_PER_TRACK;
-
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
-	{
-		if (dwImageSize != NIB1_TRACK_SIZE*TRACKS_STANDARD)
-			return eMismatch;
-
-		ms_uNumTracksInImage = TRACKS_STANDARD;
-		return eMatch;
-	}
-
-	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
-	{
-		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB1_TRACK_SIZE);
-		*pNibbles = NIB1_TRACK_SIZE;
-	}
-
-	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
-	{
-		_ASSERT(nNibbles == NIB1_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
-		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
-	}
-
-	virtual bool AllowCreate(void) { return true; }
-	virtual UINT GetTrackSizeForCreate(void) { return NIB1_TRACK_SIZE; }
-
-	virtual eImageType GetType(void) { return eImageNIB1; }
-	virtual char* GetCreateExtensions(void) { return ".nib"; }
-	virtual char* GetRejectExtensions(void) { return ".do;.iie;.po;.prg"; }
-};
-
-//-------------------------------------
-
-// NIBBLIZED 6384-NIBBLE (NB2) FORMAT IMPLEMENTATION
-class CNib2Image : public CImageBase
-{
-public:
-	CNib2Image(void) {}
-	virtual ~CNib2Image(void) {}
-
-	static const UINT NIB2_TRACK_SIZE = 6384;
-
-	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
-	{
-		if (dwImageSize != NIB2_TRACK_SIZE*TRACKS_STANDARD)
-			return eMismatch;
-
-		ms_uNumTracksInImage = TRACKS_STANDARD;
-		return eMatch;
-	}
-
-	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
-	{
-		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB2_TRACK_SIZE);
-		*pNibbles = NIB2_TRACK_SIZE;
-	}
-
-	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
-	{
-		_ASSERT(nNibbles == NIB2_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
-		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
-	}
-
-	virtual eImageType GetType(void) { return eImageNIB2; }
-	virtual char* GetCreateExtensions(void) { return ".nb2"; }
-	virtual char* GetRejectExtensions(void) { return ".do;.iie;.po;.prg"; }
-};
-
-//-------------------------------------
-
 // PRODOS ORDER (PO) FORMAT IMPLEMENTATION
 class CPoImage : public CImageBase
 {
@@ -787,6 +565,259 @@ public:
 
 //-------------------------------------
 
+// NIBBLIZED 6656-NIBBLE (NIB) FORMAT IMPLEMENTATION
+class CNib1Image : public CImageBase
+{
+public:
+	CNib1Image(void) {}
+	virtual ~CNib1Image(void) {}
+
+	static const UINT NIB1_TRACK_SIZE = NIBBLES_PER_TRACK;
+
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	{
+		if (dwImageSize != NIB1_TRACK_SIZE*TRACKS_STANDARD)
+			return eMismatch;
+
+		m_uNumTracksInImage = TRACKS_STANDARD;
+		return eMatch;
+	}
+
+	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
+	{
+		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB1_TRACK_SIZE);
+		*pNibbles = NIB1_TRACK_SIZE;
+	}
+
+	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
+	{
+		_ASSERT(nNibbles == NIB1_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
+		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
+	}
+
+	virtual bool AllowCreate(void) { return true; }
+	virtual UINT GetTrackSizeForCreate(void) { return NIB1_TRACK_SIZE; }
+
+	virtual eImageType GetType(void) { return eImageNIB1; }
+	virtual char* GetCreateExtensions(void) { return ".nib"; }
+	virtual char* GetRejectExtensions(void) { return ".do;.iie;.po;.prg"; }
+};
+
+//-------------------------------------
+
+// NIBBLIZED 6384-NIBBLE (NB2) FORMAT IMPLEMENTATION
+class CNib2Image : public CImageBase
+{
+public:
+	CNib2Image(void) {}
+	virtual ~CNib2Image(void) {}
+
+	static const UINT NIB2_TRACK_SIZE = 6384;
+
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	{
+		if (dwImageSize != NIB2_TRACK_SIZE*TRACKS_STANDARD)
+			return eMismatch;
+
+		m_uNumTracksInImage = TRACKS_STANDARD;
+		return eMatch;
+	}
+
+	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
+	{
+		ReadTrack(pImageInfo, nTrack, pTrackImageBuffer, NIB2_TRACK_SIZE);
+		*pNibbles = NIB2_TRACK_SIZE;
+	}
+
+	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
+	{
+		_ASSERT(nNibbles == NIB2_TRACK_SIZE);	// Must be true - as nNibbles gets init'd by ImageReadTrace()
+		WriteTrack(pImageInfo, nTrack, pTrackImage, nNibbles);
+	}
+
+	virtual eImageType GetType(void) { return eImageNIB2; }
+	virtual char* GetCreateExtensions(void) { return ".nb2"; }
+	virtual char* GetRejectExtensions(void) { return ".do;.iie;.po;.prg;.2mg;.2img"; }
+};
+
+//-------------------------------------
+
+// HDV image - used to trap inserting a .hdv (or a non-140K .2mg)
+class CHDVImage : public CImageBase
+{
+public:
+	CHDVImage(void) {}
+	virtual ~CHDVImage(void) {}
+
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	{
+		if (dwImageSize < UNIDISK35_800K_SIZE)	// Actually a .hdv image can be any size (so if Ext == ".hdv" then accept any size)
+			return eMismatch;
+
+		m_uNumTracksInImage = dwImageSize / TRACK_DENIBBLIZED_SIZE;	// Set to non-zero
+		return eMatch;
+	}
+
+	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
+	{
+		_ASSERT(0);
+	}
+
+	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
+	{
+		_ASSERT(0);
+	}
+
+	virtual eImageType GetType(void) { return eImageHDV; }
+	virtual char* GetCreateExtensions(void) { return ".hdv"; }
+	virtual char* GetRejectExtensions(void) { return ".do;.iie;.prg"; }
+};
+
+//-------------------------------------
+
+// SIMSYSTEM IIE (IIE) FORMAT IMPLEMENTATION
+class CIIeImage : public CImageBase
+{
+public:
+	CIIeImage(void) : m_pHeader(NULL) {}
+	virtual ~CIIeImage(void) { delete [] m_pHeader; }
+
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	{
+		if (strncmp((const char *)pImage, "SIMSYSTEM_IIE", 13) || (*(pImage+13) > 3))
+			return eMismatch;
+
+		m_uNumTracksInImage = TRACKS_STANDARD;	// Assume default # tracks
+		return eMatch;
+	}
+
+	virtual void Read(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles)
+	{
+		// IF WE HAVEN'T ALREADY DONE SO, READ THE IMAGE FILE HEADER
+		if (!m_pHeader)
+		{
+			m_pHeader = (LPBYTE) VirtualAlloc(NULL, 88, MEM_COMMIT, PAGE_READWRITE);
+			if (!m_pHeader)
+			{
+				*pNibbles = 0;
+				return;
+			}
+			ZeroMemory(m_pHeader, 88);
+			DWORD dwBytesRead;
+			SetFilePointer(pImageInfo->hFile, 0, NULL,FILE_BEGIN);
+			ReadFile(pImageInfo->hFile, m_pHeader, 88, &dwBytesRead, NULL);
+		}
+
+		// IF THIS IMAGE CONTAINS USER DATA, READ THE TRACK AND NIBBLIZE IT
+		if (*(m_pHeader+13) <= 2)
+		{
+			ConvertSectorOrder(m_pHeader+14);
+			SetFilePointer(pImageInfo->hFile, nTrack*TRACK_DENIBBLIZED_SIZE+30, NULL, FILE_BEGIN);
+			ZeroMemory(ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE);
+			DWORD bytesread;
+			ReadFile(pImageInfo->hFile, ms_pWorkBuffer, TRACK_DENIBBLIZED_SIZE, &bytesread, NULL);
+			*pNibbles = NibblizeTrack(pTrackImageBuffer, eSIMSYSTEMOrder, nTrack);
+		}
+		// OTHERWISE, IF THIS IMAGE CONTAINS NIBBLE INFORMATION, READ IT DIRECTLY INTO THE TRACK BUFFER
+		else 
+		{
+			*pNibbles = *(LPWORD)(m_pHeader+nTrack*2+14);
+			LONG Offset = 88;
+			while (nTrack--)
+				Offset += *(LPWORD)(m_pHeader+nTrack*2+14);
+			SetFilePointer(pImageInfo->hFile, Offset, NULL,FILE_BEGIN);
+			ZeroMemory(pTrackImageBuffer, *pNibbles);
+			DWORD dwBytesRead;
+			ReadFile(pImageInfo->hFile, pTrackImageBuffer, *pNibbles, &dwBytesRead, NULL);
+		}
+	}
+
+	virtual void Write(ImageInfo* pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles)
+	{
+		// note: unimplemented
+	}
+
+	virtual eImageType GetType(void) { return eImageIIE; }
+	virtual char* GetCreateExtensions(void) { return ".iie"; }
+	virtual char* GetRejectExtensions(void) { return ".do.;.nib;.po;.prg;.2mg;.2img"; }
+
+private:
+	void ConvertSectorOrder(LPBYTE sourceorder)
+	{
+		int loop = 16;
+		while (loop--)
+		{
+			BYTE found = 0xFF;
+			int  loop2 = 16;
+			while (loop2-- && (found == 0xFF))
+			{
+				if (*(sourceorder+loop2) == loop)
+					found = loop2;
+			}
+
+			if (found == 0xFF)
+				found = 0;
+
+			ms_SectorNumber[2][loop] = found;
+		}
+	}
+
+private:
+	LPBYTE m_pHeader;
+};
+
+//-------------------------------------
+
+// RAW PROGRAM IMAGE (APL) FORMAT IMPLEMENTATION
+class CAplImage : public CImageBase
+{
+public:
+	CAplImage(void) {}
+	virtual ~CAplImage(void) {}
+
+	virtual bool Boot(ImageInfo* ptr)
+	{
+		SetFilePointer(ptr->hFile, 0, NULL, FILE_BEGIN);
+		WORD address = 0;
+		WORD length  = 0;
+		DWORD bytesread;
+		ReadFile(ptr->hFile, &address, sizeof(WORD), &bytesread, NULL);
+		ReadFile(ptr->hFile, &length , sizeof(WORD), &bytesread, NULL);
+		if ((((WORD)(address+length)) <= address) ||
+			(address >= 0xC000) ||
+			(address+length-1 >= 0xC000))
+		{
+			return false;
+		}
+
+		ReadFile(ptr->hFile, mem+address, length, &bytesread, NULL);
+		int loop = 192;
+		while (loop--)
+			*(memdirty+loop) = 0xFF;
+
+		regs.pc = address;
+		return true;
+	}
+
+	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
+	{
+		DWORD dwLength = *(LPWORD)(pImage+2);
+		bool bRes = (((dwLength+4) == dwImageSize) ||
+					((dwLength+4+((256-((dwLength+4) & 255)) & 255)) == dwImageSize));
+
+		return !bRes ? eMismatch : ePossibleMatch;
+	}
+
+	virtual bool AllowBoot(void) { return true; }
+	virtual bool AllowRW(void) { return false; }
+
+	virtual eImageType GetType(void) { return eImageAPL; }
+	virtual char* GetCreateExtensions(void) { return ".apl"; }
+	virtual char* GetRejectExtensions(void) { return ".do;.dsk;.iie;.nib;.po;.2mg;.2img"; }
+};
+
+//-------------------------------------
+
 class CPrgImage : public CImageBase
 {
 public:
@@ -825,7 +856,7 @@ public:
 
 	virtual eDetectResult Detect(LPBYTE pImage, DWORD dwImageSize)
 	{
-		return (*(LPDWORD)pImage == 0x214C470A) ? eMatch : eMismatch;
+		return (*(LPDWORD)pImage == 0x214C470A) ? eMatch : eMismatch;	// "!LG\x0A"
 	}
 
 	virtual bool AllowBoot(void) { return true; }
@@ -833,19 +864,108 @@ public:
 
 	virtual eImageType GetType(void) { return eImagePRG; }
 	virtual char* GetCreateExtensions(void) { return ".prg"; }
-	virtual char* GetRejectExtensions(void) { return ".do;.dsk;.iie;.nib;.po"; }
+	virtual char* GetRejectExtensions(void) { return ".do;.dsk;.iie;.nib;.po;.2mg;.2img"; }
 };
 
 //-----------------------------------------------------------------------------
 
-CDiskImageHelper::CDiskImageHelper(void)
+eDetectResult CMacBinaryHelper::DetectHdr(LPBYTE& pImage, DWORD& dwImageSize, DWORD& dwOffset)
 {
-	m_vecImageTypes.push_back( new CAplImage );
+	// DETERMINE WHETHER THE FILE HAS A 128-BYTE MACBINARY HEADER
+	if ((dwImageSize > uMacBinHdrSize) &&
+		(!*pImage) &&
+		(*(pImage+1) < 120) &&
+		(!*(pImage+*(pImage+1)+2)) &&
+		(*(pImage+0x7A) == 0x81) &&
+		(*(pImage+0x7B) == 0x81))
+	{
+		pImage += uMacBinHdrSize;
+		dwImageSize -= uMacBinHdrSize;
+		dwOffset = uMacBinHdrSize;
+		return eMatch;
+	}
+
+	return eMismatch;
+}
+
+eDetectResult C2IMGHelper::DetectHdr(LPBYTE& pImage, DWORD& dwImageSize, DWORD& dwOffset)
+{
+	Header2IMG* pHdr = (Header2IMG*) pImage;
+
+	if (dwImageSize < sizeof(Header2IMG) || pHdr->FormatID != FormatID_2IMG || pHdr->HeaderSize != sizeof(Header2IMG))
+		return eMismatch;
+
+	if (pHdr->Version != 1)
+		return eMismatch;
+
+	if (dwImageSize < sizeof(Header2IMG)+pHdr->DiskDataLength)
+		return eMismatch;
+
+	//
+
+	pImage += sizeof(Header2IMG);
+	dwImageSize = pHdr->DiskDataLength;
+	dwOffset += sizeof(Header2IMG);
+
+	switch (pHdr->ImageFormat)
+	{
+	case e2IMGFormatDOS33:
+		{
+			if (pHdr->DiskDataLength < TRACKS_STANDARD*TRACK_DENIBBLIZED_SIZE)
+				return eMismatch;
+		}
+		break;
+	case e2IMGFormatProDOS:
+		{
+			if (pHdr->DiskDataLength < TRACKS_STANDARD*TRACK_DENIBBLIZED_SIZE)
+				return eMismatch;
+
+			if (pHdr->DiskDataLength == UNIDISK35_800K_SIZE)
+				return eMismatch;
+
+			if (pHdr->DiskDataLength > UNIDISK35_800K_SIZE)	// HDD image?
+				return eMismatch;
+		}
+		break;
+	case e2IMGFormatNIBData:
+		{
+			if (pHdr->DiskDataLength != TRACKS_STANDARD*NIBBLES_PER_TRACK)
+				return eMismatch;
+		}
+		break;
+	default:
+		return eMismatch;
+	}
+
+	memcpy(&m_Hdr, pHdr, sizeof(m_Hdr));
+	return eMatch;
+}
+
+BYTE C2IMGHelper::GetVolumeNumber(void)
+{
+	if (m_Hdr.ImageFormat != e2IMGFormatDOS33 || !m_Hdr.Flags.bDOS33VolumeNumberValid)
+		return 254;
+
+	return m_Hdr.Flags.VolumeNumber;
+}
+
+bool C2IMGHelper::IsLocked(void)
+{
+	return m_Hdr.Flags.bDiskImageLocked;
+}
+
+//-----------------------------------------------------------------------------
+
+CDiskImageHelper::CDiskImageHelper(void) :
+	m_Result2IMG(eMismatch)
+{
 	m_vecImageTypes.push_back( new CDoImage );
-	m_vecImageTypes.push_back( new CIIeImage );
+	m_vecImageTypes.push_back( new CPoImage );
 	m_vecImageTypes.push_back( new CNib1Image );
 	m_vecImageTypes.push_back( new CNib2Image );
-	m_vecImageTypes.push_back( new CPoImage );
+	m_vecImageTypes.push_back( new CHDVImage );
+	m_vecImageTypes.push_back( new CIIeImage );
+	m_vecImageTypes.push_back( new CAplImage );
 	m_vecImageTypes.push_back( new CPrgImage );
 }
 
@@ -855,28 +975,11 @@ CDiskImageHelper::~CDiskImageHelper(void)
 		delete m_vecImageTypes[i];
 }
 
-void CDiskImageHelper::SkipMacBinaryHdr(LPBYTE& pImage, DWORD& dwSize, DWORD& dwOffset)
+CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset, bool* pWriteProtected_)
 {
 	dwOffset = 0;
-
-	// DETERMINE WHETHER THE FILE HAS A 128-BYTE MACBINARY HEADER
-	const UINT uMacBinHdrSize = 128;
-	if ((dwSize > uMacBinHdrSize) &&
-		(!*pImage) &&
-		(*(pImage+1) < 120) &&
-		(!*(pImage+*(pImage+1)+2)) &&
-		(*(pImage+0x7A) == 0x81) &&
-		(*(pImage+0x7B) == 0x81))
-	{
-		pImage += uMacBinHdrSize;
-		dwSize -= uMacBinHdrSize;
-		dwOffset = uMacBinHdrSize;
-	}
-}
-
-CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* pszExt, DWORD& dwOffset)
-{
-	SkipMacBinaryHdr(pImage, dwSize, dwOffset);
+	m_MacBinaryHelper.DetectHdr(pImage, dwSize, dwOffset);
+	m_Result2IMG = m_2IMGHelper.DetectHdr(pImage, dwSize, dwOffset);	// TODO: Return: VolNumber, Locked
 
 	// CALL THE DETECTION FUNCTIONS IN ORDER, LOOKING FOR A MATCH
 	eImageType ImageType = eImageUNKNOWN;
@@ -904,7 +1007,28 @@ CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* p
 	if (ImageType == eImageUNKNOWN)
 		ImageType = PossibleType;
 
-	return GetImage(ImageType);
+	CImageBase* pImageType = GetImage(ImageType);
+
+	if (pImageType)
+	{
+		if (pImageType->AllowRW())
+		{
+			const UINT uNumTracksInImage = GetNumTracksInImage(pImageType);
+			_ASSERT(uNumTracksInImage);	// Should've been set by Image's Detect()
+			if (uNumTracksInImage == 0)
+				SetNumTracksInImage(pImageType, (dwSize > 0) ? TRACKS_STANDARD : 0);	// Assume default # tracks
+		}
+
+		if (m_Result2IMG == eMatch)
+		{
+			pImageType->m_uVolumeNumber = m_2IMGHelper.GetVolumeNumber();
+
+			if (m_2IMGHelper.IsLocked() && !*pWriteProtected_)
+				*pWriteProtected_ = 1;
+		}
+	}
+
+	return pImageType;
 }
 
 CImageBase* CDiskImageHelper::GetImageForCreation(const TCHAR* pszExt)
@@ -916,8 +1040,17 @@ CImageBase* CDiskImageHelper::GetImageForCreation(const TCHAR* pszExt)
 			continue;
 
 		if (*pszExt && _tcsstr(GetImage(uLoop)->GetCreateExtensions(), pszExt))
-			return GetImage(uLoop);
+		{
+			CImageBase* pImageType = GetImage(uLoop);
+			SetNumTracksInImage(pImageType, TRACKS_STANDARD);	// Assume default # tracks
+			return pImageType;
+		}
 	}
 
 	return NULL;
+}
+
+UINT CDiskImageHelper::GetMaxFloppyImageSize(void)
+{
+	return UNIDISK35_800K_SIZE + m_MacBinaryHelper.GetMaxHdrSize() + m_2IMGHelper.GetMaxHdrSize();
 }

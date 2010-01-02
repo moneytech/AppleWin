@@ -269,7 +269,8 @@ static void ReadTrack (int iDrive)
 }
 
 //===========================================================================
-static void RemoveDisk (int iDrive)
+
+static void RemoveDisk(int iDrive)
 {
 	Disk_t *pFloppy = &g_aFloppyDisk[iDrive];
 
@@ -497,6 +498,18 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 		bCreateIfNecessary,
 		fptr->strFilenameInZip);
 
+	if (Error == eIMAGE_ERROR_NONE && ImageIsMultiFileZip(fptr->imagehandle))
+	{
+		TCHAR szText[100+MAX_PATH];
+		wsprintf(szText, "Only the first file in a multi-file zip is supported\nUse disk image '%s' ?", fptr->strFilenameInZip.c_str());
+		int nRes = MessageBox(g_hFrameWindow, szText, TEXT("Multi-Zip Warning"), MB_ICONWARNING | MB_YESNO | MB_SETFOREGROUND);
+		if (nRes == IDNO)
+		{
+			RemoveDisk(iDrive);
+			Error = eIMAGE_ERROR_REJECTED_MULTI_ZIP;
+		}
+	}
+
 	if (Error == eIMAGE_ERROR_NONE)
 	{
 		GetImageTitle(pszImageFilename, fptr);
@@ -523,6 +536,7 @@ BOOL DiskIsSpinning ()
 }
 
 //===========================================================================
+
 void DiskNotifyInvalidImage(const int iDrive, LPCTSTR pszImageFilename, const ImageError_e Error)
 {
 	TCHAR szBuffer[MAX_PATH+128];
@@ -559,6 +573,15 @@ void DiskNotifyInvalidImage(const int iDrive, LPCTSTR pszImageFilename, const Im
 			szBuffer,
 			TEXT("Unable to use the file %s\nbecause the ")
 			TEXT("disk image format is not recognized."),
+			pszImageFilename);
+		break;
+
+	case eIMAGE_ERROR_UNSUPPORTED_HDV:
+		wsprintf(
+			szBuffer,
+			TEXT("Unable to use the file %s\n")
+			TEXT("because this UniDisk 3.5/GS/hard-disk image is not supported.\n")
+			TEXT("Try inserting as a hard-disk image instead."),
 			pszImageFilename);
 		break;
 
@@ -710,8 +733,8 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 	ofn.lStructSize     = sizeof(OPENFILENAME);
 	ofn.hwndOwner       = g_hFrameWindow;
 	ofn.hInstance       = g_hInstance;
-	ofn.lpstrFilter     =	TEXT("All Images\0*.apl;*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
-							TEXT("Disk Images (*.bin,*.do,*.dsk,*.iie,*.nib,*.po,*.gz,*.zip)\0*.bin;*.do;*.dsk;*.iie;*.nib;*.po;*.gz;*.zip\0")
+	ofn.lpstrFilter     =	TEXT("All Images\0*.bin;*.do;*.dsk;*.nib;*.po;*.gz;*.zip;*.2mg;*.2img;*.iie;*.apl\0")
+							TEXT("Disk Images (*.bin,*.do,*.dsk,*.nib,*.po,*.gz,*.zip,*.2mg,*.2img,*.iie)\0*.bin;*.do;*.dsk;*.nib;*.po;*.gz;*.zip;*.2mg;*.2img;*.iie\0")
 							TEXT("All Files\0*.*\0");
 	ofn.lpstrFile       = filename;
 	ofn.nMaxFile        = MAX_PATH;

@@ -14,8 +14,10 @@ enum ImageError_e
 	eIMAGE_ERROR_BAD_SIZE,
 	eIMAGE_ERROR_BAD_FILE,
 	eIMAGE_ERROR_UNSUPPORTED,
+	eIMAGE_ERROR_UNSUPPORTED_HDV,
 	eIMAGE_ERROR_GZ,
 	eIMAGE_ERROR_ZIP,
+	eIMAGE_ERROR_REJECTED_MULTI_ZIP,
 	eIMAGE_ERROR_UNSUPPORTED_MULTI_ZIP,
 	eIMAGE_ERROR_UNABLE_TO_OPEN,
 	eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
@@ -34,3 +36,4 @@ void ImageWriteTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPB
 
 int ImageGetNumTracks(const HIMAGE hDiskImage);
 bool ImageIsWriteProtected(const HIMAGE hDiskImage);
+bool ImageIsMultiFileZip(const HIMAGE hDiskImage);

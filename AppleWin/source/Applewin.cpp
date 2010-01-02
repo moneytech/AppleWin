@@ -604,18 +604,20 @@ bool g_bRegistryFilePo  = true;
 
 
 //===========================================================================
-void RegisterExtensions ()
+
+void RegisterExtensions()
 {
 	TCHAR szCommandTmp[MAX_PATH];
 	GetModuleFileName((HMODULE)0,szCommandTmp,MAX_PATH);
 
-#if TEST_REG_BUG
+#ifdef TEST_REG_BUG
 	TCHAR command[MAX_PATH];
 	wsprintf(command, "%s",	szCommandTmp);	// Wrap	path & filename	in quotes &	null terminate
 
 	TCHAR icon[MAX_PATH];
 	wsprintf(icon,TEXT("\"%s,1\""),(LPCTSTR)command);
 #endif
+
 	TCHAR command[MAX_PATH];
 	wsprintf(command, "\"%s\"",	szCommandTmp);	// Wrap	path & filename	in quotes &	null terminate
 
@@ -626,11 +628,16 @@ void RegisterExtensions ()
 //	_tcscat(command,TEXT("-d1 %1\""));			// Append "%1"
 //	sprintf(command, "\"%s\" \"-d1 %%1\"", szCommandTmp);	// Wrap	path & filename	in quotes &	null terminate
 
-	RegSetValue(HKEY_CLASSES_ROOT,".bin",REG_SZ,"DiskImage",10);
+	// NB. Reflect extensions in DELREG.INF
+//	RegSetValue(HKEY_CLASSES_ROOT,".bin",REG_SZ,"DiskImage",10);	// Removed as .bin is too generic
+	long Res = RegDeleteValue(HKEY_CLASSES_ROOT, ".bin");
+
 	RegSetValue(HKEY_CLASSES_ROOT,".do"	,REG_SZ,"DiskImage",10);
 	RegSetValue(HKEY_CLASSES_ROOT,".dsk",REG_SZ,"DiskImage",10);
 	RegSetValue(HKEY_CLASSES_ROOT,".nib",REG_SZ,"DiskImage",10);
 	RegSetValue(HKEY_CLASSES_ROOT,".po"	,REG_SZ,"DiskImage",10);
+//	RegSetValue(HKEY_CLASSES_ROOT,".2mg",REG_SZ,"DiskImage",10);	// Don't grab this, as not all .2mg images are supported (so defer to CiderPress)
+//	RegSetValue(HKEY_CLASSES_ROOT,".2img",REG_SZ,"DiskImage",10);	// Don't grab this, as not all .2mg images are supported (so defer to CiderPress)
 //	RegSetValue(HKEY_CLASSES_ROOT,".aws",REG_SZ,"DiskImage",10);	// TO DO
 //	RegSetValue(HKEY_CLASSES_ROOT,".hdv",REG_SZ,"DiskImage",10);	// TO DO
 

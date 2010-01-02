@@ -103,13 +103,14 @@ void ImageInitialize(void)
 
 //===========================================================================
 
+// Pre: *pWriteProtected_ already set to file's r/w status - see DiskInsert()
 static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_)
 {
 	gzFile hGZFile = gzopen(pszImageFilename, "rb");
 	if (hGZFile == NULL)
 		return eIMAGE_ERROR_UNABLE_TO_OPEN_GZ;
 
-	const UINT MAX_UNCOMPRESSED_SIZE = 512*1024;
+	const UINT MAX_UNCOMPRESSED_SIZE = sg_DiskImageHelper.GetMaxFloppyImageSize() + 1;	// +1 to detect images that are too big
 	pImageInfo->pImageBuffer = new BYTE[MAX_UNCOMPRESSED_SIZE];
 	if (!pImageInfo->pImageBuffer)
 		return eIMAGE_ERROR_BAD_POINTER;
@@ -126,10 +127,9 @@ static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInf
 	//
 
 	DWORD dwSize = nLen;
-	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks - done before Detect()
-
 	DWORD dwOffset = 0;
-	CImageBase* pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, "", dwOffset);
+	// TODO: Try to derive pszExt from <FILENAME.ext.gz>
+	CImageBase* pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, "", dwOffset, pWriteProtected_);
 
 	if (!pImageType)
 		return eIMAGE_ERROR_UNSUPPORTED;
@@ -148,6 +148,7 @@ static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInf
 
 //-------------------------------------
 
+// Pre: *pWriteProtected_ already set to file's r/w status - see DiskInsert()
 static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_, std::string& strFilenameInZip)
 {
 	zlib_filefunc_def ffunc;
@@ -174,6 +175,9 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 		return eIMAGE_ERROR_ZIP;
 
 	const UINT uFileSize = file_info.uncompressed_size;
+	if (uFileSize > sg_DiskImageHelper.GetMaxFloppyImageSize())
+		return eIMAGE_ERROR_BAD_SIZE;
+
 	pImageInfo->pImageBuffer = new BYTE[uFileSize];
 	if (!pImageInfo->pImageBuffer)
 		return eIMAGE_ERROR_BAD_POINTER;
@@ -203,15 +207,15 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 	pImageInfo->zipFileInfo.dosDate     = file_info.dosDate;
 	pImageInfo->zipFileInfo.internal_fa = file_info.internal_fa;
 	pImageInfo->zipFileInfo.external_fa = file_info.external_fa;
+	pImageInfo->uNumEntriesInZip = global_info.number_entry;
 	strFilenameInZip = szFilename;
 
 	//
 
 	DWORD dwSize = nLen;
-	sg_DiskImageHelper.SetNumTracksInImage( (dwSize > 0) ? TRACKS_STANDARD : 0 );	// Assume default # tracks - done before Detect()
-
 	DWORD dwOffset = 0;
-	CImageBase* pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, "", dwOffset);
+	// TODO: Try to derive pszExt from szFilenameInZip
+	CImageBase* pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, "", dwOffset, pWriteProtected_);
 
 	if (!pImageType)
 	{
@@ -238,6 +242,7 @@ static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo
 
 //-------------------------------------
 
+// Pre: *pWriteProtected_ already set to file's r/w status - see DiskInsert()
 static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, bool* pWriteProtected_, const bool bCreateIfNecessary)
 {
 	// TRY TO OPEN THE IMAGE FILE
@@ -294,14 +299,15 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 	_tcsncpy(szExt,imagefileext,_MAX_EXT);
 	CharLowerBuff(szExt,_tcslen(szExt));
 
-	DWORD dwSize = GetFileSize(hFile, NULL);
-	sg_DiskImageHelper.SetNumTracksInImage(TRACKS_STANDARD);	// Assume default # tracks - done before Detect()
-
 	CImageBase* pImageType = NULL;
+	DWORD dwSize = GetFileSize(hFile, NULL);
 	DWORD dwOffset = 0;
 
 	if (dwSize > 0)
 	{
+		if (dwSize > sg_DiskImageHelper.GetMaxFloppyImageSize())
+			return eIMAGE_ERROR_BAD_SIZE;
+
 		pImageInfo->pImageBuffer = new BYTE [dwSize];
 		if (!pImageInfo->pImageBuffer)
 			return eIMAGE_ERROR_BAD_POINTER;
@@ -311,7 +317,7 @@ static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageI
 		if (!bRes || dwSize != dwBytesRead)
 			return eIMAGE_ERROR_BAD_SIZE;
 
-		pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, szExt, dwOffset);
+		pImageType = sg_DiskImageHelper.Detect(pImageInfo->pImageBuffer, dwSize, szExt, dwOffset, pWriteProtected_);
 	}
 	else	// Create (or pre-existing zero-length file)
 	{
@@ -394,6 +400,9 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 	if (pImageInfo->pImageType == NULL && Err == eIMAGE_ERROR_NONE)
 		Err = eIMAGE_ERROR_UNSUPPORTED;
 
+	if (pImageInfo->pImageType != NULL && Err == eIMAGE_ERROR_NONE && pImageInfo->pImageType->GetType() == eImageHDV)
+		Err = eIMAGE_ERROR_UNSUPPORTED_HDV;
+
 	if (Err != eIMAGE_ERROR_NONE)
 	{
 		ImageClose(*hDiskImage_, true);
@@ -402,7 +411,7 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 	}
 
 	// THE FILE MATCHES A KNOWN FORMAT
-	const UINT uNumTracksInImage = sg_DiskImageHelper.GetNumTracksInImage();
+	const UINT uNumTracksInImage = sg_DiskImageHelper.GetNumTracksInImage(pImageInfo->pImageType);
 
 	_tcsncpy(pImageInfo->szFilename, pszImageFilename, MAX_PATH);
 	pImageInfo->bWriteProtected	= *pWriteProtected_;
@@ -466,10 +475,14 @@ int ImageGetNumTracks(const HIMAGE hDiskImage)
 	return ptr ? ptr->uNumTracks : 0;
 }
 
-//===========================================================================
-
 bool ImageIsWriteProtected(const HIMAGE hDiskImage)
 {
 	ImageInfo* ptr = (ImageInfo*) hDiskImage;
 	return ptr ? ptr->bWriteProtected : true;
+}
+
+bool ImageIsMultiFileZip(const HIMAGE hDiskImage)
+{
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
+	return ptr ? (ptr->uNumEntriesInZip > 1) : false;
 }
