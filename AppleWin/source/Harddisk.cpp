@@ -139,6 +139,15 @@ static CHardDiskImageHelper sg_HardDiskImageHelper;
 
 //===========================================================================
 
+static void HD_CleanupDrive(const int iDrive)
+{
+	sg_HardDiskImageHelper.Close(&g_HardDisk[iDrive].Info, false);
+
+	g_HardDisk[iDrive].hd_imageloaded = false;
+	g_HardDisk[iDrive].imagename[0] = 0;
+	g_HardDisk[iDrive].fullname[0] = 0;
+}
+
 static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 								const int iDrive,
 								const bool bCreateIfNecessary,
@@ -163,15 +172,6 @@ static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 }
 
 //-----------------------------------------------------------------------------
-
-static void HD_CleanupDrive(const int iDrive)
-{
-	sg_HardDiskImageHelper.Close(&g_HardDisk[iDrive].Info, false);
-
-	g_HardDisk[iDrive].hd_imageloaded = false;
-	g_HardDisk[iDrive].imagename[0] = 0;
-	g_HardDisk[iDrive].fullname[0] = 0;
-}
 
 static void GetImageTitle(LPCTSTR pszImageFilename, HDD* pHardDrive)
 {
