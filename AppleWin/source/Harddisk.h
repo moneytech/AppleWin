@@ -15,3 +15,5 @@ VOID HD_Cleanup(void);
 BOOL HD_InsertDisk2(const int iDrive, LPCTSTR pszFilename);
 BOOL HD_InsertDisk(const int iDrive, LPCTSTR pszImageFilename);
 void HD_Select(const int iDrive);
+void HD_Unplug(const int iDrive);
+bool HD_IsDriveUnplugged(const int iDrive);

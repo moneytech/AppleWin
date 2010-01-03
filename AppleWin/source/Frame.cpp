@@ -1219,21 +1219,21 @@ LRESULT CALLBACK FrameWndProc (
 					else
 */
 					{
-						RECT  rect;    // client area             
-						POINT pt;   // location of mouse click  
+						RECT  rect;		// client area
+						POINT pt;		// location of mouse click
 
-   						// Get the bounding rectangle of the client area. 
-						GetClientRect(window, (LPRECT) &rect); 
-			 
-						// Get the client coordinates for the mouse click.  
-						pt.x = GET_X_LPARAM(lparam); 
-						pt.y = GET_Y_LPARAM(lparam); 
-			 
-						// If the mouse click took place inside the client 
-						// area, execute the application-defined function 
-						// that displays the shortcut menu. 
-						if (PtInRect((LPRECT) &rect, pt)) 
-							ProcessDiskPopupMenu( window, pt, iDrive ); 
+   						// Get the bounding rectangle of the client area.
+						GetClientRect(window, (LPRECT) &rect);
+
+						// Get the client coordinates for the mouse click.
+						pt.x = GET_X_LPARAM(lparam);
+						pt.y = GET_Y_LPARAM(lparam);
+
+						// If the mouse click took place inside the client
+						// area, execute the application-defined function
+						// that displays the shortcut menu.
+						if (PtInRect((LPRECT) &rect, pt))
+							ProcessDiskPopupMenu( window, pt, iDrive );
                 	}
 
 					FrameRefreshStatus(DRAW_LEDS | DRAW_BUTTON_DRIVES);
@@ -1508,7 +1508,7 @@ void ProcessButtonClick (int button)
 // http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/winui/windowsuserinterface/resources/menus/usingmenus.asp
 // http://www.codeproject.com/menu/MenusForBeginners.asp?df=100&forumid=67645&exp=0&select=903061
 
-void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive) 
+void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 {		
 	//This is the default installation path of CiderPress. It shall not be left blank, otherwise  an explorer window will be open.
 	TCHAR PathToCiderPress[MAX_PATH] = "C:\\Program Files\\faddenSoft\\CiderPress\\CiderPress.exe";
@@ -1520,20 +1520,20 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	filename1.append ("\"");
 	string sFileNameEmpty = "\"";
 	sFileNameEmpty.append ("\"");
-		
-	//  Load the menu template containing the shortcut menu from the 
-	//  application's resources. 
-	HMENU hmenu = LoadMenu(g_hInstance, MAKEINTRESOURCE(ID_MENU_DISK_POPUP));	// menu template
-	if (hmenu == NULL) 
-		return; 
+
+	//  Load the menu template containing the shortcut menu from the
+	//  application's resources.
+	HMENU hmenu = LoadMenu(g_hInstance, MAKEINTRESOURCE(IDR_MENU_DISK_POPUP));	// menu template
+	if (hmenu == NULL)
+		return;
 
 	// Get the first shortcut menu in the menu template.
-	// This is the menu that TrackPopupMenu displays. 
+	// This is the menu that TrackPopupMenu displays.
 	HMENU hmenuTrackPopup = GetSubMenu(hmenu, 0);	// shortcut menu
 
-	// TrackPopup uses screen coordinates, so convert the 
-	// coordinates of the mouse click to screen coordinates. 
-	ClientToScreen(hwnd, (LPPOINT) &pt); 
+	// TrackPopup uses screen coordinates, so convert the
+	// coordinates of the mouse click to screen coordinates.
+	ClientToScreen(hwnd, (LPPOINT) &pt);
 
 	// Check menu depending on current floppy protection
 	{
@@ -1554,13 +1554,13 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 		EnableMenuItem(hmenu, ID_DISKMENU_WRITEPROTECTION_OFF, MF_GRAYED);
 	}
 
-	// Draw and track the shortcut menu.  
+	// Draw and track the shortcut menu.
 	int iCommand = TrackPopupMenu(
 		hmenuTrackPopup
 		, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RETURNCMD
 		, pt.x, pt.y
 		, 0
-		, hwnd, NULL ); 
+		, hwnd, NULL );
 
 	if (iCommand == ID_DISKMENU_EJECT)
 		DiskEject( iDrive );
@@ -1574,7 +1574,7 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 	if (iCommand == ID_DISKMENU_SENDTO_CIDERPRESS)
 	{
 		//if(!filename1.compare("\"\"") == false) //Do not use this, for some reason it does not work!!!
-		if(!filename1.compare(sFileNameEmpty) )		
+		if(!filename1.compare(sFileNameEmpty) )
 		{
 			int MB_Result = MessageBox( NULL, "No disk image loaded. Do you want to run CiderPress anyway?" ,"No disk image.", MB_ICONINFORMATION|MB_YESNO );
 			if (MB_Result == IDYES)
@@ -1583,7 +1583,7 @@ void ProcessDiskPopupMenu(HWND hwnd, POINT pt, const int iDrive)
 				{
 					HINSTANCE nResult  = ShellExecute(NULL, "open", PathToCiderPress, "" , NULL, SW_SHOWNORMAL);
 				}
-				else					
+				else
 				{
 					MessageBox( NULL,
 						"CiderPress not found!\n"

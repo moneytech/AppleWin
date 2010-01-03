@@ -92,8 +92,6 @@ static void ReadTrack (int drive);
 static void RemoveDisk (int drive);
 static void WriteTrack (int drive);
 
-// ________________________________________________________________________________________________
-
 //===========================================================================
 
 void Disk_LoadLastDiskImage(const int iDrive)
@@ -129,7 +127,7 @@ void Disk_SaveLastDiskImage(const int iDrive)
 {
 	const char *pFileName = DiskPathFilename[iDrive].c_str();
 
-	if( g_bSaveDiskImage )
+	if(g_bSaveDiskImage)
 	{
 		if( iDrive == DRIVE_1 )
 			RegSaveString(TEXT(REG_PREFS),REGVALUE_PREF_LAST_DISK_1,1,pFileName );
@@ -142,11 +140,11 @@ void Disk_SaveLastDiskImage(const int iDrive)
 
 static void CheckSpinning(void)
 {
-  DWORD modechange = (floppymotoron && !g_aFloppyDisk[currdrive].spinning);
-  if (floppymotoron)
-    g_aFloppyDisk[currdrive].spinning = 20000;
-  if (modechange)
-    FrameRefreshStatus(DRAW_LEDS);
+	DWORD modechange = (floppymotoron && !g_aFloppyDisk[currdrive].spinning);
+	if (floppymotoron)
+		g_aFloppyDisk[currdrive].spinning = 20000;
+	if (modechange)
+		FrameRefreshStatus(DRAW_LEDS);
 }
 
 //===========================================================================
@@ -181,38 +179,39 @@ static void GetImageTitle(LPCTSTR imagefilename, Disk_t* fptr)
 	TCHAR   imagetitle[ MAX_DISK_FULL_NAME+1 ];
 	LPCTSTR startpos = imagefilename;
 
-  // imagetitle = <FILENAME.EXT>
-  if (_tcsrchr(startpos,TEXT('\\')))
-    startpos = _tcsrchr(startpos,TEXT('\\'))+1;
-  _tcsncpy(imagetitle,startpos,MAX_DISK_FULL_NAME);
-  imagetitle[MAX_DISK_FULL_NAME] = 0;
+	// imagetitle = <FILENAME.EXT>
+	if (_tcsrchr(startpos,TEXT('\\')))
+		startpos = _tcsrchr(startpos,TEXT('\\'))+1;
 
-  // if imagetitle contains a lowercase char, then found=1 (why?)
-  BOOL found = 0;
-  int  loop  = 0;
-  while (imagetitle[loop] && !found)
-  {
-    if (IsCharLower(imagetitle[loop]))
-      found = 1;
-    else
-      loop++;
-  }
+	_tcsncpy(imagetitle,startpos,MAX_DISK_FULL_NAME);
+	imagetitle[MAX_DISK_FULL_NAME] = 0;
 
-  if ((!found) && (loop > 2))
-    CharLowerBuff(imagetitle+1,_tcslen(imagetitle+1));
+	// if imagetitle contains a lowercase char, then found=1 (why?)
+	BOOL found = 0;
+	int  loop  = 0;
+	while (imagetitle[loop] && !found)
+	{
+		if (IsCharLower(imagetitle[loop]))
+			found = 1;
+		else
+			loop++;
+	}
 
-  // fptr->fullname = <FILENAME.EXT>
-  _tcsncpy( fptr->fullname, imagetitle, MAX_DISK_FULL_NAME );
-  fptr->fullname[ MAX_DISK_FULL_NAME ] = 0;
+	if ((!found) && (loop > 2))
+		CharLowerBuff(imagetitle+1,_tcslen(imagetitle+1));
 
-  if (imagetitle[0])
-  {
-    LPTSTR dot = imagetitle;
-    if (_tcsrchr(dot,TEXT('.')))
-      dot = _tcsrchr(dot,TEXT('.'));
-    if (dot > imagetitle)
-      *dot = 0;
-  }
+	// fptr->fullname = <FILENAME.EXT>
+	_tcsncpy( fptr->fullname, imagetitle, MAX_DISK_FULL_NAME );
+	fptr->fullname[ MAX_DISK_FULL_NAME ] = 0;
+
+	if (imagetitle[0])
+	{
+		LPTSTR dot = imagetitle;
+		if (_tcsrchr(dot,TEXT('.')))
+			dot = _tcsrchr(dot,TEXT('.'));
+		if (dot > imagetitle)
+			*dot = 0;
+	}
 
 	// fptr->imagename = <FILENAME> (ie. no extension)
 	_tcsncpy( fptr->imagename, imagetitle, MAX_DISK_IMAGE_NAME );
@@ -229,14 +228,15 @@ static bool IsDriveValid(const int iDrive)
 
 //===========================================================================
 
-static void AllocTrack(int drive)
+static void AllocTrack(const int iDrive)
 {
-  Disk_t * fptr = &g_aFloppyDisk[drive];
-  fptr->trackimage = (LPBYTE)VirtualAlloc(NULL,NIBBLES_PER_TRACK,MEM_COMMIT,PAGE_READWRITE);
+  Disk_t * fptr = &g_aFloppyDisk[iDrive];
+  fptr->trackimage = (LPBYTE)VirtualAlloc(NULL, NIBBLES_PER_TRACK, MEM_COMMIT, PAGE_READWRITE);
 }
 
 //===========================================================================
-static void ReadTrack (int iDrive)
+
+static void ReadTrack(const int iDrive)
 {
 	if (! IsDriveValid( iDrive ))
 		return;
@@ -270,7 +270,7 @@ static void ReadTrack (int iDrive)
 
 //===========================================================================
 
-static void RemoveDisk(int iDrive)
+static void RemoveDisk(const int iDrive)
 {
 	Disk_t *pFloppy = &g_aFloppyDisk[iDrive];
 
@@ -300,7 +300,8 @@ static void RemoveDisk(int iDrive)
 }
 
 //===========================================================================
-static void WriteTrack (int iDrive)
+
+static void WriteTrack(const int iDrive)
 {
 	Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
 
@@ -326,106 +327,112 @@ static void WriteTrack (int iDrive)
 //
 
 //===========================================================================
-void DiskBoot () {
 
-  // THIS FUNCTION RELOADS A PROGRAM IMAGE IF ONE IS LOADED IN DRIVE ONE.
-  // IF A DISK IMAGE OR NO IMAGE IS LOADED IN DRIVE ONE, IT DOES NOTHING.
-  if (g_aFloppyDisk[0].imagehandle && ImageBoot(g_aFloppyDisk[0].imagehandle))
-    floppymotoron = 0;
-
-}
-
-//===========================================================================
-static BYTE __stdcall DiskControlMotor (WORD, WORD address, BYTE, BYTE, ULONG) {
-  floppymotoron = address & 1;
-  CheckSpinning();
-  return MemReturnRandomData(1);
-}
-
-//===========================================================================
-static BYTE __stdcall DiskControlStepper (WORD, WORD address, BYTE, BYTE, ULONG)
+void DiskBoot(void)
 {
-  Disk_t * fptr = &g_aFloppyDisk[currdrive];
-  int phase     = (address >> 1) & 3;
-  int phase_bit = (1 << phase);
-
-  // update the magnet states
-  if (address & 1)
-  {
-    // phase on
-    phases |= phase_bit;
-    LOG_DISK("track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
-  }
-  else
-  {
-    // phase off
-    phases &= ~phase_bit;
-    LOG_DISK("track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
-  }
-
-  // check for any stepping effect from a magnet
-  // - move only when the magnet opposite the cog is off
-  // - move in the direction of an adjacent magnet if one is on
-  // - do not move if both adjacent magnets are on
-  // momentum and timing are not accounted for ... maybe one day!
-  int direction = 0;
-  if (phases & (1 << ((fptr->phase + 1) & 3)))
-    direction += 1;
-  if (phases & (1 << ((fptr->phase + 3) & 3)))
-    direction -= 1;
-
-  // apply magnet step, if any
-  if (direction)
-  {
-    fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
-	const int nNumTracksInImage = ImageGetNumTracks(fptr->imagehandle);
-    const int newtrack = (nNumTracksInImage == 0) ? 0
-												  : MIN(nNumTracksInImage-1, fptr->phase >> 1); // (round half tracks down)
-    LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
-    if (newtrack != fptr->track)
-    {
-      if (fptr->trackimage && fptr->trackimagedirty)
-      {
-        WriteTrack(currdrive);
-      }
-      fptr->track          = newtrack;
-      fptr->trackimagedata = 0;
-    }
-  }
-  return (address == 0xE0) ? 0xFF : MemReturnRandomData(1);
+	// THIS FUNCTION RELOADS A PROGRAM IMAGE IF ONE IS LOADED IN DRIVE ONE.
+	// IF A DISK IMAGE OR NO IMAGE IS LOADED IN DRIVE ONE, IT DOES NOTHING.
+	if (g_aFloppyDisk[0].imagehandle && ImageBoot(g_aFloppyDisk[0].imagehandle))
+		floppymotoron = 0;
 }
 
 //===========================================================================
-void DiskDestroy ()
+
+static BYTE __stdcall DiskControlMotor(WORD, WORD address, BYTE, BYTE, ULONG)
+{
+	floppymotoron = address & 1;
+	CheckSpinning();
+	return MemReturnRandomData(1);
+}
+
+//===========================================================================
+
+static BYTE __stdcall DiskControlStepper(WORD, WORD address, BYTE, BYTE, ULONG)
+{
+	Disk_t * fptr = &g_aFloppyDisk[currdrive];
+	int phase     = (address >> 1) & 3;
+	int phase_bit = (1 << phase);
+
+	// update the magnet states
+	if (address & 1)
+	{
+		// phase on
+		phases |= phase_bit;
+		LOG_DISK("track %02X phases %X phase %d on  address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+	}
+	else
+	{
+		// phase off
+		phases &= ~phase_bit;
+		LOG_DISK("track %02X phases %X phase %d off address $C0E%X\r", fptr->phase, phases, phase, address & 0xF);
+	}
+
+	// check for any stepping effect from a magnet
+	// - move only when the magnet opposite the cog is off
+	// - move in the direction of an adjacent magnet if one is on
+	// - do not move if both adjacent magnets are on
+	// momentum and timing are not accounted for ... maybe one day!
+	int direction = 0;
+	if (phases & (1 << ((fptr->phase + 1) & 3)))
+		direction += 1;
+	if (phases & (1 << ((fptr->phase + 3) & 3)))
+		direction -= 1;
+
+	// apply magnet step, if any
+	if (direction)
+	{
+		fptr->phase = MAX(0, MIN(79, fptr->phase + direction));
+		const int nNumTracksInImage = ImageGetNumTracks(fptr->imagehandle);
+		const int newtrack = (nNumTracksInImage == 0)	? 0
+														: MIN(nNumTracksInImage-1, fptr->phase >> 1); // (round half tracks down)
+		LOG_DISK("newtrack %2X%s\r", newtrack, (fptr->phase & 1) ? ".5" : "");
+		if (newtrack != fptr->track)
+		{
+			if (fptr->trackimage && fptr->trackimagedirty)
+			{
+				WriteTrack(currdrive);
+			}
+			fptr->track          = newtrack;
+			fptr->trackimagedata = 0;
+		}
+	}
+
+	return (address == 0xE0) ? 0xFF : MemReturnRandomData(1);
+}
+
+//===========================================================================
+
+void DiskDestroy(void)
 {
 	g_bSaveDiskImage = false;
-	RemoveDisk(0);
+	RemoveDisk(DRIVE_1);
 
 	g_bSaveDiskImage = false;
-	RemoveDisk(1);
+	RemoveDisk(DRIVE_2);
 
 	g_bSaveDiskImage = true;
 }
 
 //===========================================================================
-static BYTE __stdcall DiskEnable (WORD, WORD address, BYTE, BYTE, ULONG) {
-  currdrive = address & 1;
-  g_aFloppyDisk[!currdrive].spinning   = 0;
-  g_aFloppyDisk[!currdrive].writelight = 0;
-  CheckSpinning();
-  return 0;
-}
 
+static BYTE __stdcall DiskEnable(WORD, WORD address, BYTE, BYTE, ULONG)
+{
+	currdrive = address & 1;
+	g_aFloppyDisk[!currdrive].spinning   = 0;
+	g_aFloppyDisk[!currdrive].writelight = 0;
+	CheckSpinning();
+	return 0;
+}
 
 //===========================================================================
-void DiskEject( const int iDrive )
+
+void DiskEject(const int iDrive)
 {
-	if (IsDriveValid( iDrive ))
+	if (IsDriveValid(iDrive))
 	{
-		RemoveDisk( iDrive );
+		RemoveDisk(iDrive);
 	}
 }
-
 
 //===========================================================================
 
@@ -453,7 +460,8 @@ LPCTSTR DiskGetBaseName(const int iDrive)
 	return g_aFloppyDisk[iDrive].imagename;
 }
 //===========================================================================
-void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
+
+void DiskGetLightStatus(int *pDisk1Status_, int *pDisk2Status_)
 {
 //	*drive1 = g_aFloppyDisk[0].spinning ? g_aFloppyDisk[0].writelight ? 2 : 1 : 0;
 //	*drive2 = g_aFloppyDisk[1].spinning ? g_aFloppyDisk[1].writelight ? 2 : 1 : 0;
@@ -466,7 +474,7 @@ void DiskGetLightStatus (int *pDisk1Status_, int *pDisk2Status_)
 
 //===========================================================================
 
-void DiskInitialize ()
+void DiskInitialize(void)
 {
 	int loop = NUM_DRIVES;
 	while (loop--)
@@ -530,7 +538,8 @@ ImageError_e DiskInsert(const int iDrive, LPCTSTR pszImageFilename, const bool b
 }
 
 //===========================================================================
-BOOL DiskIsSpinning ()
+
+BOOL DiskIsSpinning(void)
 {
 	return floppymotoron;
 }
@@ -618,9 +627,10 @@ void DiskNotifyInvalidImage(const int iDrive, LPCTSTR pszImageFilename, const Im
 
 
 //===========================================================================
-bool DiskGetProtect( const int iDrive )
+
+bool DiskGetProtect(const int iDrive)
 {
-	if (IsDriveValid( iDrive ))
+	if (IsDriveValid(iDrive))
 	{
 		Disk_t *pFloppy = &g_aFloppyDisk[ iDrive ];
 		if (pFloppy->bWriteProtected)
@@ -631,7 +641,8 @@ bool DiskGetProtect( const int iDrive )
 
 
 //===========================================================================
-void DiskSetProtect( const int iDrive, const bool bWriteProtect )
+
+void DiskSetProtect(const int iDrive, const bool bWriteProtect)
 {
 	if (IsDriveValid( iDrive ))
 	{
@@ -664,6 +675,7 @@ bool Disk_IsDriveEmpty(const int iDrive)
 }
 
 //===========================================================================
+
 static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULONG)
 {
 	Disk_t * fptr = &g_aFloppyDisk[currdrive];
@@ -709,14 +721,15 @@ static BYTE __stdcall DiskReadWrite (WORD programcounter, WORD, BYTE, BYTE, ULON
 
 //===========================================================================
 
-void DiskReset()
+void DiskReset(void)
 {
 	floppymotoron = 0;
 	phases = 0;
 }
 
 //===========================================================================
-void DiskSelectImage (int drive, LPSTR pszFilename)
+
+void DiskSelectImage(const int iDrive, LPSTR pszFilename)
 {
 	TCHAR directory[MAX_PATH] = TEXT("");
 	TCHAR filename[MAX_PATH];
@@ -724,9 +737,9 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 
 	strcpy(filename, pszFilename);
 
-	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,directory,MAX_PATH);
-	_tcscpy(title,TEXT("Select Disk Image For Drive "));
-	_tcscat(title,drive ? TEXT("2") : TEXT("1"));
+	RegLoadString(TEXT("Preferences"), REGVALUE_PREF_START_DIR, 1, directory, MAX_PATH);
+	_tcscpy(title, TEXT("Select Disk Image For Drive "));
+	_tcscat(title, iDrive ? TEXT("2") : TEXT("1"));
 
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn,sizeof(OPENFILENAME));
@@ -747,19 +760,19 @@ void DiskSelectImage (int drive, LPSTR pszFilename)
 		if ((!ofn.nFileExtension) || !filename[ofn.nFileExtension])
 			_tcscat(filename,TEXT(".DSK"));
 
-		ImageError_e Error = DiskInsert(drive, filename, ofn.Flags & OFN_READONLY, IMAGE_CREATE);
+		ImageError_e Error = DiskInsert(iDrive, filename, ofn.Flags & OFN_READONLY, IMAGE_CREATE);
 		if (Error == eIMAGE_ERROR_NONE)
 		{
-			DiskPathFilename[drive] = filename; 
+			DiskPathFilename[iDrive] = filename; 
 			filename[ofn.nFileOffset] = 0;
-			if (_tcsicmp(directory,filename))
+			if (_tcsicmp(directory, filename))
 			{
-				RegSaveString(TEXT(REG_PREFS),TEXT(REGVALUE_PREF_START_DIR),1,filename);
+				RegSaveString(TEXT(REG_PREFS), TEXT(REGVALUE_PREF_START_DIR), 1, filename);
 			}
 		}
 		else
 		{
-			DiskNotifyInvalidImage(drive, filename, Error);
+			DiskNotifyInvalidImage(iDrive, filename, Error);
 		}
 	}
 }
@@ -773,56 +786,71 @@ void DiskSelect(const int iDrive)
 
 //===========================================================================
 
-static BYTE __stdcall DiskSetLatchValue (WORD, WORD, BYTE write, BYTE value, ULONG) {
-  if (write)
-    floppylatch = value;
-  return floppylatch;
-}
-
-//===========================================================================
-static BYTE __stdcall DiskSetReadMode (WORD, WORD, BYTE, BYTE, ULONG) {
-  floppywritemode = 0;
-  return MemReturnRandomData(g_aFloppyDisk[currdrive].bWriteProtected);
-}
-
-//===========================================================================
-static BYTE __stdcall DiskSetWriteMode (WORD, WORD, BYTE, BYTE, ULONG) {
-  floppywritemode = 1;
-  BOOL modechange = !g_aFloppyDisk[currdrive].writelight;
-  g_aFloppyDisk[currdrive].writelight = 20000;
-  if (modechange)
-    FrameRefreshStatus(DRAW_LEDS);
-  return MemReturnRandomData(1);
-}
-
-//===========================================================================
-void DiskUpdatePosition (DWORD cycles) {
-  int loop = 2;
-  while (loop--) {
-    Disk_t * fptr = &g_aFloppyDisk[loop];
-    if (fptr->spinning && !floppymotoron) {
-      if (!(fptr->spinning -= MIN(fptr->spinning,(cycles >> 6))))
-        FrameRefreshStatus(DRAW_LEDS);
-    }
-    if (floppywritemode && (currdrive == loop) && fptr->spinning)
-      fptr->writelight = 20000;
-    else if (fptr->writelight) {
-      if (!(fptr->writelight -= MIN(fptr->writelight,(cycles >> 6))))
-        FrameRefreshStatus(DRAW_LEDS);
-    }
-    if ((!enhancedisk) && (!diskaccessed) && fptr->spinning) {
-      needsprecision = cumulativecycles;
-      fptr->byte += (cycles >> 5);
-      if (fptr->byte >= fptr->nibbles)
-        fptr->byte -= fptr->nibbles;
-    }
-  }
-  diskaccessed = 0;
+static BYTE __stdcall DiskSetLatchValue(WORD, WORD, BYTE write, BYTE value, ULONG) {
+	if (write)
+		floppylatch = value;
+	return floppylatch;
 }
 
 //===========================================================================
 
-bool DiskDriveSwap()
+static BYTE __stdcall DiskSetReadMode(WORD, WORD, BYTE, BYTE, ULONG)
+{
+	floppywritemode = 0;
+	return MemReturnRandomData(g_aFloppyDisk[currdrive].bWriteProtected);
+}
+
+//===========================================================================
+
+static BYTE __stdcall DiskSetWriteMode(WORD, WORD, BYTE, BYTE, ULONG)
+{
+	floppywritemode = 1;
+	BOOL modechange = !g_aFloppyDisk[currdrive].writelight;
+	g_aFloppyDisk[currdrive].writelight = 20000;
+	if (modechange)
+		FrameRefreshStatus(DRAW_LEDS);
+	return MemReturnRandomData(1);
+}
+
+//===========================================================================
+
+void DiskUpdatePosition(DWORD cycles)
+{
+	int loop = NUM_DRIVES;
+	while (loop--)
+	{
+		Disk_t * fptr = &g_aFloppyDisk[loop];
+
+		if (fptr->spinning && !floppymotoron) {
+			if (!(fptr->spinning -= MIN(fptr->spinning, (cycles >> 6))))
+				FrameRefreshStatus(DRAW_LEDS);
+		}
+
+		if (floppywritemode && (currdrive == loop) && fptr->spinning)
+		{
+			fptr->writelight = 20000;
+		}
+		else if (fptr->writelight)
+		{
+			if (!(fptr->writelight -= MIN(fptr->writelight, (cycles >> 6))))
+				FrameRefreshStatus(DRAW_LEDS);
+		}
+
+		if ((!enhancedisk) && (!diskaccessed) && fptr->spinning)
+		{
+			needsprecision = cumulativecycles;
+			fptr->byte += (cycles >> 5);
+			if (fptr->byte >= fptr->nibbles)
+				fptr->byte -= fptr->nibbles;
+		}
+	}
+
+	diskaccessed = 0;
+}
+
+//===========================================================================
+
+bool DiskDriveSwap(void)
 {
 	// Refuse to swap if either Disk][ is active
 	if(g_aFloppyDisk[0].spinning || g_aFloppyDisk[1].spinning)

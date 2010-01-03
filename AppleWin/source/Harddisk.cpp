@@ -327,7 +327,7 @@ BOOL HD_InsertDisk2(const int iDrive, LPCTSTR pszFilename)
 
 	char szFullFilename[MAX_PATH];
 
-	RegLoadString(TEXT("Preferences"),TEXT("HDV Starting Directory"), 1, szFullFilename, MAX_PATH);
+	RegLoadString(TEXT("Preferences"), TEXT("HDV Starting Directory"), 1, szFullFilename, MAX_PATH);
 	strcat(szFullFilename, pszFilename);
 
 	return HD_InsertDisk(iDrive, szFullFilename);
@@ -356,7 +356,7 @@ void HD_Select(const int iDrive)
 	TCHAR filename[MAX_PATH]  = TEXT("");
 	TCHAR title[40];
 
-	RegLoadString(TEXT("Preferences"),TEXT("HDV Starting Directory"),1,directory,MAX_PATH);
+	RegLoadString(TEXT("Preferences"), TEXT("HDV Starting Directory"), 1, directory, MAX_PATH);
 	_tcscpy(title,TEXT("Select HDV Image For HDD "));
 	_tcscat(title,iDrive ? TEXT("2") : TEXT("1"));
 	
@@ -390,6 +390,17 @@ void HD_Select(const int iDrive)
 			NotifyInvalidImage(filename);
 		}
 	}
+}
+
+void HD_Unplug(const int iDrive)
+{
+	if (g_HardDisk[iDrive].hd_imageloaded)
+		HD_CleanupDrive(iDrive);
+}
+
+bool HD_IsDriveUnplugged(const int iDrive)
+{
+	return g_HardDisk[iDrive].hd_imageloaded == FALSE;
 }
 
 //-----------------------------------------------------------------------------
