@@ -189,134 +189,14 @@ static void NotifyInvalidImage(TCHAR* pszImageFilename)
 
 static void HD_CleanupDrive(const int iDrive)
 {
-	CloseHandle(g_HardDisk[iDrive].Info.hFile);
+	sg_HardDiskImageHelper.Close(&g_HardDisk[iDrive].Info, false);
+
 	g_HardDisk[iDrive].hd_imageloaded = false;
 	g_HardDisk[iDrive].imagename[0] = 0;
 	g_HardDisk[iDrive].fullname[0] = 0;
 }
 
 //-----------------------------------------------------------------------------
-
-static ImageError_e CheckGZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo)
-{
-	_ASSERT(0);
-	return eIMAGE_ERROR_UNSUPPORTED;
-}
-
-//-------------------------------------
-
-static ImageError_e CheckZipFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, std::string& strFilenameInZip)
-{
-	_ASSERT(0);
-	return eIMAGE_ERROR_UNSUPPORTED;
-}
-
-//-------------------------------------
-
-static ImageError_e CheckNormalFile(LPCTSTR pszImageFilename, ImageInfo* pImageInfo, const bool bCreateIfNecessary)
-{
-	HANDLE& hFile = pImageInfo->hFile;
-
-	hFile = CreateFile(pszImageFilename,
-		GENERIC_READ | GENERIC_WRITE,
-		FILE_SHARE_READ,
-		(LPSECURITY_ATTRIBUTES)NULL,
-		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,
-		NULL);
-
-	// File may have read-only attribute set, so try to open as read-only.
-	if (hFile == INVALID_HANDLE_VALUE)
-	{
-		hFile = CreateFile(
-			pszImageFilename,
-			GENERIC_READ,
-			FILE_SHARE_READ,
-			(LPSECURITY_ATTRIBUTES)NULL,
-			OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL,
-			NULL );
-		
-		if (hFile != INVALID_HANDLE_VALUE)
-			pImageInfo->bWriteProtected = 1;
-	}
-
-	if ((hFile == INVALID_HANDLE_VALUE) && bCreateIfNecessary)
-		hFile = CreateFile(
-			pszImageFilename,
-			GENERIC_READ | GENERIC_WRITE,
-			FILE_SHARE_READ,
-			(LPSECURITY_ATTRIBUTES)NULL,
-			CREATE_NEW,
-			FILE_ATTRIBUTE_NORMAL,
-			NULL );
-
-	if (hFile == INVALID_HANDLE_VALUE)
-		return eIMAGE_ERROR_UNABLE_TO_OPEN;
-
-	// DETERMINE THE FILE'S EXTENSION AND CONVERT IT TO LOWERCASE
-	LPCTSTR imagefileext = pszImageFilename;
-	if (_tcsrchr(imagefileext,TEXT('\\')))
-	imagefileext = _tcsrchr(imagefileext,TEXT('\\'))+1;
-	if (_tcsrchr(imagefileext,TEXT('.')))
-	imagefileext = _tcsrchr(imagefileext,TEXT('.'));
-	TCHAR szExt[_MAX_EXT];
-	_tcsncpy(szExt,imagefileext,_MAX_EXT);
-	CharLowerBuff(szExt,_tcslen(szExt));
-
-	CImageBase* pImageType = NULL;
-	DWORD dwSize = GetFileSize(hFile, NULL);
-	DWORD dwOffset = 0;
-
-	if (dwSize > 0)
-	{
-		if (dwSize > sg_HardDiskImageHelper.GetMaxHardDiskImageSize())
-			return eIMAGE_ERROR_BAD_SIZE;
-
-		const UINT uDetectSize = sg_HardDiskImageHelper.GetMinDetectSize();
-
-		BYTE* pImageBuffer = new BYTE [uDetectSize];
-		if (!pImageBuffer)
-			return eIMAGE_ERROR_BAD_POINTER;
-
-		DWORD dwBytesRead;
-		BOOL bRes = ReadFile(hFile, pImageBuffer, uDetectSize, &dwBytesRead, NULL);
-		if (!bRes || uDetectSize != dwBytesRead)
-		{
-			delete [] pImageBuffer;
-			return eIMAGE_ERROR_BAD_SIZE;
-		}
-
-		pImageType = sg_HardDiskImageHelper.Detect(pImageBuffer, dwSize, szExt, dwOffset, &pImageInfo->bWriteProtected);
-		delete [] pImageBuffer;
-	}
-	else	// Create (or pre-existing zero-length file)
-	{
-		pImageType = sg_HardDiskImageHelper.GetImageForCreation(szExt);
-	}
-
-	//
-
-	if (!pImageType)
-	{
-		CloseHandle(hFile);
-		hFile = INVALID_HANDLE_VALUE;
-
-		if (dwSize == 0)
-			DeleteFile(pszImageFilename);
-
-		return eIMAGE_ERROR_UNSUPPORTED;
-	}
-
-	pImageInfo->FileType = eFileNormal;
-	pImageInfo->uOffset = dwOffset;
-	pImageInfo->pImageType = pImageType;
-	pImageInfo->uImageSize = dwSize;
-
-	return eIMAGE_ERROR_NONE;
-}
-
-//-------------------------------------
 
 static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 								const int iDrive,
@@ -328,38 +208,15 @@ static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 
 	HDD* pHDD = &g_HardDisk[iDrive];
 	ImageInfo* pImageInfo = &pHDD->Info;
-	pImageInfo->hFile = INVALID_HANDLE_VALUE;
 	pImageInfo->bWriteProtected = false;
 
-	//
-
-	ImageError_e Err;
-    const size_t uStrLen = strlen(pszImageFilename);
-
-    if (uStrLen > GZ_SUFFIX_LEN && strcmp(pszImageFilename+uStrLen-GZ_SUFFIX_LEN, GZ_SUFFIX) == 0)
-	{
-		Err = CheckGZipFile(pszImageFilename, pImageInfo);
-	}
-    else if (uStrLen > ZIP_SUFFIX_LEN && strcmp(pszImageFilename+uStrLen-ZIP_SUFFIX_LEN, ZIP_SUFFIX) == 0)
-	{
-		Err = CheckZipFile(pszImageFilename, pImageInfo, strFilenameInZip);
-	}
-	else
-	{
-		Err = CheckNormalFile(pszImageFilename, pImageInfo, bCreateIfNecessary);
-	}
-
-	if (pImageInfo->pImageType == NULL && Err == eIMAGE_ERROR_NONE)
-		Err = eIMAGE_ERROR_UNSUPPORTED;
+	ImageError_e Err = sg_HardDiskImageHelper.Open(pszImageFilename, pImageInfo, bCreateIfNecessary, strFilenameInZip);
 
 	if (Err != eIMAGE_ERROR_NONE)
 	{
 		HD_CleanupDrive(iDrive);
 		return Err;
 	}
-
-	// THE FILE MATCHES A KNOWN FORMAT
-	_tcsncpy(pImageInfo->szFilename, pszImageFilename, MAX_PATH);
 
 	return eIMAGE_ERROR_NONE;
 }
@@ -368,14 +225,11 @@ static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 
 static BOOL HD_Load_Image(const int iDrive, LPCSTR pszImageFilename)
 {
-	const bool bCreateIfNecessary = false;	// File Select dialog uses OFN_CREATEPROMPT
-	string strFilenameInZip;
+	const bool bCreateIfNecessary = false;	// NB. File Select dialog uses OFN_CREATEPROMPT
+	string strFilenameInZip;				// TODO: Use this
 	ImageError_e Error = ImageOpen(pszImageFilename, iDrive, bCreateIfNecessary, strFilenameInZip);
 
-	if (g_HardDisk[iDrive].Info.hFile == INVALID_HANDLE_VALUE)
-		g_HardDisk[iDrive].hd_imageloaded = false;
-	else
-		g_HardDisk[iDrive].hd_imageloaded = true;
+	g_HardDisk[iDrive].hd_imageloaded = (Error == eIMAGE_ERROR_NONE);
 
 	return g_HardDisk[iDrive].hd_imageloaded;
 }
@@ -580,7 +434,7 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 						{
 							if ((pHDD->hd_diskblock * HD_BLOCK_SIZE) < pHDD->Info.uImageSize)
 							{
-								BOOL bRes = pHDD->Info.pImageType->Read(&pHDD->Info, pHDD->hd_diskblock, pHDD->hd_buf);
+								bool bRes = pHDD->Info.pImageType->Read(&pHDD->Info, pHDD->hd_diskblock, pHDD->hd_buf);
 								if (bRes)
 								{
 									pHDD->hd_error = 0;
@@ -602,22 +456,29 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 						break;
 					case 0x02: //write
 						{
-							if ((pHDD->hd_diskblock * HD_BLOCK_SIZE) >= pHDD->Info.uImageSize)
+							bool bRes = true;
+							const bool bAppendBlocks = (pHDD->hd_diskblock * HD_BLOCK_SIZE) >= pHDD->Info.uImageSize;
+							if (bAppendBlocks)
 							{
-								SetFilePointer(pHDD->Info.hFile, 0, NULL, FILE_END);
-								DWORD addblocks = pHDD->hd_diskblock - (pHDD->Info.uImageSize / HD_BLOCK_SIZE);
+								// TODO: Test this!
 								ZeroMemory(pHDD->hd_buf, HD_BLOCK_SIZE);
 
-								while (addblocks--)
+								UINT uBlock = pHDD->Info.uImageSize / HD_BLOCK_SIZE;
+								while (uBlock < pHDD->hd_diskblock)
 								{
-									DWORD dwBytesWritten;
-									WriteFile(pHDD->Info.hFile, pHDD->hd_buf, HD_BLOCK_SIZE, &dwBytesWritten, NULL);
+									bRes = pHDD->Info.pImageType->Write(&pHDD->Info, uBlock++, pHDD->hd_buf);
+									_ASSERT(bRes);
+									if (!bRes)
+										break;
+									pHDD->Info.uImageSize += HD_BLOCK_SIZE;
 								}
 							}
 
 							MoveMemory(pHDD->hd_buf, mem+pHDD->hd_memblock, HD_BLOCK_SIZE);
 
-							BOOL bRes = pHDD->Info.pImageType->Write(&pHDD->Info, pHDD->hd_diskblock, pHDD->hd_buf);
+							if (bRes)
+								bRes = pHDD->Info.pImageType->Write(&pHDD->Info, pHDD->hd_diskblock, pHDD->hd_buf);
+
 							if (bRes)
 							{
 								pHDD->hd_error = 0;
@@ -629,7 +490,8 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 								r = DEVICE_IO_ERROR;
 							}
 
-							pHDD->Info.uImageSize = GetFileSize(pHDD->Info.hFile, NULL);
+							if (bAppendBlocks && bRes)
+								pHDD->Info.uImageSize += HD_BLOCK_SIZE;
 						}
 						break;
 					case 0x03: //format

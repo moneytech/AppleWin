@@ -580,7 +580,7 @@ void DiskNotifyInvalidImage(const int iDrive, LPCTSTR pszImageFilename, const Im
 		wsprintf(
 			szBuffer,
 			TEXT("Unable to use the file %s\n")
-			TEXT("because this UniDisk 3.5/GS/hard-disk image is not supported.\n")
+			TEXT("because this UniDisk 3.5/Apple IIGS/hard-disk image is not supported.\n")
 			TEXT("Try inserting as a hard-disk image instead."),
 			pszImageFilename);
 		break;

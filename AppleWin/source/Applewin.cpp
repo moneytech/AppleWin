@@ -595,16 +595,16 @@ void SetCurrentImageDir()
 	SetCurrentDirectory(g_sCurrentDir);
 }
 
+//===========================================================================
+
 // TODO: Added dialog option of which file extensions to registry
 bool g_bRegisterFileTypes = true;
-bool g_bRegistryFileBin = false;
+//bool g_bRegistryFileBin = false;
 bool g_bRegistryFileDo  = true;
 bool g_bRegistryFileDsk = true;
 bool g_bRegistryFileNib = true;
 bool g_bRegistryFilePo  = true;
 
-
-//===========================================================================
 
 void RegisterExtensions()
 {
@@ -631,7 +631,7 @@ void RegisterExtensions()
 
 	// NB. Reflect extensions in DELREG.INF
 //	RegSetValue(HKEY_CLASSES_ROOT,".bin",REG_SZ,"DiskImage",10);	// Removed as .bin is too generic
-	long Res = RegDeleteValue(HKEY_CLASSES_ROOT, ".bin");
+	long Res = RegDeleteValue(HKEY_CLASSES_ROOT, ".bin");			// TODO: This isn't working :-/
 
 	RegSetValue(HKEY_CLASSES_ROOT,".do"	,REG_SZ,"DiskImage",10);
 	RegSetValue(HKEY_CLASSES_ROOT,".dsk",REG_SZ,"DiskImage",10);
