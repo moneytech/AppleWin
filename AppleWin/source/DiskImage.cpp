@@ -37,63 +37,6 @@ static CDiskImageHelper sg_DiskImageHelper;
 
 //===========================================================================
 
-BOOL ImageBoot(const HIMAGE hDiskImage)
-{
-	ImageInfo* ptr = (ImageInfo*) hDiskImage;
-	BOOL result = 0;
-
-	if (ptr->pImageType->AllowBoot())
-		result = ptr->pImageType->Boot(ptr);
-
-	if (result)
-		ptr->bWriteProtected = 1;
-
-	return result;
-}
-
-//===========================================================================
-
-void ImageClose(const HIMAGE hDiskImage, const bool bOpenError /*=false*/)
-{
-	ImageInfo* ptr = (ImageInfo*) hDiskImage;
-	bool bDeleteFile = false;
-
-	if (!bOpenError)
-	{
-		for (UINT uTrack = 0; uTrack < ptr->uNumTracks; uTrack++)
-		{
-			if (!ptr->ValidTrack[uTrack])
-			{
-				// What's the reason for this?
-				bDeleteFile = true;
-				break;
-			}
-		}
-	}
-
-	sg_DiskImageHelper.Close(ptr, bDeleteFile);
-
-	VirtualFree(ptr, 0, MEM_RELEASE);
-}
-
-//===========================================================================
-
-void ImageDestroy(void)
-{
-	VirtualFree(sg_DiskImageHelper.GetWorkBuffer(), 0, MEM_RELEASE);
-	sg_DiskImageHelper.SetWorkBuffer(NULL);
-}
-
-//===========================================================================
-
-void ImageInitialize(void)
-{
-	LPBYTE pBuffer = (LPBYTE) VirtualAlloc(NULL, TRACK_DENIBBLIZED_SIZE*2, MEM_COMMIT, PAGE_READWRITE);
-	sg_DiskImageHelper.SetWorkBuffer(pBuffer);
-}
-
-//===========================================================================
-
 // Pre: *pWriteProtected_ already set to file's r/w status - see DiskInsert()
 ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 						HIMAGE* hDiskImage_,
@@ -135,6 +78,63 @@ ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
 	*pWriteProtected_ = pImageInfo->bWriteProtected;
 
 	return eIMAGE_ERROR_NONE;
+}
+
+//===========================================================================
+
+void ImageClose(const HIMAGE hDiskImage, const bool bOpenError /*=false*/)
+{
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
+	bool bDeleteFile = false;
+
+	if (!bOpenError)
+	{
+		for (UINT uTrack = 0; uTrack < ptr->uNumTracks; uTrack++)
+		{
+			if (!ptr->ValidTrack[uTrack])
+			{
+				// What's the reason for this?
+				bDeleteFile = true;
+				break;
+			}
+		}
+	}
+
+	sg_DiskImageHelper.Close(ptr, bDeleteFile);
+
+	VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+//===========================================================================
+
+BOOL ImageBoot(const HIMAGE hDiskImage)
+{
+	ImageInfo* ptr = (ImageInfo*) hDiskImage;
+	BOOL result = 0;
+
+	if (ptr->pImageType->AllowBoot())
+		result = ptr->pImageType->Boot(ptr);
+
+	if (result)
+		ptr->bWriteProtected = 1;
+
+	return result;
+}
+
+//===========================================================================
+
+void ImageDestroy(void)
+{
+	VirtualFree(sg_DiskImageHelper.GetWorkBuffer(), 0, MEM_RELEASE);
+	sg_DiskImageHelper.SetWorkBuffer(NULL);
+}
+
+//===========================================================================
+
+void ImageInitialize(void)
+{
+	LPBYTE pBuffer = (LPBYTE) VirtualAlloc(NULL, TRACK_DENIBBLIZED_SIZE*2, MEM_COMMIT, PAGE_READWRITE);
+	sg_DiskImageHelper.SetWorkBuffer(pBuffer);
 }
 
 //===========================================================================

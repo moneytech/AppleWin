@@ -24,12 +24,11 @@ enum ImageError_e
 	eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
 };
 
-BOOL ImageBoot(const HIMAGE hDiskImage);
+ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary, std::string& strFilenameInZip);
 void ImageClose(const HIMAGE hDiskImage, const bool bOpenError=false);
+BOOL ImageBoot(const HIMAGE hDiskImage);
 void ImageDestroy(void);
 void ImageInitialize(void);
-
-ImageError_e ImageOpen(LPCTSTR pszImageFilename, HIMAGE* hDiskImage_, bool* pWriteProtected_, const bool bCreateIfNecessary, std::string& strFilenameInZip);
 
 void ImageReadTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles);
 void ImageWriteTrack(const HIMAGE hDiskImage, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles);

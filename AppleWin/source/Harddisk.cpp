@@ -139,7 +139,41 @@ static CHardDiskImageHelper sg_HardDiskImageHelper;
 
 //===========================================================================
 
-static void GetImageTitle (LPCTSTR pszImageFilename, HDD* pHardDrive)
+static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
+								const int iDrive,
+								const bool bCreateIfNecessary,
+								std::string& strFilenameInZip)
+{
+	if (!pszImageFilename)
+		return eIMAGE_ERROR_BAD_POINTER;
+
+	HDD* pHDD = &g_HardDisk[iDrive];
+	ImageInfo* pImageInfo = &pHDD->Info;
+	pImageInfo->bWriteProtected = false;
+
+	ImageError_e Err = sg_HardDiskImageHelper.Open(pszImageFilename, pImageInfo, bCreateIfNecessary, strFilenameInZip);
+
+	if (Err != eIMAGE_ERROR_NONE)
+	{
+		HD_CleanupDrive(iDrive);
+		return Err;
+	}
+
+	return eIMAGE_ERROR_NONE;
+}
+
+//-----------------------------------------------------------------------------
+
+static void HD_CleanupDrive(const int iDrive)
+{
+	sg_HardDiskImageHelper.Close(&g_HardDisk[iDrive].Info, false);
+
+	g_HardDisk[iDrive].hd_imageloaded = false;
+	g_HardDisk[iDrive].imagename[0] = 0;
+	g_HardDisk[iDrive].fullname[0] = 0;
+}
+
+static void GetImageTitle(LPCTSTR pszImageFilename, HDD* pHardDrive)
 {
 	TCHAR   imagetitle[128];
 	LPCTSTR startpos = pszImageFilename;
@@ -186,42 +220,6 @@ static void NotifyInvalidImage(TCHAR* pszImageFilename)
 {
 	// TC: TO DO
 }
-
-static void HD_CleanupDrive(const int iDrive)
-{
-	sg_HardDiskImageHelper.Close(&g_HardDisk[iDrive].Info, false);
-
-	g_HardDisk[iDrive].hd_imageloaded = false;
-	g_HardDisk[iDrive].imagename[0] = 0;
-	g_HardDisk[iDrive].fullname[0] = 0;
-}
-
-//-----------------------------------------------------------------------------
-
-static ImageError_e ImageOpen(	LPCTSTR pszImageFilename,
-								const int iDrive,
-								const bool bCreateIfNecessary,
-								std::string& strFilenameInZip)
-{
-	if (!pszImageFilename)
-		return eIMAGE_ERROR_BAD_POINTER;
-
-	HDD* pHDD = &g_HardDisk[iDrive];
-	ImageInfo* pImageInfo = &pHDD->Info;
-	pImageInfo->bWriteProtected = false;
-
-	ImageError_e Err = sg_HardDiskImageHelper.Open(pszImageFilename, pImageInfo, bCreateIfNecessary, strFilenameInZip);
-
-	if (Err != eIMAGE_ERROR_NONE)
-	{
-		HD_CleanupDrive(iDrive);
-		return Err;
-	}
-
-	return eIMAGE_ERROR_NONE;
-}
-
-//-----------------------------------------------------------------------------
 
 static BOOL HD_Load_Image(const int iDrive, LPCSTR pszImageFilename)
 {
