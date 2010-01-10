@@ -658,8 +658,8 @@ LRESULT CALLBACK FrameWndProc (
         SetNormalMode();
       if (!IsIconic(window))
         GetWindowRect(window,&framerect);
-      RegSaveValue(TEXT("Preferences"),TEXT("Window X-Position"),1,framerect.left);
-      RegSaveValue(TEXT("Preferences"),TEXT("Window Y-Position"),1,framerect.top);
+      RegSaveValue(TEXT(REG_PREFS), TEXT(REGVALUE_PREF_WINDOW_X_POS), 1, framerect.left);
+      RegSaveValue(TEXT(REG_PREFS), TEXT(REGVALUE_PREF_WINDOW_Y_POS), 1, framerect.top);
       FrameReleaseDC();
       SetUsingCursor(0);
       if (helpquit) {

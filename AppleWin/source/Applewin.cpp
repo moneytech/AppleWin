@@ -478,7 +478,7 @@ void LoadConfiguration ()
   }
 
   REGLOAD(TEXT("Emulation Speed")   ,&g_dwSpeed);
-  REGLOAD(TEXT("Enhance Disk Speed"),(DWORD *)&enhancedisk);
+  REGLOAD(TEXT(REGVALUE_ENHANCE_DISK_SPEED),(DWORD *)&enhancedisk);
 
   Config_Load_Video();
 
@@ -522,11 +522,11 @@ void LoadConfiguration ()
   if(REGLOAD(TEXT(REGVALUE_HDD_ENABLED), &dwTmp))
 	  HD_SetEnabled(dwTmp ? true : false);
 
-  char szHDFilename[MAX_PATH] = {0};
-  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE1), 1, szHDFilename, sizeof(szHDFilename)))
-	  HD_InsertDisk2(0, szHDFilename);
-  if(RegLoadString(TEXT(REG_CONFIG), TEXT(REGVALUE_HDD_IMAGE2), 1, szHDFilename, sizeof(szHDFilename)))
-	  HD_InsertDisk2(1, szHDFilename);
+  char szHDVPathname[MAX_PATH] = {0};
+  if(RegLoadString(TEXT(REG_PREFS), TEXT(REGVALUE_PREF_LAST_HARDDISK_1), 1, szHDVPathname, sizeof(szHDVPathname)))
+	  HD_InsertDisk(HARDDISK_1, szHDVPathname);
+  if(RegLoadString(TEXT(REG_PREFS), TEXT(REGVALUE_PREF_LAST_HARDDISK_2), 1, szHDVPathname, sizeof(szHDVPathname)))
+	  HD_InsertDisk(HARDDISK_2, szHDVPathname);
 
   if(REGLOAD(TEXT(REGVALUE_PDL_XTRIM), &dwTmp))
       JoySetTrim((short)dwTmp, true);
