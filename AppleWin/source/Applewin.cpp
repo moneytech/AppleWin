@@ -742,10 +742,29 @@ LPSTR GetNextArg(LPSTR lpCmdLine)
 
 //---------------------------------------------------------------------------
 
-static int DoDiskInsert(int nDrive, LPSTR szFileName)
+static int DoDiskInsert(const int nDrive, LPCSTR szFileName)
 {
-	ImageError_e Error = DiskInsert(nDrive, szFileName, IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
-	return (Error == eIMAGE_ERROR_NONE) ? 0 : 1;
+	string strPathName;
+
+	if (szFileName[0] == '\\' || szFileName[1] == ':')
+	{
+		// Abs pathname
+		strPathName = szFileName;
+	}
+	else
+	{
+		// Rel pathname
+		char szCWD[_MAX_PATH] = {0};
+		if (!GetCurrentDirectory(sizeof(szCWD), szCWD))
+			return false;
+
+		strPathName = szCWD;
+		strPathName.append("\\");
+		strPathName.append(szFileName);
+	}
+
+	ImageError_e Error = DiskInsert(nDrive, strPathName.c_str(), IMAGE_USE_FILES_WRITE_PROTECT_STATUS, IMAGE_DONT_CREATE);
+	return Error == eIMAGE_ERROR_NONE;
 }
 
 //---------------------------------------------------------------------------
@@ -977,8 +996,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 		if(bBoot)
 		{
-			PostMessage(g_hFrameWindow, WM_KEYDOWN, VK_F1+BTN_RUN, 0);
-			PostMessage(g_hFrameWindow, WM_KEYUP,   VK_F1+BTN_RUN, 0);
+			PostMessage(g_hFrameWindow, WM_USER_BOOT, 0, 0);
 			bBoot = false;
 		}
 
