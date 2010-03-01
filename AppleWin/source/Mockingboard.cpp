@@ -84,6 +84,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "AY8910.h"
 #include "SSI263Phonemes.h"
+#include "Echo.h"
 
 
 #define SY6522_DEVICE_A 0
@@ -790,9 +791,15 @@ static void MB_Update()
 	if(nNumSamples > 2*nNumSamplesPerPeriod)
 		nNumSamples = 2*nNumSamplesPerPeriod;
 
+	short* pEchoBuffer = NULL;
+
 	if(nNumSamples)
+	{
 		for(int nChip=0; nChip<NUM_AY8910; nChip++)
 			AY8910Update(nChip, &ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910], nNumSamples);
+
+		pEchoBuffer = sg_Echo.AudioRequest(nNumSamples);
+	}
 
 	//
 
@@ -878,6 +885,8 @@ static void MB_Update()
 			nDataL += (int) ((double)ppAYVoiceBuffer[2*NUM_VOICES_PER_AY8910+j][i] * fAttenuation);
 			nDataR += (int) ((double)ppAYVoiceBuffer[3*NUM_VOICES_PER_AY8910+j][i] * fAttenuation);
 		}
+
+		nDataL += (int) ((double)pEchoBuffer[i] * fAttenuation);
 
 		// Cap the superpositioned output
 		if(nDataL < nWaveDataMin)

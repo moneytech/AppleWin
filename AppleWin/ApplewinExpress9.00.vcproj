@@ -602,6 +602,14 @@
 					>
 				</File>
 				<File
+					RelativePath=".\source\Echo.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Echo.h"
+					>
+				</File>
+				<File
 					RelativePath=".\source\Frame.cpp"
 					>
 				</File>
@@ -743,6 +751,14 @@
 				</File>
 				<File
 					RelativePath=".\source\Tape.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\TMS5220.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\TMS5220.h"
 					>
 				</File>
 				<File

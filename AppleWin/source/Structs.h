@@ -153,6 +153,8 @@ enum SS_CARDTYPE
 	CT_GenericClock,
 	CT_MouseInterface,
 	CT_Z80,
+	CT_Echo,
+	CT_EchoPlus,
 };
 
 /////////////////////////////////////////////////////////////////////////////////

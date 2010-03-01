@@ -34,6 +34,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 //#include <objbase.h>	// Updated[TC]: Removed, as not needed
 #include "MouseInterface.h"
+#include "Echo.h"
 #ifdef USE_SPEECH_API
 #include "Speech.h"
 #endif
@@ -81,10 +82,11 @@ bool		g_bDisableDirectSoundMockingboard = false;
 
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
+CEcho				sg_Echo(SPKR_SAMPLE_RATE);
 
 // TODO: CLEANUP! Move to peripherals.cpp!!!
 #ifdef SUPPORT_CPM
-UINT		g_Slot4 = CT_Empty;
+UINT		g_Slot4 = CT_Echo;	//CT_Empty;
 #else
 UINT		g_Slot4 = CT_Mockingboard;		// CT_Mockingboard or CT_MouseInterface
 #endif
@@ -558,12 +560,12 @@ void LoadConfiguration ()
   if (g_uZ80InSlot5)
 	  MB_SetSoundcardType(SC_NONE);
 
-	g_Slot4 = 
-	g_uMouseInSlot4	? CT_MouseInterface
-					: g_uZ80InSlot5	? CT_Empty
-									: CT_Mockingboard;
-//									: g_uClockInSlot4	? CT_GenericClock
-//														: CT_Mockingboard;
+//	g_Slot4 = 
+//	g_uMouseInSlot4	? CT_MouseInterface
+//					: g_uZ80InSlot5	? CT_Empty
+//									: CT_Mockingboard;
+////									: g_uClockInSlot4	? CT_GenericClock
+////														: CT_Mockingboard;
 #else
 	g_Slot4 = g_uMouseInSlot4
 				? CT_MouseInterface

@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "StdAfx.h"
 #include "Harddisk.h"
 #include "MouseInterface.h"
+#include "Echo.h"
 #ifdef SUPPORT_CPM
 #include "z80emu.h"
 #include "Z80VICE\z80.h"
@@ -1143,6 +1144,10 @@ void MemInitialize()
 		const UINT uSlot4 = 4;
 		const UINT uSlot5 = 5;
 		MB_InitializeIO(pCxRomPeripheral, uSlot4, uSlot5);
+	}
+	else if (g_Slot4 = CT_Echo)
+	{
+		sg_Echo.Initialize(pCxRomPeripheral, 4);
 	}
 
 #ifdef SUPPORT_CPM
