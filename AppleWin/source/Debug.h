@@ -1,16 +1,19 @@
 #pragma once
 
 #include <vector>
-#include <algorithm> // sort
+#include <algorithm> // sort, find
 #include <map>
 using namespace std;
 
 #include "Debugger_Types.h"
+#include "Debugger_DisassemblerData.h"
+#include "Debugger_Range.h"
 #include "Debugger_Parser.h"
 #include "Debugger_Console.h"
 #include "Debugger_Assembler.h"
 #include "Debugger_Help.h"
 #include "Debugger_Display.h"
+#include "Debugger_Symbols.h"
 #include "Util_MemoryTextFile.h"
 
 // Globals __________________________________________________________________
@@ -72,6 +75,7 @@ using namespace std;
 	extern const int WINDOW_DATA_BYTES_PER_LINE;
 
 // Config - Disassembly
+	extern bool  g_bConfigDisasmAddressView  ;
 	extern bool  g_bConfigDisasmAddressColon ;
 	extern bool  g_bConfigDisasmOpcodesView  ;
 	extern bool  g_bConfigDisasmOpcodeSpaces ;
@@ -155,7 +159,7 @@ using namespace std;
 // Symbol Table / Memory
 	bool FindAddressFromSymbol( LPCSTR pSymbol, WORD * pAddress_ = NULL, int * iTable_ = NULL );
 	WORD GetAddressFromSymbol (LPCTSTR symbol); // HACK: returns 0 if symbol not found
-	void SymbolUpdate( Symbols_e eSymbolTable, char *pSymbolName, WORD nAddrss, bool bRemoveSymbol, bool bUpdateSymbol );
+	void SymbolUpdate( SymbolTable_Index_e eSymbolTable, char *pSymbolName, WORD nAddrss, bool bRemoveSymbol, bool bUpdateSymbol );
 
 	LPCTSTR FindSymbolFromAddress (WORD nAdress, int * iTable_ = NULL );
 	LPCTSTR GetSymbol   (WORD nAddress, int nBytes);

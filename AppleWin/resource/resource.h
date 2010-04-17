@@ -2,7 +2,6 @@
 // Microsoft Visual C++ generated include file.
 // Used by Applewin.rc
 //
-#define ID_MENU_DISK_POPUP              4
 #define IDC_COMPUTER                    101
 #define IDC_JOYSTICK0                   102
 #define IDC_SOUNDTYPE                   103
@@ -44,7 +43,9 @@
 #define IDR_PRAVETS_82_ROM              139
 #define IDR_PRAVETS_8M_ROM              140
 #define IDR_PRAVETS_8C_ROM              142
-#define IDR_APLSPIDRVR_FW               143
+#define IDR_MENU_DISK_POPUP             143
+#define IDR_MENU_DISK_CFG_POPUP         144
+#define IDR_APLSPIDRVR_FW               145
 #define IDC_KEYB_BUFFER_ENABLE          1005
 #define IDC_SAVESTATE                   1006
 #define IDC_SAVESTATE_ON_EXIT           1007
@@ -100,22 +101,25 @@
 #define IDC_PRINTER_APPEND              1057
 #define IDC_SPIN_PRINTER_IDLE           1058
 #define IDC_CHECK_HALF_SCAN_LINES       1059
-
 #define IDM_EXIT                        40001
 #define IDM_HELP                        40002
 #define IDM_ABOUT                       40003
 #define ID_DISKMENU_EJECT               40004
 #define ID_DISKMENU_WRITEPROTECTION_ON  40005
 #define ID_DISKMENU_WRITEPROTECTION_OFF 40006
-#define ID_DISKMENU_SENDTO_CIDERPRESS	40007
+#define ID_DISKMENU_SENDTO_CIDERPRESS   40007
+#define ID_DISKMENU_EJECT_DISK1         40008
+#define ID_DISKMENU_EJECT_DISK2         40009
+#define ID_DISKMENU_UNPLUG_HARDDISK1    40010
+#define ID_DISKMENU_UNPLUG_HARDDISK2    40011
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        141
-#define _APS_NEXT_COMMAND_VALUE         40008
+#define _APS_NEXT_RESOURCE_VALUE        146
+#define _APS_NEXT_COMMAND_VALUE         40012
 #define _APS_NEXT_CONTROL_VALUE         1060
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

@@ -4,9 +4,9 @@
   <link rel="shortcut icon" href="applewin.ico">
   <title>Apple //e Emulator for Windows</title></head>
 <body alink="gold" background="background.gif" bgcolor="mediumpurple" link="orange" text="powderblue" vlink="plum">
-<p align="center"><font face="Tahoma"><u><font size="5">AppleWin 1.16.1</font></u></font></p>
+<p align="center"><font face="Tahoma"><u><font size="5">AppleWin 1.17.2</font></u></font></p>
 <p align="center"><font face="Tahoma"><img src="applewin.gif" title="" alt="Apple //e Emulator Logo" height="384" width="560"></font></p>
-<p align="center"><font face="Tahoma">Download <a href="http://download.berlios.de/applewin/AppleWin1.16.1.zip">Version 1.16.1</a><br>
+<p align="center"><font face="Tahoma">Download <a href="http://download.berlios.de/applewin/AppleWin1.17.2.0.zip">Version 1.17.2</a><br>
 <a href="#OldReleases">Download older releases</a><br>
 </font></p>
 
@@ -18,16 +18,63 @@ AppleWin is now hosted at <a href="http://developer.berlios.de/">BerliOS</a> and
 The SVN repository is located here: <a href="https://developer.berlios.de/projects/applewin/">AppleWin SVN</a>
 </font>
 </p><p><font face="Tahoma">
-Latest AppleWin compiled html help: <a href="applewin.chm">AppleWin.chm</a>
+Latest AppleWin compiled html help: <a href="AppleWin.chm">AppleWin.chm</a>
 <br>
 <font size="2">
-NB. If you have trouble reading the CHM:<br>
+<strong>NB. If you have trouble reading the CHM:</strong><br>
 - On Windows XP you can simply right-click on the CHM file, select "Properties", and click on the "Unblock" button.<br>
 - Click "Apply" and the content should be visible.
 </font></font></p>
 
 
-<p><font face="Tahoma"></font><br></p><p><font face="Tahoma"><u>1.16.1 - 21 Apr 2009</u></font></p>
+<p><font face="Tahoma"></font><br></p><p><font face="Tahoma"><u>1.17.2 - 13 Dec 2009</u></font></p>
+<font face="Tahoma">
+<li>Changes:</li>
+<ul>
+    <li>Enable XP visual themes &amp; corrected tab order in the Configuration dialog - thanks to Joshua Bell</li>
+    <li>Updated Help chm's Debugger breakpoint commands (BC,BD,BE,BL now replaced by BPC,BPD,BPE.BPL)</li>
+</ul>
+<li>Fixes:</li>
+<ul>
+    <li>Fix: Crash when COM or TCP port opened before Configuration dialog is opened for the first time</li>
+	<li>Fix: Reading SSC DIP SW1 for "external" CLK (115.2K mode)</li>
+	<li>Fix: Reinstated debugger's GO command:</li>
+    <ul>
+       <li>G        : Go (Stepping Mode)</li>
+       <li>G &lt;addr&gt; : Go (Stepping Mode) until PC=addr</li>
+    </ul>
+</ul>
+
+
+<p><font face="Tahoma"></font><br></p><p><font face="Tahoma"><u>1.17.1 - 27 Nov 2009</u></font></p>
+<font face="Tahoma">
+<li>Changes:</li>
+<ul>
+    <li>SSC: Support 112.5K Baud</li>
+    <li>Dynamically generated 'Serial Port' drop-down menu</li>
+    <ul>
+       <li>Save "Serial Port Name" to Registry (instead of drop-down menu index as "Serial Port")</li>
+    </ul>
+    <li>Updated Help chm's "Transferring Disk Images" - thanks to David Schmidt</li>
+    <li>New switches: -log, -no-mb, -spkr-max, -spkr-inc</li>
+    <li>Debugger (v2.6.2.0):</li>
+    <ul>
+       <li>Added Applesoft BASIC symbols - thanks to Bob Sander-Cederlof</li>
+       <li>Return on blank line to toggle full screen console</li>
+       <li>Page Up/Down of console history while editing</li>
+    </ul>
+</ul>
+<li>Fixes:</li>
+<ul>
+    <li>Fix for Speaker underflow problem (-spkr-max=200, -spkr-inc=20)</li>
+    <li>Fix for SSC (big transfers): use queue instead of single byte buffer</li>
+    <li>Don't hog CPU in PAUSED mode</li>
+    <li>Implemented the shift key mod for II/II+. This fixes a problem with Homeword</li>
+    <li>[Bug #14879] Double-Lo-Res Graphics colors not correct</li>
+</ul>
+
+
+<p><font face="Tahoma"></font><br></p><p><font face="Tahoma"><u>1.16.1 - 21 Jun 2009</u></font></p>
 <font face="Tahoma">
 <li>Changes:</li>
 <ul>
@@ -60,6 +107,7 @@ NB. If you have trouble reading the CHM:<br>
     <li>Fixed flash rate for NTSC</li>
     <li>Fixed maximum volume bug when doubling-clicking a .dsk image to execute with AppleWin</li>
     <li>[Bug #14557] Loading serial port# from Registry (caused AppleWin to crash when booting Apple Pascal &amp; other weird crashes)</li>
+    <li>[Bug #15394] Audio under-run (set process priority to Above Normal when in non-Full Speed mode)</li>
 </ul>
 
 
@@ -353,7 +401,7 @@ Tested with the following Mockingboard/Phasor titles:<br>
 <blockquote>
   Adventure Construction Set<br>
   Berzap!<br>
-  Broadsides (SSI) - Card must be in slot-4. Appears to be noise only<br>
+  Broadsides (SSI) - Card must be in slot-4. Appears to be noise-channel only<br>
   Crimewave (Votrax speech only)<br>
   Crypt of Medea (Votrax speech only)<br>
   <a href="http://www.tomcharlesworth.pwp.blueyonder.co.uk/Cybernoid.dsk">Cybernoid Music Disk</a><br>
@@ -389,7 +437,11 @@ find didn't appear to support it:<br>
 
 <p><font face="Tahoma"><font face="Tahoma"><u><a name="OldReleases"></a>Old releases:</u></font></font></p>
 <p><font face="Tahoma"><font face="Tahoma">
-  Download <a href="http://download.berlios.de/applewin/AppleWin1.14.2-beta.zip">Version 1.14.2 (beta)</a><br></font></font><font face="Tahoma"><font face="Tahoma">
+  Download <a href="http://download.berlios.de/applewin/AppleWin1.17.1.0.zip">Version 1.17.1</a><br></font></font><font face="Tahoma"><font face="Tahoma">
+  Download <a href="http://download.berlios.de/applewin/AppleWin1.16.1.0.zip">Version 1.16.1</a><br></font></font><font face="Tahoma"><font face="Tahoma">
+  Download <a href="http://download.berlios.de/applewin/AppleWin1.16.0.0-beta.zip">Version 1.16.0 (beta)</a><br></font></font><font face="Tahoma"><font face="Tahoma">
+  Download <a href="http://download.berlios.de/applewin/AppleWin1.15.0-beta.zip">Version 1.15.0 (beta)</a><br></font></font><font face="Tahoma"><font face="Tahoma">
+  Download <a href="http://download.berlios.de/applewin/AppleWin1.14.2.zip">Version 1.14.2</a><br></font></font><font face="Tahoma"><font face="Tahoma">
   Download <a href="http://download.berlios.de/applewin/AppleWin1.14.0-beta.zip">Version 1.14.0 (beta)</a><br></font></font><font face="Tahoma"><font face="Tahoma">
   Download <a href="http://download.berlios.de/applewin/AppleWin1.13.2.zip">Version 1.13.2</a><br></font></font><font face="Tahoma"><font face="Tahoma">
   Download <a href="http://download.berlios.de/applewin/AppleWin1.13.1.zip">Version 1.13.1</a><br></font></font><font face="Tahoma"><font face="Tahoma">

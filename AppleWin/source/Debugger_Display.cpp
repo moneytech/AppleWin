@@ -27,10 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "StdAfx.h"
-#pragma  hdrstop
 
-
-#include <assert.h>
 
 // NEW UI debugging
 #define DEBUG_FORCE_DISPLAY 0
@@ -647,13 +644,16 @@ void DebuggerPrint ( int x, int y, const char *pText )
 	}
 }
 
-
+//===========================================================================
 void DebuggerPrintColor( int x, int y, const conchar_t * pText )
 {
 	int nLeft = x;
 
 	conchar_t g;
 	const conchar_t *pSrc = pText;
+
+	if( !pText)
+		return;
 
 	while (g = (*pSrc))
 	{
@@ -1152,7 +1152,7 @@ void DrawConsoleCursor ()
 }
 
 //===========================================================================
-void GetConsoleRect( const int y, RECT & rect )
+void GetConsoleRect ( const int y, RECT & rect )
 {
 	int nLineHeight = GetConsoleLineHeightPixels();
 
@@ -1170,7 +1170,7 @@ void GetConsoleRect( const int y, RECT & rect )
 }
 
 //===========================================================================
-void DrawConsoleLine( const conchar_t * pText, int y )
+void DrawConsoleLine ( const conchar_t * pText, int y )
 {
 	if (y < 0)
 		return;
@@ -1200,10 +1200,11 @@ void DrawConsoleInput ()
 // Disassembly ____________________________________________________________________________________
 
 
+// Get the data needed to disassemble one line of opcodes
 // Disassembly formatting flags returned
 //	@parama sTargetValue_ indirect/indexed final value
 //===========================================================================
-int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
+int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 //	char *sAddress_, char *sOpCodes_,
 //	char *sTarget_, char *sTargetOffset_, int & nTargetOffset_,
 //	char *sTargetPointer_, char *sTargetValue_,
@@ -1264,7 +1265,7 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 		if (nOpbyte == 2)
 			nTarget &= 0xFF;
 
-		if (iOpmode == AM_R) // Relative ADDR_REL)
+		if (iOpmode == AM_R) // Relative
 		{
 			line_.bTargetRelative = true;
 
@@ -1291,9 +1292,9 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 				sprintf( line_.sBranch, "%s", g_sConfigBranchIndicatorEqual[ g_iConfigDisasmBranchType ] );
 			}
 		}
+		// intentional re-test AM_R ...
 
-//		if (strstr(g_aOpmodes[ iOpmode ]._sFormat,"%s"))
-//		if ((iOpmode >= ADDR_ABS) && (iOpmode <= ADDR_IABS))
+//		if ((iOpmode >= AM_A) && (iOpmode <= AM_NA))
 		if ((iOpmode == AM_A  ) || // Absolute
 			(iOpmode == AM_Z  ) || // Zeropage
 			(iOpmode == AM_AX ) || // Absolute, X
@@ -1325,7 +1326,7 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 					bDisasmFormatFlags |= DISASM_FORMAT_SYMBOL;
 					bDisasmFormatFlags |= DISASM_FORMAT_OFFSET;
 					pTarget = pSymbol;
-					line_.nTargetOffset = +1; // U FA82   LDA #3F1 BREAK+1
+					line_.nTargetOffset = +1; // U FA82   LDA $3F1 BREAK-1
 				}
 			}
 			
@@ -1337,7 +1338,7 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 					bDisasmFormatFlags |= DISASM_FORMAT_SYMBOL;
 					bDisasmFormatFlags |= DISASM_FORMAT_OFFSET;
 					pTarget = pSymbol;
-					line_.nTargetOffset = -1; // U FA82 LDA #3F3 BREAK-1
+					line_.nTargetOffset = -1; // U FA82 LDA $3F3 BREAK+1
 				}
 			}
 
@@ -1429,6 +1430,23 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 	sprintf( line_.sAddress, "%04X", nBaseAddress );
 
 	// Opcode Bytes
+	FormatOpcodeBytes( nBaseAddress, line_ );
+
+	int nSpaces = strlen( line_.sOpCodes );
+    while (nSpaces < (int)nMinBytesLen)
+	{
+		strcat( line_.sOpCodes, " " );
+		nSpaces++;
+	}
+
+	return bDisasmFormatFlags;
+}	
+
+//===========================================================================
+void FormatOpcodeBytes ( WORD nBaseAddress, DisasmLine_t & line_ )
+{
+	int nOpbyte = line_.nOpbyte;
+
 	char *pDst = line_.sOpCodes;
 	for( int iByte = 0; iByte < nOpbyte; iByte++ )
 	{
@@ -1442,20 +1460,64 @@ int GetDisassemblyLine( WORD nBaseAddress, DisasmLine_t & line_ )
 			pDst++; // 2.5.3.3 fix
 		}
 	}
+}
 
-	int nSpaces = strlen( line_.sOpCodes );
-    while (nSpaces < (int)nMinBytesLen)
+// Formats Target string with bytes,words, string, etc...
+//===========================================================================
+void FormatNopcodeBytes ( WORD nBaseAddress, DisasmLine_t & line_ )
+{
+	char *pDst = line_.sTarget;
+	for( int iByte = 0; iByte < line_.nOpbyte; )
 	{
-		strcat( line_.sOpCodes, " " );
-		nSpaces++;
+		BYTE nTarget8  = *(LPBYTE)(mem + nBaseAddress + iByte);
+		WORD nTarget16 = *(LPWORD)(mem + nBaseAddress + iByte);
+		
+		switch( line_.iNoptype )
+		{
+			case NOP_BYTE_1:
+				sprintf( pDst, "$%02X", nTarget8 ); // sBytes+strlen(sBytes)
+				pDst += 3;
+				iByte++;
+				if( iByte < line_.nOpbyte )
+				{
+					*pDst++ = ',';
+				}
+				break;
+			case NOP_WORD_1:
+				sprintf( pDst, "$%04X", nTarget16 ); // sBytes+strlen(sBytes)
+				pDst += 5;
+				iByte+= 2;
+				if( iByte < line_.nOpbyte )
+				{
+					*pDst++ = ',';
+				}
+				break;
+			case NOP_STRING_APPLESOFT:
+				iByte = line_.nOpbyte;
+				strncpy( pDst, (const char*)(mem + nBaseAddress), iByte );
+				pDst += iByte;
+				*pDst = 0;
+			default:
+				break;
+		}
+//		else // 4 bytes
+//		if( line_.nOpbyte == 4)
+//		{
+//		}		
+//		else // 8 bytes
+//		if( line_.nOpbyte == 8)
+//		{
+//		}		
 	}
+}
 
-	return bDisasmFormatFlags;
-}	
 
 void FormatDisassemblyLine( const DisasmLine_t & line, char * sDisassembly, const int nBufferSize )
 {
 	//> Address Seperator Opcodes   Label Mnemonic Target [Immediate] [Branch]
+	//
+	// Data Disassembler
+	//                              Label Directive       [Immediate]
 	const char * pMnemonic = g_aOpcodes[ line.iOpcode ].sMnemonic;
 
 	sprintf( sDisassembly, "%s:%s %s "
@@ -1525,14 +1587,29 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 	int iOpmode;
 	int nOpbyte;
 	DisasmLine_t line;
+	LPCSTR pSymbol = NULL;
+	const char * pMnemonic = NULL;
 
 	int bDisasmFormatFlags = GetDisassemblyLine( nBaseAddress, line );
+	DisasmData_t *pData = Disassembly_IsDataAddress( nBaseAddress );
+	if( pData )
+	{
+		Disassembly_GetData( nBaseAddress, pData, line );
+//		pSymbol = line.sLabel;
+	}
+
+	{
+		pSymbol = FindSymbolFromAddress( nBaseAddress );
+//		strcpy( line.sLabel, pSymbol );
+	}
+
 	iOpcode = line.iOpcode;	
 	iOpmode = line.iOpmode;
 	nOpbyte = line.nOpbyte;
 
-//		sAddress, sOpcodes, sTarget, sTargetOffset, nTargetOffset, sTargetPointer, sTargetValue, sImmediate, nImmediate, sBranch );
-
+	// Data Disassembler
+	//
+	// sAddress, sOpcodes, sTarget, sTargetOffset, nTargetOffset, sTargetPointer, sTargetValue, sImmediate, nImmediate, sBranch );
 	//> Address Seperator Opcodes   Label Mnemonic Target [Immediate] [Branch]
 	//
 	//> xxxx: xx xx xx   LABEL    MNEMONIC    'E' =
@@ -1587,6 +1664,13 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 	int nSpacer = 11; // 9
 	for (iTab = 0; iTab < _NUM_TAB_STOPS; iTab++ )
 	{
+		if (! g_bConfigDisasmAddressView )
+		{
+			if (iTab < TS_IMMEDIATE) // TS_BRANCH)
+			{
+				aTabs[ iTab ] -= 4;
+			}
+		}
 		if (! g_bConfigDisasmOpcodesView)
 		{
 			if (iTab < TS_IMMEDIATE) // TS_BRANCH)
@@ -1712,7 +1796,11 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 //			DebuggerSetColorBG( dc, DebuggerGetColor( FG_DISASM_BOOKMARK ) ); // swapped
 //			DebuggerSetColorFG( dc, DebuggerGetColor( BG_DISASM_BOOKMARK ) ); // swapped
 //		}		
-		PrintTextCursorX( (LPCTSTR) line.sAddress, linerect );
+
+		if( g_bConfigDisasmAddressView )
+		{
+			PrintTextCursorX( (LPCTSTR) line.sAddress, linerect );
+		}
 
 		if (bAddressIsBookmark)
 		{
@@ -1726,6 +1814,8 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 
 		if (g_bConfigDisasmAddressColon)
 			PrintTextCursorX( ":", linerect );
+		else
+			PrintTextCursorX( " ", linerect ); // bugfix, not showing "addr:" doesn't alternate color lines
 
 	// Opcodes
 		linerect.left = (int) aTabs[ TS_OPCODE ];
@@ -1751,15 +1841,23 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 //		linerect.left += (g_nFontWidthAvg * DISASM_SYMBOL_LEN);
 //		PrintTextCursorX( " ", linerect );
 
-	// Instruction
+	// Instruction / Mnemonic
 		linerect.left = (int) aTabs[ TS_INSTRUCTION ];
 
 		if (! bCursorLine)
 			DebuggerSetColorFG( DebuggerGetColor( iForeground ) );
 
-		const char * pMnemonic = g_aOpcodes[ iOpcode ].sMnemonic;
-		PrintTextCursorX( pMnemonic, linerect );
+		if( pData )
+		{
+//			pMnemonic = g_aAssemblerDirectives[ line.iNopcode ].sMnemonic;
+			pMnemonic = line.sMnemonic;
+		}
+		else
+		{
+			pMnemonic = g_aOpcodes[ iOpcode ].sMnemonic;
+		}
 
+		PrintTextCursorX( pMnemonic, linerect );
 		PrintTextCursorX( " ", linerect );
 
 	// Target
@@ -1807,6 +1905,11 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 		}
 		PrintTextCursorX( pTarget, linerect );
 //		PrintTextCursorX( " ", linerect );
+
+		if( pData )
+		{
+			return nOpbyte;
+		}
 
 		// Target Offset +/-		
 		if (bDisasmFormatFlags & DISASM_FORMAT_OFFSET)
@@ -2705,6 +2808,12 @@ void DrawSubWindow_Console (Update_t bUpdate)
 			{
 				DebuggerSetColorFG( DebuggerGetColor( FG_CONSOLE_OUTPUT ));
 				DrawConsoleLine( g_aConsoleDisplay[ iLine  ], y );
+			}
+			else
+			{
+				// bugfix: 2.6.1.34
+				// scrolled past top of console... Draw blank line
+				DrawConsoleLine( NULL, y );
 			}
 			iLine++;
 		}

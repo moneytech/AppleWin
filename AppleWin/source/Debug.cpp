@@ -30,16 +30,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //#pragma warning(disable: 4786)
 
 #include "StdAfx.h"
-#pragma  hdrstop
-
-#include <algorithm> // find
 
 //	#define DEBUG_COMMAND_HELP  1
 //	#define DEBUG_ASM_HASH 1
 #define ALLOW_INPUT_LOWERCASE 1
 
 	// See Debugger_Changelong.txt for full details
-	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,0,8);
+	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,2,0);
 
 
 // Public _________________________________________________________________________________________
@@ -87,6 +84,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		"OP", // Opcode/Instruction/Mnemonic
 		// Memory
 		"M" // Main
+		// TODO: M0 ram bank 0, M1 aux ram ?
 	};
 
 	// Note: BreakpointOperator_t, _PARAM_BREAKPOINT_, and g_aBreakpointSymbols must match!
@@ -118,13 +116,37 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	// Setting function to NULL, allows g_aCommands arguments to be safely listed here
 	// Commands should be listed alphabetically per category.
 	// For the list sorted by category, check Commands_e
-	// NOTE: Commands_e and g_aCommands[] must match! Aliases are listed at the end
+	// NOTE: Commands_e and g_aCommands[] must be kept in sync! Aliases are listed at the end.
 	Command_t g_aCommands[] =
 	{
+	// Assembler
+		{TEXT("A")           , CmdAssemble          , CMD_ASSEMBLE             , "Assemble instructions"      },
+	// Disassembler Data 
+		{TEXT("B")           , CmdDisasmDataDefByte1       , CMD_DISASM_DATA      , "Treat byte [range] as data"                },
+		{TEXT("X")           , CmdDisasmDataDefCode        , CMD_DISASM_CODE      , "Treat byte [range] as code"                },
+		{TEXT("DL")          , CmdDisasmDataList           , CMD_DISASM_LIST      , "List all byte ranges treated as data"      },
+		// without symbol lookup
+		{TEXT("DB")          , CmdDisasmDataDefByte1       , CMD_DEFINE_DATA_BYTE1, "Define byte (array)"                          },
+		{TEXT("DB2")         , CmdDisasmDataDefByte2       , CMD_DEFINE_DATA_BYTE2, "Define byte array, display 2 bytes/line"    },
+		{TEXT("DB4")         , CmdDisasmDataDefByte4       , CMD_DEFINE_DATA_BYTE4, "Define byte array, display 4 bytes/line"    },
+		{TEXT("DB8")         , CmdDisasmDataDefByte8       , CMD_DEFINE_DATA_BYTE8, "Define byte array, display 8 bytes/line"    },
+		{TEXT("DW")          , CmdDisasmDataDefWord1       , CMD_DEFINE_DATA_WORD1, "Define address array"                       },
+		{TEXT("DW2")         , CmdDisasmDataDefWord2       , CMD_DEFINE_DATA_WORD2, "Define address array, display 2 words/line" },
+		{TEXT("DW4")         , CmdDisasmDataDefWord4       , CMD_DEFINE_DATA_WORD4, "Define address array, display 4 words/line" },
+		{TEXT("DS")          , CmdDisasmDataDefString      , CMD_DEFINE_DATA_STR  , "Define string"                              },
+//		{TEXT("DF")          , CmdDisasmDataDefFloat       , CMD_DEFINE_DATA_FLOAT, "Define AppleSoft (packed) Float"            },
+//		{TEXT("DFX")         , CmdDisasmDataDefFloatUnpack , CMD_DEFINE_DATA_FLOAT2,"Define AppleSoft (unpacked) Float"          },
+		// with symbol lookup
+//		{TEXT("DA<>")        , CmdDisasmDataDefAddress8HL  , CMD_DEFINE_ADDR_8_HL , "Define split array of addresses, high byte section followed by low byte section" },
+//		{TEXT("DA><")        , CmdDisasmDataDefAddress8LH  , CMD_DEFINE_ADDR_8_LH , "Define split array of addresses, low byte section followed by high byte section" },
+//		{TEXT("DA<")         , CmdDisasmDataDefAddress8H   , CMD_DEFINE_ADDR_BYTE_H   , "Define array of high byte addresses"   },
+//		{TEXT("DB>")         , CmdDisasmDataDefAddress8L   , CMD_DEFINE_ADDR_BYTE_L   , "Define array of low byte addresses"    } 
+		{TEXT(".DA")         , CmdDisasmDataDefAddress16   , CMD_DEFINE_ADDR_WORD , "Define array of word addresses"            },
+// TODO: Rename config cmd: DISASM
+//		{TEXT("UA")          , CmdDisasmDataSmart          , CMD_SMART_DISASSEMBLE, "Analyze opcodes to determine if code or data" },		
 	// CPU (Main)
 		{TEXT(".")           , CmdCursorJumpPC      , CMD_CURSOR_JUMP_PC       , "Locate the cursor in the disasm window" }, // centered
 		{TEXT("=")           , CmdCursorSetPC       , CMD_CURSOR_SET_PC        , "Sets the PC to the current instruction" },
-		{TEXT("A")           , CmdAssemble          , CMD_ASSEMBLE             , "Assemble instructions"      },
 		{TEXT("BRK")         , CmdBreakInvalid      , CMD_BREAK_INVALID        , "Enter debugger on BRK or INVALID" },
 		{TEXT("BRKOP")       , CmdBreakOpcode       , CMD_BREAK_OPCODE         , "Enter debugger on opcode"   },
 		{TEXT("G")           , CmdGo                , CMD_GO                   , "Run [until PC = address]"   },
@@ -163,11 +185,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("BPIO")        , CmdBreakpointAddIO   , CMD_BREAKPOINT_ADD_IO    , "Add breakpoint for IO address $C0xx"   },
 		{TEXT("BPM")         , CmdBreakpointAddMem  , CMD_BREAKPOINT_ADD_MEM   , "Add breakpoint on memory access"       },  // SoftICE
 
-		{TEXT("BC")          , CmdBreakpointClear   , CMD_BREAKPOINT_CLEAR     , "Clear (remove) breakpoint"             }, // SoftICE
-		{TEXT("BD")          , CmdBreakpointDisable , CMD_BREAKPOINT_DISABLE   , "Disable breakpoint- it is still in the list, just not active" }, // SoftICE
-		{TEXT("BPE")         , CmdBreakpointEdit    , CMD_BREAKPOINT_EDIT      , "Edit breakpoint"                       }, // SoftICE
-		{TEXT("BE")          , CmdBreakpointEnable  , CMD_BREAKPOINT_ENABLE    , "(Re)Enable disabled breakpoint"        }, // SoftICE
-		{TEXT("BL")          , CmdBreakpointList    , CMD_BREAKPOINT_LIST      , "List all breakpoints"                      }, // SoftICE
+		{TEXT("BPC")         , CmdBreakpointClear   , CMD_BREAKPOINT_CLEAR     , "Clear (remove) breakpoint"             }, // SoftICE
+		{TEXT("BPD")         , CmdBreakpointDisable , CMD_BREAKPOINT_DISABLE   , "Disable breakpoint- it is still in the list, just not active" }, // SoftICE
+		{TEXT("BPEDIT")      , CmdBreakpointEdit    , CMD_BREAKPOINT_EDIT      , "Edit breakpoint"                       }, // SoftICE
+		{TEXT("BPE")         , CmdBreakpointEnable  , CMD_BREAKPOINT_ENABLE    , "(Re)Enable disabled breakpoint"        }, // SoftICE
+		{TEXT("BPL")         , CmdBreakpointList    , CMD_BREAKPOINT_LIST      , "List all breakpoints"                  }, // SoftICE
 //		{TEXT("BPLOAD")      , CmdBreakpointLoad    , CMD_BREAKPOINT_LOAD      , "Loads breakpoints" },
 		{TEXT("BPSAVE")      , CmdBreakpointSave    , CMD_BREAKPOINT_SAVE      , "Saves breakpoints" },
 	// Config
@@ -228,7 +250,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("MC")          , CmdMemoryCompare     , CMD_MEMORY_COMPARE       },
 
 		{TEXT("D")           , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  , "Hex dump in the mini memory area 1" }, // FIXME: Must also work in DATA screen
-		{TEXT("MD")          , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // alias
 		{TEXT("MD1")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  , "Hex dump in the mini memory area 1" },
 		{TEXT("MD2")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_2  , "Hex dump in the mini memory area 2" },
 		{TEXT("M1")          , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // alias
@@ -244,13 +265,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //		{TEXT("MH2")         , CmdMemoryMiniDumpHigh, CMD_MEM_MINI_DUMP_TXT_HI_2, "Text (High) in mini memory dump area 2" },
 
 		{TEXT("ME")          , CmdMemoryEdit        , CMD_MEMORY_EDIT          }, // TODO: like Copy ][+ Sector Edit
-		{TEXT("E")           , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    , "Enter byte"                   },
-		{TEXT("EW")          , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    , "Enter word"                   },
+		{TEXT("MEB")         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    , "Enter byte"                   },
+		{TEXT("MEW")         , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    , "Enter word"                   },
 		{TEXT("BLOAD")       , CmdMemoryLoad        , CMD_MEMORY_LOAD          , "Load a region of memory"      },
 		{TEXT("M")           , CmdMemoryMove        , CMD_MEMORY_MOVE          , "Memory move"                  },
 		{TEXT("BSAVE")       , CmdMemorySave        , CMD_MEMORY_SAVE          , "Save a region of memory"      },
 		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        , "Search memory for text / hex values" },
-		{TEXT("@")           ,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory resuts" },
+		{TEXT("@")           ,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory results" },
 //		{TEXT("SA")          , CmdMemorySearchAscii,  CMD_MEMORY_SEARCH_ASCII  , "Search ASCII text"            },
 //		{TEXT("ST")          , CmdMemorySearchApple , CMD_MEMORY_SEARCH_APPLE  , "Search Apple text (hi-bit)"   },
 		{TEXT("SH")          , CmdMemorySearchHex   , CMD_MEMORY_SEARCH_HEX    , "Search memory for hex values" },
@@ -267,9 +288,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	// Symbols
 		{TEXT("SYM")         , CmdSymbols           , CMD_SYMBOLS_LOOKUP       , "Lookup symbol or address, or define symbol" },
 
-		{TEXT("SYMMAIN")     , CmdSymbolsMain       , CMD_SYMBOLS_MAIN         , "Main symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMUSER")     , CmdSymbolsUser       , CMD_SYMBOLS_USER         , "User symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMSRC" )     , CmdSymbolsSource     , CMD_SYMBOLS_SRC          , "Source symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMMAIN")     , CmdSymbolsCommand    , CMD_SYMBOLS_ROM          , "Main/ROM symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMBASIC")    , CmdSymbolsCommand    , CMD_SYMBOLS_APPLESOFT    , "Applesoft symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMASM")      , CmdSymbolsCommand    , CMD_SYMBOLS_ASSEMBLY     , "Assembly symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMUSER")     , CmdSymbolsCommand    , CMD_SYMBOLS_USER_1       , "First user symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMUSER2")    , CmdSymbolsCommand    , CMD_SYMBOLS_USER_2       , "Second User symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMSRC")      , CmdSymbolsCommand    , CMD_SYMBOLS_SRC_1        , "First Source symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
+		{TEXT("SYMSRC2")     , CmdSymbolsCommand    , CMD_SYMBOLS_SRC_2        , "Second Source symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
 //		{TEXT("SYMCLEAR")    , CmdSymbolsClear      , CMD_SYMBOLS_CLEAR        }, // can't use SC = SetCarry
 		{TEXT("SYMINFO")     , CmdSymbolsInfo       , CMD_SYMBOLS_INFO         , "Display summary of symbols" },
 		{TEXT("SYMLIST")     , CmdSymbolsList       , CMD_SYMBOLS_LIST         , "Lookup symbol in main/user/src tables" }, // 'symbolname', can't use param '*' 
@@ -312,10 +337,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("WSAVE")       , CmdWatchSave         , CMD_WATCH_SAVE    , "Save Watches"                                  }, // due to symbol look-up
 	// Window
 		{TEXT("WIN")         , CmdWindow            , CMD_WINDOW         , "Show specified debugger window"              },
+// TODO: need to rename with data disassembly
 		{TEXT("CODE")        , CmdWindowViewCode    , CMD_WINDOW_CODE    , "Switch to full code window"                  },  // Can't use WC = WatchClear
 		{TEXT("CODE1")       , CmdWindowShowCode1   , CMD_WINDOW_CODE_1  , "Show code on top split window"               },
 		{TEXT("CODE2")       , CmdWindowShowCode2   , CMD_WINDOW_CODE_2  , "Show code on bottom split window"            },
 		{TEXT("CONSOLE")     , CmdWindowViewConsole , CMD_WINDOW_CONSOLE , "Switch to full console window"               },
+// TODO: need to rename with data disassembly
 		{TEXT("DATA")        , CmdWindowViewData    , CMD_WINDOW_DATA    , "Switch to full data window"                  },
 		{TEXT("DATA1")       , CmdWindowShowCode1   , CMD_WINDOW_CODE_1  , "Show data on top split window"               },
 		{TEXT("DATA2")       , CmdWindowShowData2   , CMD_WINDOW_DATA_2  , "Show data on bottom split window"            },
@@ -356,6 +383,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("Ctrl ->" )    , NULL                 , CMD_CURSOR_SET_PC        },
 		{TEXT("Shift ->")    , NULL                 , CMD_CURSOR_JUMP_PC       }, // at top
 		{TEXT("INPUT")       , CmdIn                , CMD_IN                   },
+		// Data
 		// Flags - Clear
 		{TEXT("RC")          , CmdFlagClear         , CMD_FLAG_CLR_C , "Clear Flag Carry"               }, // 0 // Legacy
 		{TEXT("RZ")          , CmdFlagClear         , CMD_FLAG_CLR_Z , "Clear Flag Zero"                }, // 1
@@ -375,10 +403,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("SV")          , CmdFlagSet           , CMD_FLAG_SET_V , "Clear Flag Overflow"            }, // 6
 		{TEXT("SN")          , CmdFlagSet           , CMD_FLAG_SET_N , "Clear Flag Negative"            }, // 7
 
-		{TEXT("EB" )         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    },
-		{TEXT("E8" )         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    },
-		{TEXT("E16")         , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    },
-		{TEXT("MF")          , CmdMemoryFill        , CMD_MEMORY_FILL          },
+		{TEXT("ME8")         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    }, // changed from EB -- bugfix: EB:## ##
+		{TEXT("ME16")        , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    },
 		{TEXT("MM")          , CmdMemoryMove        , CMD_MEMORY_MOVE          },
 		{TEXT("MS")          , CmdMemorySearch      , CMD_MEMORY_SEARCH        }, // CmdMemorySearch
 		{TEXT("P0")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_0   },
@@ -392,9 +418,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("SYMBOLS")     , CmdSymbols           , CMD_SYMBOLS_LOOKUP       , "Return " },
 //		{TEXT("SYMBOLS1")    , CmdSymbolsInfo       , CMD_SYMBOLS_1            },
 //		{TEXT("SYMBOLS2")    , CmdSymbolsInfo       , CMD_SYMBOLS_2            },
-		{TEXT("SYM1" )       , CmdSymbolsInfo       , CMD_SYMBOLS_MAIN         },
-		{TEXT("SYM2" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER         },
-		{TEXT("SYM3" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC          },
+
+		{TEXT("SYM0" )       , CmdSymbolsInfo       , CMD_SYMBOLS_ROM          },
+		{TEXT("SYM1" )       , CmdSymbolsInfo       , CMD_SYMBOLS_APPLESOFT    },
+		{TEXT("SYM2" )       , CmdSymbolsInfo       , CMD_SYMBOLS_ASSEMBLY     },
+		{TEXT("SYM3" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER_1       },
+		{TEXT("SYM4" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER_2       },
+		{TEXT("SYM5" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC_1        },
+		{TEXT("SYM6" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC_2        },
+
 		{TEXT("TEXT40")      , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X          },
 		{TEXT("TEXT41")      , CmdViewOutput_Text41 , CMD_VIEW_TEXT41          },
 		{TEXT("TEXT42")      , CmdViewOutput_Text42 , CMD_VIEW_TEXT42          },
@@ -408,8 +440,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("BENCH")       , CmdBenchmarkStart    , CMD_BENCHMARK            },
 		{TEXT("EXITBENCH")   , CmdBenchmarkStop     , CMD_BENCHMARK            },
 		{TEXT("MDB")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // MemoryDumpByte  // Did anyone actually use this??
-		{TEXT("MDC")         , CmdUnassemble        , CMD_UNASSEMBLE           }, // MemoryDumpCode  // Did anyone actually use this??
-		{TEXT("MEB")         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    }, // MemoryEnterByte // Did anyone actually use this??
 		{TEXT("MEMORY")      , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // MemoryDumpByte  // Did anyone actually use this??
 };
 
@@ -585,6 +615,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // Config _____________________________________________________________________
 
 // Config - Disassembly
+	bool  g_bConfigDisasmAddressView   = true;
 	bool  g_bConfigDisasmAddressColon  = true;
 	bool  g_bConfigDisasmOpcodesView   = true;
 	bool  g_bConfigDisasmOpcodeSpaces  = true;
@@ -769,23 +800,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	SourceAssembly_t g_aSourceDebug;
 
 
-// Symbols ________________________________________________________________________________________
-	char * g_aSymbolTableNames[ NUM_SYMBOL_TABLES ] =
-	{
-		"Main",
-		"User",
-		"Src" 
-	};
-
-	SymbolTable_t g_aSymbols[ NUM_SYMBOL_TABLES ];
-	int           g_nSymbolsLoaded = 0;  // on Last Load
-	bool          g_aConfigSymbolsDisplayed[ NUM_SYMBOL_TABLES ] =
-	{
-		true,
-		true,
-		true
-	};
-
 
 // Watches ________________________________________________________________________________________
 	int       g_nWatches = 0;
@@ -820,8 +834,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		"AppleWinDebugger.cfg";
 #endif
 
-	char      g_sFileNameSymbolsMain[] = "APPLE2E.SYM";
-	char      g_sFileNameSymbolsUser[ MAX_PATH ] = "";
 	char      g_sFileNameTrace      [] = "Trace.txt";
 
 	bool      g_bBenchmarking = false;
@@ -861,8 +873,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //	bool CheckBreakpoint (WORD address, BOOL memory);
 	bool CheckBreakpointsIO ();
 	bool CheckBreakpointsReg ();
-	bool _CmdBreakpointAddReg ( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen );
-	int  _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp );
+	bool _CmdBreakpointAddReg ( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen, bool bIsTempBreakpoint );
+	int  _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, bool bIsTempBreakpoint=false );
+	void _BWZ_Clear( Breakpoint_t * aBreakWatchZero, int iSlot );
 
 // Config - Colors
 	static	void _ConfigColorsReset ( BYTE *pPalDst = 0 );
@@ -877,18 +890,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Font
 	static	void _UpdateWindowFontHeights (int nFontHeight);
-
-// Symbols
-	Update_t _CmdSymbolsClear ( Symbols_e eSymbolTable );
-	Update_t _CmdSymbolsCommon ( int nArgs, int bSymbolTables );
-	Update_t _CmdSymbolsListTables (int nArgs, int bSymbolTables );
-	Update_t _CmdSymbolsUpdate ( int nArgs );
-
-	bool _CmdSymbolList_Address2Symbol ( int nAddress   , int bSymbolTables );
-	bool _CmdSymbolList_Symbol2Address ( LPCTSTR pSymbol, int bSymbolTables );
-
-	// SymbolOffset
-	int ParseSymbolTable ( TCHAR *pFileName, Symbols_e eWhichTableToLoad, int nSymbolOffset = 0 );
 
 // Source Level Debugging
 	static	bool BufferAssemblyListing ( char * pFileName );
@@ -908,11 +909,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	Update_t _CmdWindowViewCommon (int iNewWindow);
 
 // Utility
-	RangeType_t Range_Get( WORD & nAddress1_, WORD &nAddress2_, const int iArg = 1 );
-	bool        Range_CalcEndLen( const RangeType_t eRange
-		, const WORD & nAddress1, const WORD & nAddress2
-		, WORD & nAddressEnd_, int & nAddressLen_ );
-
 	char FormatCharTxtCtrl ( const BYTE b, bool *pWasCtrl_ );
 	char FormatCharTxtAsci ( const BYTE b, bool *pWasAsci_ );
 	char FormatCharTxtHigh ( const BYTE b, bool *pWasHi_ );
@@ -946,99 +942,6 @@ LPCTSTR FormatAddress( WORD nAddress, int nBytes )
 }
 
 
-
-// Util - Range _______________________________________________________________
-
-
-//===========================================================================
-bool Range_CalcEndLen( const RangeType_t eRange
-	, const WORD & nAddress1, const WORD & nAddress2
-	, WORD & nAddressEnd_, int & nAddressLen_ )
-{
-	bool bValid = false;
-
-	if (eRange == RANGE_HAS_LEN)
-	{
-		// BSAVE 2000,0  Len=0 End=n/a
-		// BSAVE 2000,1  Len=1 End=2000
-		// 0,FFFF [,)
-		// End =  FFFE = Len-1
-		// Len =  FFFF
-		nAddressLen_ = nAddress2;
-		int nTemp = nAddress1 + nAddressLen_ - 1;
-		if (nTemp > _6502_MEM_END)
-			nTemp = _6502_MEM_END;
-		nAddressEnd_ = nTemp;
-		bValid = true;
-	}
-	else
-	if (eRange == RANGE_HAS_END)
-	{
-		// BSAVE 2000:2000 Len=0, End=n/a
-		// BSAVE 2000:2001 Len=1, End=2000
-		// 0:FFFF [,]
-		// End =  FFFF
-		// Len = 10000 = End+1
-		nAddressEnd_ = nAddress2;
-		nAddressLen_ = nAddress2 - nAddress1 + 1;
-		bValid = true;
-	}
-
-	return bValid;
-}
-
-
-//===========================================================================
-RangeType_t Range_Get( WORD & nAddress1_, WORD & nAddress2_, const int iArg ) // =1
-{
-	nAddress1_ = (unsigned) g_aArgs[ iArg ].nValue; 
-	if (nAddress1_ > _6502_MEM_END)
-		nAddress1_ = _6502_MEM_END;
-
-	nAddress2_ = 0;
-	int nTemp  = 0;
-
-	RangeType_t eRange = RANGE_MISSING_ARG_2;
-
-	if (g_aArgs[ iArg + 1 ].eToken == TOKEN_COMMA)
-	{
-		// 0,FFFF [,) // Note the mathematical range
-		// End =  FFFE = Len-1
-		// Len =  FFFF
-		eRange = RANGE_HAS_LEN;
-		nTemp  = g_aArgs[ iArg + 2 ].nValue;
-		nAddress2_ = nTemp;
-	}
-	else
-	if (g_aArgs[ iArg + 1 ].eToken == TOKEN_COLON)
-	{
-		// 0:FFFF [,] // Note the mathematical range
-		// End =  FFFF
-		// Len = 10000 = End+1
-		eRange = RANGE_HAS_END;
-		nTemp  = g_aArgs[ iArg + 2 ].nValue;
-
-		// i.e.
-		// FFFF:D000
-		// 1    2    Temp
-		// FFFF      D000
-		//      FFFF
-		// D000
-		if (nAddress1_ > nTemp)
-		{
-			nAddress2_ = nAddress1_;
-			nAddress1_ = nTemp;
-		}
-		else
-			nAddress2_ = nTemp;
-	}
-
-	// .17 Bug Fix: D000,FFFF -> D000,CFFF (nothing searched!)
-//	if (nTemp > _6502_MEM_END)
-//		nTemp = _6502_MEM_END;
-
-	return eRange;
-}
 
 
 // Bookmarks __________________________________________________________________
@@ -1760,37 +1663,52 @@ bool CheckBreakpointsReg ()
 		switch (pBP->eSource)
 		{
 			case BP_SRC_REG_PC:
-				if (_CheckBreakpointValue( pBP, regs.pc ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.pc );
 				break;
 			case BP_SRC_REG_A:
-				if (_CheckBreakpointValue( pBP, regs.a ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.a );
 				break;
 			case BP_SRC_REG_X:
-				if (_CheckBreakpointValue( pBP, regs.x ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.x );
 				break;
 			case BP_SRC_REG_Y:
-				if (_CheckBreakpointValue( pBP, regs.y ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.y );
 				break;
 			case BP_SRC_REG_P:
-				if (_CheckBreakpointValue( pBP, regs.ps ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.ps );
 				break;
 			case BP_SRC_REG_S:
-				if (_CheckBreakpointValue( pBP, regs.sp ))
-					return true;
+				bStatus = _CheckBreakpointValue( pBP, regs.sp );
 				break;
 			default:
 				break;
+		}
+
+		if (bStatus)
+		{
+			if (pBP->bTemp)
+				_BWZ_Clear(pBP, iBreakpoint);
+
+			break;
 		}
 	}
 
 	return bStatus;
 }
 
+void ClearTempBreakpoints ()
+{
+	for (int iBreakpoint = 0; iBreakpoint < MAX_BREAKPOINTS; iBreakpoint++)
+	{
+		Breakpoint_t *pBP = &g_aBreakpoints[iBreakpoint];
+
+		if (! _BreakpointValid( pBP ))
+			continue;
+
+		if (pBP->bTemp)
+			_BWZ_Clear(pBP, iBreakpoint);
+	}
+}
 
 //===========================================================================
 Update_t CmdBreakpoint (int nArgs)
@@ -1904,7 +1822,7 @@ Update_t CmdBreakpointAddReg (int nArgs)
 
 
 //===========================================================================
-bool _CmdBreakpointAddReg( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen )
+bool _CmdBreakpointAddReg( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen, bool bIsTempBreakpoint )
 {
 	bool bStatus = false;
 
@@ -1916,6 +1834,7 @@ bool _CmdBreakpointAddReg( Breakpoint_t *pBP, BreakpointSource_t iSrc, Breakpoin
 		pBP->nLength   = nLen;
 		pBP->bSet      = true;
 		pBP->bEnabled  = true;
+		pBP->bTemp     = bIsTempBreakpoint;
 		bStatus = true;
 	}
 
@@ -1925,7 +1844,7 @@ bool _CmdBreakpointAddReg( Breakpoint_t *pBP, BreakpointSource_t iSrc, Breakpoin
 
 // @return Number of args processed
 //===========================================================================
-int _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp )
+int _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, bool bIsTempBreakpoint )
 {
 	int dArg = 0;
 
@@ -1968,7 +1887,7 @@ int _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, Br
 			nLen = 1;
 		}
 
-		if (! _CmdBreakpointAddReg( pBP, iSrc, iCmp, nAddress, nLen ))
+		if (! _CmdBreakpointAddReg( pBP, iSrc, iCmp, nAddress, nLen, bIsTempBreakpoint ))
 		{
 			dArg = 0;
 		}
@@ -2334,6 +2253,89 @@ Update_t CmdBreakpointSave (int nArgs)
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
+// Assembler ______________________________________________________________________________________
+
+//===========================================================================
+Update_t _CmdAssemble( WORD nAddress, int iArg, int nArgs )
+{
+	bool bHaveLabel = false;
+
+	// if AlphaNumeric
+	ArgToken_e iTokenSrc = NO_TOKEN;
+	ParserFindToken( g_pConsoleInput, g_aTokens, NUM_TOKENS, &iTokenSrc );
+
+	if (iTokenSrc == NO_TOKEN) // is TOKEN_ALPHANUMERIC
+	if (g_pConsoleInput[0] != CHAR_SPACE)
+	{
+		bHaveLabel = true;
+
+		// Symbol
+		char *pSymbolName = g_aArgs[ iArg ].sArg; // pArg->sArg;
+		SymbolUpdate( SYMBOLS_ASSEMBLY, pSymbolName, nAddress, false, true ); // bool bRemoveSymbol, bool bUpdateSymbol )
+
+		iArg++;
+	}	
+
+	bool bStatus = Assemble( iArg, nArgs, nAddress );
+	if ( bStatus)
+		return UPDATE_ALL;
+		
+	return UPDATE_CONSOLE_DISPLAY; // UPDATE_NOTHING;
+}
+
+
+//===========================================================================
+Update_t CmdAssemble (int nArgs)
+{
+	if (! g_bAssemblerOpcodesHashed)
+	{
+		AssemblerStartup();
+		g_bAssemblerOpcodesHashed = true;
+	}
+
+	// 0 : A
+	// 1 : A address
+	// 2+: A address mnemonic...
+
+	if (! nArgs)
+	{
+//		return Help_Arg_1( CMD_ASSEMBLE );
+
+		// Start assembler, continue with last assembled address
+		AssemblerOn();
+		return UPDATE_CONSOLE_DISPLAY;
+	}
+		
+	g_nAssemblerAddress = g_aArgs[1].nValue;
+
+	if (nArgs == 1)
+	{
+		int iArg = 1;
+		
+		// undocumented ASM *
+		if ((! _tcscmp( g_aArgs[ iArg ].sArg, g_aParameters[ PARAM_WILDSTAR        ].m_sName )) ||
+			(! _tcscmp( g_aArgs[ iArg ].sArg, g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName )) )
+		{
+			_CmdAssembleHashDump();
+		}
+
+		AssemblerOn();
+		return UPDATE_CONSOLE_DISPLAY;
+	
+//		return Help_Arg_1( CMD_ASSEMBLE );
+	}
+
+	if (nArgs > 1)
+	{
+		return _CmdAssemble( g_nAssemblerAddress, 2, nArgs ); // disasm, memory, watches, zeropage
+	}
+
+//		return Help_Arg_1( CMD_ASSEMBLE );
+	// g_nAssemblerAddress; // g_aArgs[1].nValue;
+//	return ConsoleUpdate();
+
+	return UPDATE_CONSOLE_DISPLAY;
+}
 
 // CPU ____________________________________________________________________________________________
 // CPU Step, Trace ________________________________________________________________________________
@@ -2442,7 +2444,7 @@ Update_t CmdStepOver (int nArgs)
 		int nOpcode = *(mem + regs.pc); // g_nDisasmCurAddress
 	//	int eMode = g_aOpcodes[ nOpcode ].addrmode;
 	//	int nByte = g_aOpmodes[eMode]._nBytes;
-	//	if ((eMode ==  ADDR_ABS) && 
+	//	if ((eMode ==  AM_A) && 
 
 		CmdTrace(0);
 		if (nOpcode == OPCODE_JSR)
@@ -2549,88 +2551,6 @@ Update_t CmdTraceLine (int nArgs)
 }
 
 
-
-//===========================================================================
-Update_t _CmdAssemble( WORD nAddress, int iArg, int nArgs )
-{
-	bool bHaveLabel = false;
-
-	// if AlphaNumeric
-	ArgToken_e iTokenSrc = NO_TOKEN;
-	ParserFindToken( g_pConsoleInput, g_aTokens, NUM_TOKENS, &iTokenSrc );
-
-	if (iTokenSrc == NO_TOKEN) // is TOKEN_ALPHANUMERIC
-	if (g_pConsoleInput[0] != CHAR_SPACE)
-	{
-		bHaveLabel = true;
-
-		// Symbol
-		char *pSymbolName = g_aArgs[ iArg ].sArg; // pArg->sArg;
-		SymbolUpdate( SYMBOLS_SRC, pSymbolName, nAddress, false, true ); // bool bRemoveSymbol, bool bUpdateSymbol )
-
-		iArg++;
-	}	
-
-	bool bStatus = Assemble( iArg, nArgs, nAddress );
-	if ( bStatus)
-		return UPDATE_ALL;
-		
-	return UPDATE_CONSOLE_DISPLAY; // UPDATE_NOTHING;
-}
-
-
-//===========================================================================
-Update_t CmdAssemble (int nArgs)
-{
-	if (! g_bAssemblerOpcodesHashed)
-	{
-		AssemblerStartup();
-		g_bAssemblerOpcodesHashed = true;
-	}
-
-	// 0 : A
-	// 1 : A address
-	// 2+: A address mnemonic...
-
-	if (! nArgs)
-	{
-//		return Help_Arg_1( CMD_ASSEMBLE );
-
-		// Start assembler, continue with last assembled address
-		AssemblerOn();
-		return UPDATE_CONSOLE_DISPLAY;
-	}
-		
-	g_nAssemblerAddress = g_aArgs[1].nValue;
-
-	if (nArgs == 1)
-	{
-		int iArg = 1;
-		
-		// undocumented ASM *
-		if ((! _tcscmp( g_aArgs[ iArg ].sArg, g_aParameters[ PARAM_WILDSTAR        ].m_sName )) ||
-			(! _tcscmp( g_aArgs[ iArg ].sArg, g_aParameters[ PARAM_MEM_SEARCH_WILD ].m_sName )) )
-		{
-			_CmdAssembleHashDump();
-		}
-
-		AssemblerOn();
-		return UPDATE_CONSOLE_DISPLAY;
-	
-//		return Help_Arg_1( CMD_ASSEMBLE );
-	}
-
-	if (nArgs > 1)
-	{
-		return _CmdAssemble( g_nAssemblerAddress, 2, nArgs ); // disasm, memory, watches, zeropage
-	}
-
-//		return Help_Arg_1( CMD_ASSEMBLE );
-	// g_nAssemblerAddress; // g_aArgs[1].nValue;
-//	return ConsoleUpdate();
-
-	return UPDATE_CONSOLE_DISPLAY;
-}
 
 
 // Unassemble
@@ -3559,7 +3479,7 @@ void DisasmCalcTopFromCurAddress( bool bUpdateTop )
 			}
 
 			// .20 Fixed: DisasmCalcTopFromCurAddress()
-			//if ((eMode >= ADDR_INVALID1) && (eMode <= ADDR_INVALID3))
+			//if ((eMode >= AM_1) && (eMode <= AM_3))
 #if 0 // _DEBUG
 			TCHAR sText[ CONSOLE_WIDTH ];
 			wsprintf( sText, "%04X : %d bytes\n", iAddress, nOpbytes );
@@ -4338,7 +4258,7 @@ Update_t CmdDisk ( int nArgs)
 		LPCTSTR pDiskName = g_aArgs[ 3 ].sArg;
 
 		// DISK # "Diskname"
-		DiskInsert( iDrive, pDiskName, true, false ); // write_protected, dont_create
+		DiskInsert( iDrive, pDiskName, IMAGE_FORCE_WRITE_PROTECTED, IMAGE_DONT_CREATE );
 		FrameRefreshStatus(DRAW_LEDS | DRAW_BUTTON_DRIVES);
 	}
 
@@ -4541,7 +4461,7 @@ Update_t CmdMemoryEdit (int nArgs)
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
-
+// MEB addr 8_bit_value
 //===========================================================================
 Update_t CmdMemoryEnterByte (int nArgs)
 {
@@ -4554,7 +4474,16 @@ Update_t CmdMemoryEnterByte (int nArgs)
 	WORD nAddress = g_aArgs[1].nValue;
 	while (nArgs >= 2)
 	{
-		*(mem + nAddress+nArgs-2)  = (BYTE)g_aArgs[nArgs].nValue;
+		WORD nData = g_aArgs[nArgs].nValue;
+		if( nData > 0xFF)
+		{
+			*(mem + nAddress + nArgs - 2)  = (BYTE)(nData >> 0);
+			*(mem + nAddress + nArgs - 1)  = (BYTE)(nData >> 8);
+		}
+		else
+		{
+			*(mem + nAddress+nArgs-2)  = (BYTE)nData;
+		}
 		*(memdirty+(nAddress >> 8)) = 1;
 		nArgs--;
 	}
@@ -4562,7 +4491,7 @@ Update_t CmdMemoryEnterByte (int nArgs)
 	return UPDATE_ALL;
 }
 
-
+// MEW addr 16-bit_vaue
 //===========================================================================
 Update_t CmdMemoryEnterWord (int nArgs)
 {
@@ -4589,40 +4518,64 @@ Update_t CmdMemoryEnterWord (int nArgs)
 }
 
 //===========================================================================
+void MemMarkDirty( WORD nAddressStart, WORD nAddressEnd )
+{
+	for( int iPage = (nAddressStart >> 8); iPage <= (nAddressEnd >> 8); iPage++ )
+	{
+		*(memdirty+iPage) = 1;
+	}
+}
+
+//===========================================================================
 Update_t CmdMemoryFill (int nArgs)
 {
-	// F address [,len] value
 	// F address end value
-	if ((!nArgs) || (nArgs > 5))
+	// F address,len value
+	// F address:end value
+	if ((!nArgs) || (nArgs < 3) || (nArgs > 4))
 		return Help_Arg_1( CMD_MEMORY_FILL );
-  
-	WORD nAddress = g_aArgs[1].nValue;
-	WORD nBytes = 1;
 
-	int iValue = 2;
-	if (g_aArgs[2].eToken == TOKEN_COMMA)
+	WORD nAddress2 = 0;
+	WORD nAddressStart = 0;
+	WORD nAddressEnd = 0;
+	int  nAddressLen = 0;
+	BYTE nValue = 0;
+
+	if( nArgs == 3)
 	{
-		nBytes = MAX(1 , g_aArgs[ iValue + 1 ].nValue);
-		iValue = 4;
+		nAddressStart = g_aArgs[1].nValue;
+		nAddressEnd   = g_aArgs[2].nValue;
+		nAddressLen = MIN(_6502_MEM_END , nAddressEnd - nAddressStart + 1 );
 	}
 	else
-	if (nArgs > 3)
-		return Help_Arg_1( CMD_MEMORY_FILL );
+	{
+		RangeType_t eRange;
+		eRange = Range_Get( nAddressStart, nAddress2, 1 );
 
+		if (! Range_CalcEndLen( eRange, nAddressStart, nAddress2, nAddressEnd, nAddressLen ))
+			return Help_Arg_1( CMD_MEMORY_MOVE );
+	}
 #if DEBUG_VAL_2
 		nBytes   = MAX(1,g_aArgs[1].nVal2); // TODO: This actually work??
 #endif
 
-	while (nBytes--)
+	if ((nAddressLen > 0) && (nAddressEnd <= _6502_MEM_END))
 	{
-		if ((nAddress < _6502_IO_BEGIN) || (nAddress > _6502_IO_END))
+		MemMarkDirty( nAddressStart, nAddressEnd );
+
+		nValue = g_aArgs[nArgs].nValue & 0xFF;
+		while( nAddressStart <= nAddressEnd )
 		{
-			*(mem + nAddress) = (BYTE)(g_aArgs[ iValue ].nValue & 0xFF); // HACK: Undocumented fill with ZERO
+			// TODO: Optimize - split into pre_io, and post_io
+			if ((nAddress2 < _6502_IO_BEGIN) || (nAddress2 > _6502_IO_END))
+			{
+				*(mem + nAddressStart) = nValue;
+			}
+			nAddressStart++;
 		}
-		nAddress++;
 	}
 
-	return UPDATE_CONSOLE_DISPLAY;
+	return UPDATE_ALL; // UPDATE_CONSOLE_DISPLAY;
 }
 
 
@@ -4752,17 +4705,50 @@ Update_t CmdMemoryLoad (int nArgs)
 	return ConsoleUpdate();
 }
 
-
+// dst src : len
 //===========================================================================
 Update_t CmdMemoryMove (int nArgs)
 {
 	if (nArgs < 3)
 		return Help_Arg_1( CMD_MEMORY_MOVE );
 
-	WORD nSrc = g_aArgs[1].nValue;
-	WORD nLen = g_aArgs[2].nValue - nSrc;
-	WORD nDst = g_aArgs[3].nValue;
-	
+	WORD nDst = g_aArgs[1].nValue;
+//	WORD nSrc = g_aArgs[2].nValue;
+//	WORD nLen = g_aArgs[3].nValue - nSrc;
+	WORD nAddress2 = 0;
+	WORD nAddressStart = 0;
+	WORD nAddressEnd = 0;
+	int  nAddressLen = 0;
+
+	RangeType_t eRange;
+	eRange = Range_Get( nAddressStart, nAddress2, 2 );
+
+//		if (eRange == RANGE_MISSING_ARG_2)
+	if (! Range_CalcEndLen( eRange, nAddressStart, nAddress2, nAddressEnd, nAddressLen ))
+		return Help_Arg_1( CMD_MEMORY_MOVE );
+
+	if ((nAddressLen > 0) && (nAddressEnd <= _6502_MEM_END))
+	{
+		MemMarkDirty( nAddressStart, nAddressEnd );
+
+//			BYTE *pSrc = mem + nAddressStart;
+//			BYTE *pDst = mem + nDst;
+//			BYTE *pEnd = pSrc + nAddressLen;
+
+		while( nAddressStart <= nAddressEnd )
+		{
+			// TODO: Optimize - split into pre_io, and post_io
+			if ((nDst < _6502_IO_BEGIN) || (nDst > _6502_IO_END))
+			{
+				*(mem + nDst) = *(mem + nAddressStart);
+			}
+			nDst++;
+			nAddressStart++;
+		}
+
+		return UPDATE_ALL;
+	}
+
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
@@ -5681,11 +5667,20 @@ Update_t CmdOutputRun (int nArgs)
 
 //	if (g_aArgs[1].bType & TYPE_QUOTED_2)
 
-	strcpy( sMiniFileName, pFileName );
-//	strcat( sMiniFileName, ".aws" ); // HACK: MAGIC STRING
+	_tcscpy( sMiniFileName, pFileName );
+//	_tcscat( sMiniFileName, ".aws" ); // HACK: MAGIC STRING
 
-	_tcscpy(sFileName, g_sCurrentDir); // 
-	_tcscat(sFileName, sMiniFileName);
+	if (pFileName[0] == '\\' || pFileName[1] == ':')	// NB. Any prefix quote has already been stripped
+	{
+		// Abs pathname
+		_tcscpy(sFileName, sMiniFileName);
+	}
+	else
+	{
+		// Rel pathname
+		_tcscpy(sFileName, g_sCurrentDir);
+		_tcscat(sFileName, sMiniFileName);
+	}
 
 	if (script.Read( sFileName ))
 	{
@@ -5697,7 +5692,7 @@ Update_t CmdOutputRun (int nArgs)
 		for( int iLine = 0; iLine < nLine; iLine++ )
 		{
 			script.GetLine( iLine, g_pConsoleInput, CONSOLE_WIDTH-2 );
-			g_nConsoleInputChars = strlen( g_pConsoleInput );
+			g_nConsoleInputChars = _tcslen( g_pConsoleInput );
 			bUpdateDisplay |= DebuggerProcessCommand( false );
 		}
 	}
@@ -5913,7 +5908,7 @@ bool ParseAssemblyListing( bool bBytesToMemory, bool bAddSymbols )
 					{
 						char *pAddressEnd;
 						nAddress = (DWORD) strtol( pAddress, &pAddressEnd, 16 );
-						g_aSymbols[SYMBOLS_SRC][ (WORD) nAddress] = sName;
+						g_aSymbols[ SYMBOLS_SRC_2 ][ (WORD) nAddress] = sName;
 						g_nSourceAssemblySymbols++;
 					}
 				}
@@ -6028,788 +6023,6 @@ Update_t CmdStackPop (int nArgs)
 
 //===========================================================================
 Update_t CmdStackPopPseudo (int nArgs)
-{
-	return UPDATE_CONSOLE_DISPLAY;
-}
-
-// Symbols ________________________________________________________________________________________
-
-
-//===========================================================================
-Update_t CmdSymbols (int nArgs)
-{
-	if (! nArgs)
-		return CmdSymbolsInfo( 0 );
-
-	Update_t iUpdate = _CmdSymbolsUpdate( nArgs);
-	if (iUpdate != UPDATE_NOTHING)
-		return iUpdate;
-
-//	return CmdSymbolsList( nArgs );
-	int bSymbolTables = SYMBOL_TABLE_MAIN | SYMBOL_TABLE_USER | SYMBOL_TABLE_SRC;
-	return _CmdSymbolsListTables( nArgs, bSymbolTables );
-}
-
-//===========================================================================
-Update_t CmdSymbolsClear (int nArgs)
-{
-	Symbols_e eSymbolsTable = SYMBOLS_USER;	
-	_CmdSymbolsClear( eSymbolsTable );
-	return (UPDATE_DISASM | UPDATE_SYMBOLS);
-}
-
-//===========================================================================
-Update_t CmdSymbolsInfo (int nArgs)
-{
-	char sText[ CONSOLE_WIDTH ];
-
-	bool bDisplayMain = false;
-	bool bDisplayUser = false;
-	bool bDisplaySrc  = false;
-
-	if (! nArgs)
-	{
-		bDisplayMain = true;
-		bDisplayUser = true;
-		bDisplaySrc  = true;
-	}
-	else
-	if (CMD_SYMBOLS_MAIN == g_iCommand)
-		bDisplayMain = true;
-	else
-	if (CMD_SYMBOLS_USER == g_iCommand)
-		bDisplayUser = true;
-	else
-	if (CMD_SYMBOLS_SRC == g_iCommand)
-		bDisplaySrc = true;
-
-	int nSymbolsMain = g_aSymbols[SYMBOLS_MAIN].size();
-	int nSymbolsUser = g_aSymbols[SYMBOLS_USER].size();
-	int nSymbolsSrc  = g_aSymbols[SYMBOLS_SRC ].size();
-
-	if (bDisplayMain && bDisplayUser && bDisplaySrc)
-	{
-		sprintf( sText, "  Symbols  Main: %s%d%s  User: %s%d%s   Source: %s%d%s"
-			, CHC_NUM_DEC
-			, nSymbolsMain
-			, CHC_DEFAULT
-			, CHC_NUM_DEC
-			, nSymbolsUser
-			, CHC_DEFAULT
-			, CHC_NUM_DEC
-			, nSymbolsSrc
-			, CHC_DEFAULT
-		 );
-		ConsolePrint( sText );
-	}
-	else
-	if (bDisplayMain)
-	{
-		sprintf( sText, "  Main symbols: %s%d%s"
-			, CHC_NUM_DEC
-			, nSymbolsMain
-			, CHC_DEFAULT
-		);
-		ConsolePrint( sText );
-	}
-	else
-	if (bDisplayUser)
-	{
-		sprintf( sText, "  User symbols: %s%d%s"
-			, CHC_NUM_DEC
-			, nSymbolsUser
-			, CHC_DEFAULT
-		);
-		ConsolePrint( sText );
-	}
-	else
-	if (bDisplaySrc)
-	{
-		sprintf( sText, "  Source symbols: %s%d%s"
-			, CHC_NUM_DEC
-			, nSymbolsSrc
-			, CHC_DEFAULT
-		);
-		ConsolePrint( sText );
-	}
-	
-	if (bDisplayMain || bDisplayUser || bDisplaySrc)
-		return ConsoleUpdate();
-
-	return UPDATE_CONSOLE_DISPLAY;
-}
-
-void _CmdPrintSymbol( LPCTSTR pSymbol, WORD nAddress, int iTable )
-{
-	char   sText[ CONSOLE_WIDTH ];
-	sprintf( sText, "  %s$%s%04X%s (%s%s%s) %s%s"
-		, CHC_ARG_SEP
-		, CHC_ADDRESS
-		, nAddress
-		, CHC_DEFAULT
-		, CHC_STRING
-		, g_aSymbolTableNames[ iTable ]
-		, CHC_DEFAULT
-		, CHC_SYMBOL
-		, pSymbol );
-	// ConsoleBufferPush( sText );
-	ConsolePrint( sText );
-}
-
-
-
-//=========================================================================== */
-bool _FindSymbolTable( int bSymbolTables, int iTable )
-{
-	// iTable is enumeration
-	// bSymbolTables is bit-flags of enabled tables to search
-
-	if (bSymbolTables & SYMBOL_TABLE_MAIN)
-		if (iTable == SYMBOLS_MAIN)
-			return true;
-
-	if (bSymbolTables & SYMBOL_TABLE_USER)
-		if (iTable == SYMBOLS_USER)
-			return true;
-
-	if (bSymbolTables & SYMBOL_TABLE_SRC )
-		if (iTable == SYMBOLS_SRC)
-			return true;
-
-	return false;
-}
-
-
-//=========================================================================== */
-int _GetSymbolTableFromFlag( int bSymbolTables )
-{
-	int iTable = NUM_SYMBOL_TABLES;
-	
-	if (bSymbolTables & SYMBOL_TABLE_MAIN)
-		iTable = SYMBOLS_MAIN;
-	else
-	if (bSymbolTables & SYMBOL_TABLE_USER)
-		iTable = SYMBOLS_USER;
-	else
-	if (bSymbolTables & SYMBOL_TABLE_SRC )
-		iTable = SYMBOLS_SRC;
-
-	return iTable;
-}
-
-
-/**
-	@param bSymbolTables Bit Flags of which symbol tables to search
-//=========================================================================== */
-bool _CmdSymbolList_Address2Symbol( int nAddress, int bSymbolTables )
-{
-	int  iTable;
-	LPCTSTR pSymbol = FindSymbolFromAddress( nAddress, &iTable );
-
-	if (pSymbol)
-	{				
-		if (_FindSymbolTable( bSymbolTables, iTable ))
-		{
-			_CmdPrintSymbol( pSymbol, nAddress, iTable );
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool _CmdSymbolList_Symbol2Address( LPCTSTR pSymbol, int bSymbolTables )
-{
-	int  iTable;
-	WORD nAddress;
-	bool bFoundSymbol = FindAddressFromSymbol( pSymbol, &nAddress, &iTable );
-	if (bFoundSymbol)
-	{
-		if (_FindSymbolTable( bSymbolTables, iTable ))
-		{
-			_CmdPrintSymbol( pSymbol, nAddress, iTable );
-		}
-	}
-	return bFoundSymbol;
-}
-
-
-//===========================================================================
-bool String2Address( LPCTSTR pText, WORD & nAddress_ )
-{
-	TCHAR sHexApple[ CONSOLE_WIDTH ];
-
-	if (pText[0] == '$')
-	{
-		if (!TextIsHexString( pText+1))
-			return false;
-
-		_tcscpy( sHexApple, "0x" );
-		_tcsncpy( sHexApple+2, pText+1, MAX_SYMBOLS_LEN - 3 );
-		pText = sHexApple;
-	}
-
-	if (pText[0] == TEXT('0'))
-	{
-		if ((pText[1] == TEXT('X')) || pText[1] == TEXT('x'))
-		{
-			if (!TextIsHexString( pText+2))
-				return false;
-
-			TCHAR *pEnd;
-			nAddress_ = (WORD) _tcstol( pText, &pEnd, 16 );
-			return true;
-		}
-		if (TextIsHexString( pText ))
-		{
-			TCHAR *pEnd;
-			nAddress_ = (WORD) _tcstol( pText, &pEnd, 16 );
-			return true;
-		}
-	}
-
-	return false;
-}		
-
-
-// LIST is normally an implicit "LIST *", but due to the numbers of symbols
-// only look up symbols the user specifies
-//===========================================================================
-Update_t CmdSymbolsList (int nArgs )
-{
-	int bSymbolTables = SYMBOL_TABLE_MAIN | SYMBOL_TABLE_USER | SYMBOL_TABLE_SRC;
-	return _CmdSymbolsListTables( nArgs, bSymbolTables );
-}
-
-
-//===========================================================================
-Update_t _CmdSymbolsListTables (int nArgs, int bSymbolTables)
-{
-	if (! nArgs)
-	{
-		return Help_Arg_1( CMD_SYMBOLS_LIST );
-	}
-
-	/*
-		Test Cases
-
-		SYM 0 RESET FA6F $FA59
-			$0000 LOC0
-			$FA6F RESET
-			$FA6F INITAN
-			$FA59 OLDBRK
-		SYM B
-		
-		SYMBOL B = $2000
-		SYM B
-	*/
-		
-	TCHAR sText[ CONSOLE_WIDTH ];
-
-	for( int iArgs = 1; iArgs <= nArgs; iArgs++ )
-	{
-		WORD nAddress = g_aArgs[iArgs].nValue;
-		LPCTSTR pSymbol = g_aArgs[iArgs].sArg;
-		if (nAddress)
-		{	// Have address, do symbol lookup first
-			if (! _CmdSymbolList_Symbol2Address( pSymbol, bSymbolTables ))
-			{
-				// nope, ok, try as address
-				if (! _CmdSymbolList_Address2Symbol( nAddress, bSymbolTables))
-				{
-					wsprintf( sText, TEXT(" Address not found: %04X" ), nAddress );
-					ConsoleBufferPush( sText );
-				}
-			}
-		}
-		else
-		{	// Have symbol, do address lookup
-			if (! _CmdSymbolList_Symbol2Address( pSymbol, bSymbolTables ))
-			{	// nope, ok, try as address
-				if (String2Address( pSymbol, nAddress ))
-				{
-					if (! _CmdSymbolList_Address2Symbol( nAddress, bSymbolTables ))
-					{
-						wsprintf( sText, TEXT(" Symbol not found: %s"), pSymbol );
-						ConsoleBufferPush( sText );
-					}
-				}
-				else
-				{
-					wsprintf( sText, TEXT(" Symbol not found: %s"), pSymbol );
-					ConsoleBufferPush( sText );
-				}
-			}
-		}
-	}
-	return ConsoleUpdate();
-}
-
-
-void Print_Current_Path()
-{
-	ConsoleDisplayError( g_sProgramDir );
-}
-
-//===========================================================================
-int ParseSymbolTable( TCHAR *pFileName, Symbols_e eWhichTableToLoad, int nSymbolOffset )
-{
-	int nSymbolsLoaded = 0;
-
-	if (! pFileName)
-		return nSymbolsLoaded;
-
-//#if _UNICODE
-//	TCHAR sFormat1[ MAX_SYMBOLS_LEN ];
-//	TCHAR sFormat2[ MAX_SYMBOLS_LEN ];
-//	wsprintf( sFormat1, "%%x %%%ds", MAX_SYMBOLS_LEN ); // i.e. "%x %13s"
-//	wsprintf( sFormat2, "%%%ds %%x", MAX_SYMBOLS_LEN ); // i.e. "%13s %x"
-// ascii
-	char sFormat1[ MAX_SYMBOLS_LEN ];
-	char sFormat2[ MAX_SYMBOLS_LEN ];
-	sprintf( sFormat1, "%%x %%%ds", MAX_SYMBOLS_LEN ); // i.e. "%x %13s"
-	sprintf( sFormat2, "%%%ds %%x", MAX_SYMBOLS_LEN ); // i.e. "%13s %x"
-
-	FILE *hFile = fopen(pFileName,"rt");
-
-	if( !hFile )
-	{
-		ConsoleDisplayError( "Symbol File not found:" );
-		Print_Current_Path();
-		nSymbolsLoaded = -1; // HACK: ERROR: FILE NOT EXIST
-	}
-
-	while(hFile && !feof(hFile))
-	{
-		// Support 2 types of symbols files:
-		// 1) AppleWin:
-		//    . 0000 SYMBOL
-		//    . FFFF SYMBOL
-		// 2) ACME:
-		//    . SYMBOL  =$0000; Comment
-		//    . SYMBOL  =$FFFF; Comment
-		//
-		DWORD nAddress = _6502_MEM_END + 1; // default to invalid address
-		char  sName[ MAX_SYMBOLS_LEN+1 ]  = "";
-
-		const int MAX_LINE = 256;
-		char  szLine[ MAX_LINE ];
-		fgets(szLine, MAX_LINE-1, hFile);	// Get next line
-
-		if(strstr(szLine, "$") == NULL)
-		{
-			sscanf(szLine, sFormat1, &nAddress, sName);
-		}
-		else
-		{
-			char* p = strstr(szLine, "=");	// Optional
-			if(p) *p = ' ';
-			p = strstr(szLine, "$");
-			if(p) *p = ' ';
-			p = strstr(szLine, ";");		// Optional
-			if(p) *p = 0;
-			p = strstr(szLine, " ");		// 1st space between name & value
-			int nLen = p - szLine;
-			if (nLen > MAX_SYMBOLS_LEN)
-			{
-				memset(&szLine[MAX_SYMBOLS_LEN], ' ', nLen-MAX_SYMBOLS_LEN);	// sscanf fails for nAddress if string too long
-			}
-			sscanf(szLine, sFormat2, sName, &nAddress);
-		}
-
-		// SymbolOffset
-		nAddress += nSymbolOffset;
-
-		if( (nAddress > _6502_MEM_END) || (sName[0] == 0) )
-			continue;
-
-		g_aSymbols[ eWhichTableToLoad ] [ (WORD) nAddress ] = sName;
-		nSymbolsLoaded++;
-	}
-
-	if (hFile)
-	{
-		fclose(hFile);
-	}
-
-	return nSymbolsLoaded;
-}
-
-
-//===========================================================================
-Update_t CmdSymbolsLoad (int nArgs)
-{
-	TCHAR sFileName[MAX_PATH];
-	_tcscpy(sFileName,g_sProgramDir);
-
-	int iWhichTable = (g_iCommand - CMD_SYMBOLS_MAIN);
-	if ((iWhichTable < 0) || (iWhichTable >= NUM_SYMBOL_TABLES))
-	{
-		wsprintf( sFileName, "Only %d symbol tables supported!", NUM_SYMBOL_TABLES );
-		return ConsoleDisplayError( sFileName );
-	}
-
-	int nSymbols = 0;
-
-	if (! nArgs)
-	{
-		// Default to main table
-		if (g_iCommand == CMD_SYMBOLS_MAIN)
-			_tcscat(sFileName, g_sFileNameSymbolsMain );
-		else
-		{
-			if (! _tcslen( g_sFileNameSymbolsUser ))
-			{
-				return ConsoleDisplayError(TEXT("No user symbol file to reload."));
-			}
-			// load user symbols
-			_tcscat( sFileName, g_sFileNameSymbolsUser );
-		}
-
-		nSymbols = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable );
-	}
-
-	int iArg = 1;
-	if (iArg <= nArgs)
-	{
-		TCHAR *pFileName = NULL;
-		
-		if( g_aArgs[ iArg ].bType & TYPE_QUOTED_2 )
-		{
-			pFileName = g_aArgs[ iArg ].sArg;
-
-			_tcscpy(sFileName,g_sProgramDir);
-			_tcscat(sFileName, pFileName);
-
-			// Remember File Name of last symbols loaded
-			_tcscpy( g_sFileNameSymbolsUser, pFileName );
-		}
-
-		// SymbolOffset
-		// sym load "filename" [,symbol_offset]
-		int nOffsetAddr = 0;
-
-		iArg++;
-		if( iArg <= nArgs)
-		{
-			if (g_aArgs[ iArg ].eToken == TOKEN_COMMA)
-			{
-				iArg++;
-				if( iArg <= nArgs )
-				{
-					nOffsetAddr = g_aArgs[ iArg ].nValue;
-					if( (nOffsetAddr < _6502_MEM_BEGIN) || (nOffsetAddr > _6502_MEM_END) )
-					{
-						nOffsetAddr = 0;
-					}
-				}
-			}
-		}
-
-		if( pFileName )
-		{
-			nSymbols = ParseSymbolTable( sFileName, (Symbols_e) iWhichTable, nOffsetAddr );
-		}
-	}
-
-	if( nSymbols > 0 )
-	{
-		g_nSymbolsLoaded = nSymbols;
-	}
-
-	Update_t bUpdateDisplay = UPDATE_DISASM;
-	bUpdateDisplay |= (nSymbols > 0) ? UPDATE_SYMBOLS : 0;
-
-	return bUpdateDisplay;
-}
-
-//===========================================================================
-bool FindAddressFromSymbol ( LPCTSTR pSymbol, WORD * pAddress_, int * iTable_ )
-{
-	// Bugfix/User feature: User symbols should be searched first
-	for (int iTable = NUM_SYMBOL_TABLES; iTable-- > 0; )
-	{
-		if (! g_aSymbols[iTable].size())
-			continue;
-
-//		map<WORD, string>::iterator iSymbol = g_aSymbols[iTable].begin();
-		SymbolTable_t :: iterator  iSymbol = g_aSymbols[iTable].begin();
-		while (iSymbol != g_aSymbols[iTable].end())
-		{
-			if (!_tcsicmp( iSymbol->second.c_str(), pSymbol))
-			{
-				if (pAddress_)
-				{
-					*pAddress_ = iSymbol->first;
-				}
-				if (iTable_)
-				{
-					*iTable_ = iTable;
-				}
-				return true;
-			}
-			iSymbol++;
-		}
-	}
-	return false;
-}
-
-//===========================================================================
-LPCTSTR FindSymbolFromAddress (WORD nAddress, int * iTable_ )
-{
-	// Bugfix/User feature: User symbols should be searched first
-	int iTable = NUM_SYMBOL_TABLES;
-	while (iTable-- > 0)
-	{
-		if (g_aSymbols[iTable].size())
-		{
-			map<WORD, string>::iterator iSymbols = g_aSymbols[iTable].find(nAddress);
-			if(g_aSymbols[iTable].find(nAddress) != g_aSymbols[iTable].end())
-			{
-				if (iTable_)
-				{
-					*iTable_ = iTable;
-				}
-				return iSymbols->second.c_str();
-			}
-		}
-	}	
-	return NULL;	
-}
-
-
-//===========================================================================
-WORD GetAddressFromSymbol (LPCTSTR pSymbol)
-{
-	WORD nAddress;
-	bool bFoundSymbol = FindAddressFromSymbol( pSymbol, & nAddress );
-	if (! bFoundSymbol)
-	{
-		nAddress = 0;
-	}
-	return nAddress;
-}
-
-
-//===========================================================================
-Update_t _CmdSymbolsClear( Symbols_e eSymbolTable )
-{
-	g_aSymbols[ eSymbolTable ].clear();
-	
-	return UPDATE_SYMBOLS;
-}
-
-
-//===========================================================================
-void SymbolUpdate( Symbols_e eSymbolTable, char *pSymbolName, WORD nAddress, bool bRemoveSymbol, bool bUpdateSymbol )
-{
-	if (bRemoveSymbol)
-		pSymbolName = g_aArgs[2].sArg;
-
-	if (_tcslen( pSymbolName ) < MAX_SYMBOLS_LEN)
-	{
-		WORD nAddressPrev;
-		int  iTable;
-		bool bExists = FindAddressFromSymbol( pSymbolName, &nAddressPrev, &iTable );
-
-		if (bExists)
-		{
-			if (iTable == eSymbolTable)
-			{
-				if (bRemoveSymbol)
-				{
-					ConsoleBufferPush( TEXT(" Removing symbol." ) );
-				}
-
-				g_aSymbols[ eSymbolTable ].erase( nAddressPrev );
-
-				if (bUpdateSymbol)
-				{
-					ConsoleBufferPush( TEXT(" Updating symbol to new address." ) );
-				}
-			}
-		}					
-		else
-		{
-			if (bRemoveSymbol)
-			{
-				ConsoleBufferPush( TEXT(" Symbol not in table." ) );
-			}
-		}
-
-		if (bUpdateSymbol)
-		{
-#if _DEBUG
-			LPCTSTR pSymbol = FindSymbolFromAddress( nAddress, &iTable );
-			{
-				// Found another symbol for this address.  Harmless.
-				// TODO: Probably should check if same name?
-			}
-#endif
-			g_aSymbols[ eSymbolTable ][ nAddress ] = pSymbolName;
-		}
-	}
-}
-
-
-//===========================================================================
-Update_t _CmdSymbolsUpdate( int nArgs )
-{
-	bool bRemoveSymbol = false;
-	bool bUpdateSymbol = false;
-
-	if ((nArgs == 2) && (g_aArgs[ 1 ].eToken == TOKEN_EXCLAMATION))
-		bRemoveSymbol = true;
-
-	if ((nArgs == 3) && (g_aArgs[ 2 ].eToken == TOKEN_EQUAL      ))
-		bUpdateSymbol = true;
-
-	if (bRemoveSymbol || bUpdateSymbol)
-	{
-		TCHAR *pSymbolName = g_aArgs[1].sArg;
-		WORD   nAddress    = g_aArgs[3].nValue;
-
-		SymbolUpdate( SYMBOLS_USER, pSymbolName, nAddress, bRemoveSymbol, bUpdateSymbol );
-		return ConsoleUpdate();
-	}
-
-	return UPDATE_NOTHING;
-}
-
-
-//===========================================================================
-Update_t _CmdSymbolsCommon ( int nArgs, int bSymbolTables )
-{
-	if (! nArgs)
-	{
-		return Help_Arg_1( g_iCommand );
-	}
-
-	Update_t iUpdate = _CmdSymbolsUpdate( nArgs );
-	if (iUpdate != UPDATE_NOTHING)
-		return iUpdate;
-
-	TCHAR sText[ CONSOLE_WIDTH ];
-
-	int iArg = 0;
-	while (iArg++ <= nArgs)
-	{
-		int iParam;
-		int nParams = FindParam( g_aArgs[iArg].sArg, MATCH_EXACT, iParam ); // MATCH_FUZZY
-		if (nParams)
-		{
-			if (iParam == PARAM_CLEAR)
-			{
-				int iTable = _GetSymbolTableFromFlag( bSymbolTables );
-				if (iTable != NUM_SYMBOL_TABLES)
-				{
-					Update_t iUpdate = _CmdSymbolsClear( (Symbols_e) iTable );
-					wsprintf( sText, TEXT(" Cleared symbol table: %s"),
-						g_aSymbolTableNames[ iTable ]
-					 );
-					ConsoleBufferPush( sText );
-					iUpdate |= ConsoleUpdate();
-					return iUpdate;
-				}
-				else
-				{
-					ConsoleBufferPush( TEXT(" Error: Unknown Symbol Table Type") );
-					return ConsoleUpdate();
-				}
-//				if (bSymbolTable & SYMBOL_TABLE_MAIN)
-//					return _CmdSymbolsClear( SYMBOLS_MAIN );
-//				else
-//				if (bSymbolsTable & SYMBOL_TABLE_USER)
-//					return _CmdSymbolsClear( SYMBOLS_USER );
-//				else
-					// Shouldn't have multiple symbol tables selected
-//					nArgs = _Arg_1( eSymbolsTable );
-			}
-			else
-			if (iParam == PARAM_LOAD)
-			{
-				nArgs = _Arg_Shift( iArg, nArgs);
-				Update_t bUpdate = CmdSymbolsLoad( nArgs );
-
-				int iTable = _GetSymbolTableFromFlag( bSymbolTables );
-				if (iTable != NUM_SYMBOL_TABLES)
-				{
-					if( bUpdate & UPDATE_SYMBOLS )
-					{
-						wsprintf( sText, "  Symbol Table: %s, loaded symbols: %d",
-						g_aSymbolTableNames[ iTable ], g_nSymbolsLoaded );
-						ConsoleBufferPush( sText );
-					}
-				}
-				else
-				{
-					ConsoleBufferPush( TEXT(" Error: Unknown Symbol Table Type") );
-				}
-				return ConsoleUpdate();
-			}
-			else
-			if (iParam == PARAM_SAVE)
-			{
-				nArgs = _Arg_Shift( iArg, nArgs);
-				return CmdSymbolsSave( nArgs );
-			}
-		}
-		else
-		{
-			return _CmdSymbolsListTables( nArgs, bSymbolTables );
-		}
-
-	}
-
-	return ConsoleUpdate();
-}
-
-//===========================================================================
-Update_t CmdSymbolsMain (int nArgs)
-{
-	if (! nArgs)
-	{
-		return CmdSymbolsInfo( nArgs );
-	}
-
-	return _CmdSymbolsCommon( nArgs, SYMBOL_TABLE_MAIN ); // SYMBOLS_MAIN );
-}
-
-
-//===========================================================================
-Update_t CmdSymbolsUser (int nArgs)
-{
-	if (! nArgs)
-	{
-		return CmdSymbolsInfo( nArgs );
-	}
-
-	return _CmdSymbolsCommon( nArgs, SYMBOL_TABLE_USER ); // SYMBOLS_USER );
-}
-
-//===========================================================================
-Update_t CmdSymbolsSource (int nArgs)
-{
-	if (! nArgs)
-	{
-		return CmdSymbolsInfo( nArgs );
-	}
-
-	return _CmdSymbolsCommon( nArgs, SYMBOL_TABLE_SRC ); // SYMBOLS_SRC );
-}
-
-//===========================================================================
-LPCTSTR GetSymbol (WORD nAddress, int nBytes)
-{
-	LPCSTR pSymbol = FindSymbolFromAddress( nAddress );
-	if (pSymbol)
-		return pSymbol;
-
-	return FormatAddress( nAddress, nBytes );
-}
-
-//===========================================================================
-Update_t CmdSymbolsSave (int nArgs)
 {
 	return UPDATE_CONSOLE_DISPLAY;
 }
@@ -7722,7 +6935,7 @@ int FindCommand( LPTSTR pName, CmdFuncPtr_t & pFunction_, int * iCommand_ )
 
 	char sCommand[ CONSOLE_WIDTH ];
 	strcpy( sCommand, pName );
-	strupr( sCommand );
+	_strupr( sCommand );
 
 	while ((iCommand < NUM_COMMANDS_WITH_ALIASES)) // && (name[0] >= g_aCommands[iCommand].aName[0])) Command no longer in Alphabetical order
 	{
@@ -7803,6 +7016,20 @@ void DisplayAmbigiousCommands( int nFound )
 	}
 }
 
+bool IsHexDigit( char c )
+{
+	if ((c >= '0') && (c <= '9'))
+		return true;
+	else
+	if ((c >= 'A') && (c <= 'F'))
+		return true;
+	else
+	if ((c >= 'a') && (c <= 'f'))
+		return true;
+	return false;
+}
+
+
 //===========================================================================
 Update_t ExecuteCommand (int nArgs) 
 {
@@ -7814,26 +7041,23 @@ Update_t ExecuteCommand (int nArgs)
 
 //	int nCookMask = (1 << NUM_TOKENS) - 1; // ArgToken_e used as bit mask!
 
-	if (! nFound)
+	
+	// BUGFIX: commands that are also valid hex addresses
+	// ####:# [#]
+	// #<#.#M
+	int nLen = pArg->nArgLen;
+
+	if ((! nFound) || (nLen < 6))
 	{
-		int nLen = strlen( pCommand );
-		if (nLen < 6)
 		{
-			// verify pCommand[ 0 .. (nLen-1) ] is hex digit
+			// verify pCommand[ 0 .. (nLen-1) ] are hex digits
 			bool bIsHex = true;
-			for (int iChar = 0; iChar < (nLen - 1); iChar++ )
+			char *pChar = pCommand;
+			for (int iChar = 0; iChar < (nLen - 1); iChar++, pChar++ )
 			{
-				if (isdigit(pCommand[iChar]))
-					continue;
-				else
-				if (pCommand[iChar] >= 'A' && pCommand[iChar] <= 'F')
-					continue;
-				else
-				if (pCommand[iChar] >= 'a' && pCommand[iChar] <= 'f')
-					continue;
-				else
+				bIsHex = IsHexDigit( *pChar );
+				if( !bIsHex )
 				{
-					bIsHex = false;
 					break;
 				}
 			}
@@ -7842,21 +7066,37 @@ Update_t ExecuteCommand (int nArgs)
 			{
 				WORD nAddress = 0;
 
-				// Support Apple Monitor commands
-				// ####G -> JMP $adress
+				// Support old AppleWin GO commands:
+				// . G      -> GO
+				// . G #### -> GO until $address
+				// Support Apple Monitor commands:
+				// . ####G  -> JMP $address (exit debugger)
 				if ((pCommand[nLen-1] == 'G') ||
 					(pCommand[nLen-1] == 'g'))
 				{
-					pCommand[nLen-1] = 0;
-					ArgsGetValue( pArg, & nAddress );
+					if (nLen == 1)
+					{
+						if (nArgs)
+						{
+							const int iArg = 1;
+							ArgsGetValue( &g_aArgs[iArg], &g_aArgs[iArg].nValue );
+							_CmdBreakpointAddCommonArg(iArg, nArgs, BP_SRC_REG_PC, BP_OP_EQUAL, true);
+						}
+					}
+					else if (nLen > 1)
+					{
+						pCommand[nLen-1] = 0;
+						ArgsGetValue( pArg, & nAddress );
 
-					regs.pc = nAddress;
+						regs.pc = nAddress;
+					}
+
 					g_nAppMode = MODE_RUNNING; // exit the debugger
 
 					nFound = 1;
 					g_iCommand = CMD_OUTPUT_ECHO; // hack: don't cook args
 				}
-
+				else
 				// ####L -> Unassemble $address
 				if ((pCommand[nLen-1] == 'L') ||
 					(pCommand[nLen-1] == 'l'))
@@ -7878,7 +7118,7 @@ Update_t ExecuteCommand (int nArgs)
 					pFunction = g_aCommands[ g_iCommand ].pFunction;
 					nFound = 1;
 				}					
-
+				else
 				// address: byte ...
 				if ((pArg+1)->eToken == TOKEN_COLON)
 				{
@@ -7896,6 +7136,80 @@ Update_t ExecuteCommand (int nArgs)
 
 					pFunction = g_aCommands[ g_iCommand ].pFunction;
 					nFound = 1;
+				}
+				else
+				// #<#.#M
+				if	(pArg[1].eToken == TOKEN_LESS_THAN)
+				{
+					// Look for period
+					nLen = pArg[2].nArgLen;
+
+					char *pDst = pArg[0].sArg;
+					char *pSrc = pArg[2].sArg;
+					char *pEnd = 0;
+
+					bool bFoundSrc = false;
+					bool bFoundLen = false;
+
+					pChar = pSrc;
+					while( *pChar )
+					{
+						if( *pChar == '.' )
+						{
+							if( pEnd ) // only allowed one period
+							{
+								pEnd = 0;
+								break;
+							}
+
+							*pChar = 0; // ':';
+							pEnd = pChar + 1;
+							bFoundSrc = true;
+						} else
+						if( !IsHexDigit( *pChar ) )
+						{
+							break;
+						}	
+						pChar++;
+					}
+					if( pEnd ) {
+						if(	(*pChar == 'M')
+						||	(*pChar == 'm'))
+						{
+							*pChar++ = 0;
+							if( ! *pChar )
+								bFoundLen = true;
+						}
+
+						if( bFoundSrc && bFoundLen )
+						{
+//ArgsGetValue( pArg, & nAddress );
+//char sText[ CONSOLE_WIDTH ];
+//sprintf( sText, "Dst:%s  Src: %s  End: %s", pDst, pSrc, pEnd );
+//ConsolePrint( sText );
+							g_iCommand = CMD_MEMORY_MOVE;
+							pFunction = g_aCommands[ g_iCommand ].pFunction;
+
+							strcpy( pArg[4].sArg, pEnd );
+							strcpy( pArg[3].sArg, g_aTokens[ TOKEN_COLON ].sToken );
+							strcpy( pArg[2].sArg, pSrc );
+							strcpy( pArg[1].sArg, pDst );
+							strcpy( pArg[0].sArg, g_aCommands[ g_iCommand ].m_sName );
+							// pDst moved from arg0 to arg1 !
+							pArg[1].bType = TYPE_VALUE;
+							pArg[2].bType = TYPE_VALUE;
+							pArg[3].bType = TYPE_OPERATOR;
+							pArg[4].bType = TYPE_VALUE;
+
+							ArgsGetValue( &pArg[1], &pArg[1].nValue );
+							ArgsGetValue( &pArg[2], &pArg[2].nValue );
+							pArg[3].eToken = TOKEN_COLON;
+							ArgsGetValue( &pArg[4], &pArg[4].nValue );
+
+							nFound = 1;
+							nArgs = 4;
+						}
+					}
 				}
 
 				// TODO: display memory at address
@@ -8527,10 +7841,12 @@ void DebugDestroy ()
 //	DeleteObject(g_hFontDebugger);
 //	DeleteObject(g_hFontWebDings);
 
+	// TODO: Symbols_Clear()
 	for( int iTable = 0; iTable < NUM_SYMBOL_TABLES; iTable++ )
 	{
-		_CmdSymbolsClear( (Symbols_e) iTable );
+		_CmdSymbolsClear( (SymbolTable_Index_e) iTable );
 	}
+	// TODO: DataDisassembly_Clear()
 
 	SelectObject( g_hFrameDC, GetStockObject(NULL_BRUSH) );
 
@@ -8771,8 +8087,30 @@ void DebugInitialize ()
 	ZeroMemory( g_aWatches         , MAX_WATCHES           * sizeof(Watches_t) );
 	ZeroMemory( g_aZeroPagePointers, MAX_ZEROPAGE_POINTERS * sizeof(ZeroPagePointers_t));
 
-	g_iCommand = CMD_SYMBOLS_MAIN;
+	// Load Main, Applesoft, and User Symbols
+	extern bool g_bSymbolsDisplayMissingFile;
+	g_bSymbolsDisplayMissingFile = false;
+
+	g_iCommand = CMD_SYMBOLS_ROM;
 	CmdSymbolsLoad(0);
+
+	g_iCommand = CMD_SYMBOLS_APPLESOFT;
+	CmdSymbolsLoad(0);
+
+	// ,0x7,0xFF // Treat zero-page as data
+	// $00 GOWARM   JSR ...
+	// $01 LOC1 DW
+	// $03 GOSTROUT JSR ...
+	// $07..$B0
+	// $B1 CHRGET
+	// $C8
+	// $C9 RNDSEED DW
+	// $D0..$FF
+
+	g_iCommand = CMD_SYMBOLS_USER_1;
+	CmdSymbolsLoad(0);
+
+	g_bSymbolsDisplayMissingFile = true;
 
 #if OLD_FONT
 	// CREATE A FONT FOR THE DEBUGGING SCREEN
@@ -8856,12 +8194,14 @@ void DebugInitialize ()
 	{
 		wsprintf( sText, "*** ERROR *** Commands mis-matched!" );
 		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
+		PostQuitMessage( 1 );
 	}
 
 	if (_tcscmp( g_aParameters[ NUM_PARAMS ].m_sName, TEXT(__PARAMS_VERIFY_TXT__)))
 	{
 		wsprintf( sText, "*** ERROR *** Parameters mis-matched!" );
 		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
+		PostQuitMessage( 2 );
 	}
 
 	// Check all summary help to see if it fits within the console
@@ -8900,6 +8240,7 @@ void DebuggerInputConsoleChar( TCHAR ch )
 	if ((g_nAppMode == MODE_STEPPING) && (ch == DEBUG_EXIT_KEY))
 	{
 		g_nDebugSteps = 0; // Exit Debugger
+		ClearTempBreakpoints();
 	}
 
 	if (g_nAppMode != MODE_DEBUG)
@@ -9020,7 +8361,7 @@ void DebuggerInputConsoleChar( TCHAR ch )
 
 // Triggered when ENTER is pressed, or via script
 //===========================================================================
-Update_t DebuggerProcessCommand( const bool bEchoConsoleInput )
+Update_t DebuggerProcessCommand ( const bool bEchoConsoleInput )
 {
 	Update_t bUpdateDisplay = UPDATE_NOTHING;
 
@@ -9076,6 +8417,19 @@ Update_t DebuggerProcessCommand( const bool bEchoConsoleInput )
 	}
 
 	return bUpdateDisplay;
+}
+
+void ToggleFullScreenConsole()
+{
+	// Switch to Console Window
+	if (g_iWindowThis != WINDOW_CONSOLE)
+	{
+		CmdWindowViewConsole( 0 );
+	}
+	else // switch back to last window
+	{
+		CmdWindowLast( 0 );
+	}
 }
 
 //===========================================================================
@@ -9145,24 +8499,36 @@ void DebuggerProcessKey( int keycode )
 	else if (keycode == VK_RETURN)
 	{
 //		ConsoleUpdateCursor( 0 );
-		ConsoleScrollEnd();
-		bUpdateDisplay |= DebuggerProcessCommand( true ); // copy console input to console output
-		bUpdateDisplay |= UPDATE_CONSOLE_DISPLAY;
+
+		if (! g_nConsoleInputChars)
+		{
+			// bugfix: 2.6.1.35 Fixed: Pressing enter on blank line while in assembler wouldn't exit it.
+			if( g_bAssemblerInput )
+			{
+				bUpdateDisplay |= DebuggerProcessCommand( false );
+			}
+			else
+			{
+				ToggleFullScreenConsole();
+				bUpdateDisplay |= UPDATE_ALL;
+			}
+		}
+		else
+		{
+			ConsoleScrollEnd();
+			bUpdateDisplay |= DebuggerProcessCommand( true ); // copy console input to console output
+
+			// BUGFIX: main disassembly listing doesn't get updated in full screen console
+			//bUpdateDisplay |= UPDATE_CONSOLE_DISPLAY;
+			bUpdateDisplay |= UPDATE_ALL;
+		}		
 	}
 	else if (( keycode == VK_OEM_3 ) ||	// US: Tilde ~ (key to the immediate left of numeral 1)
 			 ( keycode == VK_OEM_8 ))	// UK: Logical NOT ¬ (key to the immediate left of numeral 1)
 	{
 		if (KeybGetCtrlStatus())
 		{
-			// Switch to Console Window
-			if (g_iWindowThis != WINDOW_CONSOLE)
-			{
-				CmdWindowViewConsole( 0 );
-			}
-			else // switch back to last window
-			{
-				CmdWindowLast( 0 );
-			}
+			ToggleFullScreenConsole();
 			bUpdateDisplay |= UPDATE_ALL;
 		}
 		else
@@ -9290,6 +8656,7 @@ void DebuggerProcessKey( int keycode )
 					else
 					{
 						// Scroll through console input history
+						bUpdateDisplay |= ConsoleScrollUp( 3 );
 					}
 				}
 				else
@@ -9319,6 +8686,7 @@ void DebuggerProcessKey( int keycode )
 					else
 					{
 						// Scroll through console input history
+						bUpdateDisplay |= ConsoleScrollDn( 3 );
 					}
 				}
 				else
@@ -9534,22 +8902,62 @@ void	DebuggerMouseClick( int x, int y )
 	if (g_iWindowThis == WINDOW_CODE)
 	{
 		// Display_AssemblyLine -- need Tabs
-		if (cx == 4)
+
+		if( g_bConfigDisasmAddressView )
 		{
-			g_bConfigDisasmAddressColon ^= true;
-			DebugDisplay( UPDATE_DISASM );
+			// HACK: hard-coded from DrawDisassemblyLine::aTabs[] !!!
+			if( cx < 4) // #### 
+			{
+				g_bConfigDisasmAddressView ^= true;
+				DebugDisplay( UPDATE_DISASM );
+			}
+			else
+			if (cx == 4) //    :
+			{
+				g_bConfigDisasmAddressColon ^= true;
+				DebugDisplay( UPDATE_DISASM );
+			}
+			else         //      AD 00 00
+			if ((cx > 4) & (cx <= 13))
+			{
+				g_bConfigDisasmOpcodesView ^= true;
+				DebugDisplay( UPDATE_DISASM );
+			}
+			
+		} else
+		{
+			if( cx == 0 ) //   :
+			{
+				// Three-way state
+				//   "addr:"
+				//   ":"
+				//   " "
+				g_bConfigDisasmAddressColon ^= true;
+				if( g_bConfigDisasmAddressColon )
+				{
+					g_bConfigDisasmAddressView ^= true;
+				}
+				DebugDisplay( UPDATE_DISASM );
+			}
+			else
+			if ((cx > 0) & (cx <= 13))
+			{
+				g_bConfigDisasmOpcodesView ^= true;
+				DebugDisplay( UPDATE_DISASM );
+			}
 		}
-		else
-		if ((cx > 4) & (cx <= 13))
+		// Click on PC inside reg window?
+		if ((cx >= 51) && (cx <= 60))
 		{
-			g_bConfigDisasmOpcodesView ^= true;
-			DebugDisplay( UPDATE_DISASM );
-		}
-		else
-		if ((cx >= 51) && (cx <= 60) && (cy == 3))
-		{
-			CmdCursorJumpPC( CURSOR_ALIGN_CENTER );
-			DebugDisplay( UPDATE_DISASM );
+			if (cy == 3)
+			{
+				CmdCursorJumpPC( CURSOR_ALIGN_CENTER );
+				DebugDisplay( UPDATE_DISASM );
+			}
+			else // Click on stack
+			if( cy > 3)
+			{
+			}
 		}
 	}
 	

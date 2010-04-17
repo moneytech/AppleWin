@@ -38,7 +38,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 // - This is because the 2-joystick version of Mario Bros expects the 2nd joystick to control Apple switch #2.
 
 #include "StdAfx.h"
-#pragma  hdrstop
 #include "MouseInterface.h"
 
 #define  BUTTONTIME       5000
@@ -394,7 +393,16 @@ BYTE __stdcall JoyReadButton(WORD, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
       break;
 
     case 0x63:
-      pressed = (buttonlatch[2] || joybutton[2] || setbutton[2] || (GetKeyState(VK_SHIFT) < 0));
+	  if (IS_APPLE2 && (joyinfo[joytype[1]].device == DEVICE_NONE))
+	  {
+	    // Apple II/II+ with no joystick has the "SHIFT key mod"
+	    // See Sather's Understanding The Apple II p7-36
+		pressed = !(GetKeyState(VK_SHIFT) < 0);
+	  }
+	  else
+	  {
+	    pressed = (buttonlatch[2] || joybutton[2] || setbutton[2]);
+	  }
       buttonlatch[2] = 0;
       break;
 

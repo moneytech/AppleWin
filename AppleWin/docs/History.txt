@@ -15,7 +15,101 @@ tomch at users.berlios.de
 
 Restrictions/bugs:
 - SSI263 emulation is very basic: there is no attempt to emulate rate, inflection or filters.
-- During Mockingboard playback, Speaker emulation isn't precise
+- During Mockingboard playback, Speaker emulation isn't precise.
+- For an original Apple //e, 80-column (PR#3) and INVERSE, it still appears to be mousetext character, but it should be inverted upper-case from $40 to $5F.
+
+
+1.18.1 - 14 Feb 2010 (beta)
+---------------------------
+Changes:
+. Added "-speech" cmd-line switch
+  - Captures text from COUT and outputs to Speech API
+  - Ctrl+RESET and FullSpeed mode (ie. disk access) will purge the speech buffers
+
+Fixed:
+. [Bug #16699] Debugger: G xxxx not clearing BP
+. [Bug #16688] Debugger RUN <script-file> still not 100%
+  - Honour absolute path (ie. don't prefix with CWD)
+
+
+1.18.0 - 17 Jan 2010 (beta)
+---------------------------
+Changes:
+. Added disk/harddisk image r/w support for .gz/.zip (and .2mg) files.
+  - Multi-zip archives are read-only.
+. Added disk/harddisk eject sub-menu to Disk Config tab.
+. Removed .bin registration.
+
+Fixes:
+. [Bug #16632] Fix cmd-line -d1/d2 switches with relative path
+. Fix speaker volume when booting with -d1 switch
+. Fix debugger bugs:
+  - Crash when doing: help *
+  - [Bug #16651] Crash when doing: run <script-file>
+. [Bug #16652] Fix "Harddisk images aren't persisted when in different folders"
+. [Bug #12724,14747] Fix "Registry persisted Window x,y position sometimes off screen"
+
+
+1.17.2 - 13 Dec 2009
+--------------------
+Changes:
+. Enable XP visual themes & corrected tab order in the Configuration dialog - thanks to Joshua Bell
+. Updated Help chm's Debugger breakpoint commands (BC,BD,BE,BL now replaced by BPC,BPD,BPE.BPL)
+
+Fixes:
+. Fix: Crash when COM or TCP port opened before Configuration dialog is opened for the first time
+. Fix: Reading SSC DIP SW1 for "external" CLK (115.2K mode)
+. Fix: Reinstated debugger's GO command:
+  - G        : Go (Stepping Mode)
+  - G <addr> : Go (Stepping Mode) until PC=addr
+
+
+1.17.1 - 27 Nov 2009
+--------------------
+Changes:
+. SSC: Support 115.2K Baud
+. Dynamically generated 'Serial Port' drop-down menu
+  - Save "Serial Port Name" to Registry (instead of drop-down menu index as "Serial Port")
+. Updated Help chm's "Transferring Disk Images" - thanks to David Schmidt
+. New switches: -log, -no-mb, -spkr-max, -spkr-inc
+. Debugger (v2.6.2.0):
+  - Added Applesoft BASIC symbols - thanks to Bob Sander-Cederlof
+  - Return on blank line to toggle full screen console
+  - Page Up/Down of console history while editing
+
+Fixes:
+. Fix for Speaker underflow problem (-spkr-max=200, -spkr-inc=20)
+. Fix for SSC (big transfers): use queue instead of single byte buffer
+. Don't hog CPU in PAUSED mode
+. Implemented the shift key mod for II/II+. This fixes a problem with Homeword.
+. [Bug #14879] Double-Lo-Res Graphics colors not correct
+
+
+1.16.1 - 21 Jun 2009
+--------------------
+Changes:
+. Ctrl-F2 now functions as CONTROL-RESET (same as Ctrl-Break)
+. Video Mode now shown in Window Title
+. 50% Scan Lines (can use Shift+Ctrl+F9 to toggle)
+  - Added: Checkbox for "50% Scan lines" in the configuration tab, next to video mode
+  - Supported by PrintScreen and Shift-PrintScreen
+. Added command line "-noreg" to not register file extensions
+. Added support for up to 40 track (160KB) disk images
+. Debugger:
+  - Symbols Length raised from 13 to 31
+  - Pressing the Reboot button (F2) with breakpoints active, keeps the debugger running
+  - symsrc is now relocatable, i.e. symsrc load "filename" [,offset]
+    + Changes the address where debugger symbols are bound to by the offset (if specified)
+  - Pressing Shift, Ctrl, or Alt, when viewing the current Apple output no longer kicks you back into the debugger.
+    (Allows for Ctrl-Shift-F9, and Shift-F9 previewing.)
+
+Fixes:
+. Full screen drive LED status not showing up when floppy disks being accessed were set to read-only mode
+. FLASHing 'S' in AppleII+ mode!
+. Flash rate for NTSC
+. Maximum volume bug when doubling-clicking a .dsk image to execute with AppleWin
+. [Bug #14557] Loading serial port# from Registry (caused AppleWin to crash when booting Apple Pascal & other weird crashes)
+. [Bug #15394] Audio under-run (set process priority to Above Normal when in non-Full Speed mode)
 
 
 1.16.0 - 1 Feb 2009 (beta)
@@ -42,8 +136,8 @@ Fixes:
 . Fix for Willy Byte & MB support (strange 6522 behaviour!)
 
 
-1.15.0.3 - 31 Aug 2008
-----------------------
+1.15.0.3 - 31 Aug 2008 (beta)
+-----------------------------
 Changes:
 . Remembers the last disk images used for Drive 1 & 2
   - Is updated when you insert or remove a disk

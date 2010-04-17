@@ -1,6 +1,7 @@
 #pragma once
 
 #define SUPPORT_CPM
+#define USE_SPEECH_API
 
 const double _M14 = (157500000.0 / 11.0); // 14.3181818... * 10^6
 const double CLK_6502 = ((_M14 * 65.0) / 912.0); // 65 cycles per 912 14M clocks
@@ -80,8 +81,6 @@ enum AppMode_e
 #define  REGVALUE_SLOT7_ENABLED      "Slot 7 Enable"
 #define  REGVALUE_HDD_ENABLED        "Harddisk Enable"
 #define  REGVALUE_APLSPI_ENABLED     "AppleSPI Enable"
-#define  REGVALUE_HDD_IMAGE1         "Harddisk Image 1"
-#define  REGVALUE_HDD_IMAGE2         "Harddisk Image 2"
 #define  REGVALUE_PDL_XTRIM          "PDL X-Trim"
 #define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
 #define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
@@ -101,12 +100,19 @@ enum AppMode_e
 #define  REGVALUE_VIDEO_MODE         "Video Emulation"
 #define  REGVALUE_VIDEO_HALF_SCAN_LINES "Half Scan Lines"
 #define  REGVALUE_VIDEO_MONO_COLOR      "Monochrome Color"
+#define  REGVALUE_SERIAL_PORT_NAME   "Serial Port Name"
+#define  REGVALUE_ENHANCE_DISK_SPEED "Enhance Disk Speed"
 
 // Preferences 
-#define REG_PREFS							"Preferences"
+#define REG_PREFS						"Preferences"
 #define REGVALUE_PREF_START_DIR      "Starting Directory"
 #define REGVALUE_PREF_LAST_DISK_1	 "Last Disk Image 1"
 #define REGVALUE_PREF_LAST_DISK_2	 "Last Disk Image 2"
+#define REGVALUE_PREF_WINDOW_X_POS   "Window X-Position"
+#define REGVALUE_PREF_WINDOW_Y_POS   "Window Y-Position"
+#define REGVALUE_PREF_HDV_START_DIR  "HDV Starting Directory"
+#define REGVALUE_PREF_LAST_HARDDISK_1 "Last Harddisk Image 1"
+#define REGVALUE_PREF_LAST_HARDDISK_2 "Last Harddisk Image 2"
 
 #define WM_USER_BENCHMARK	WM_USER+1
 #define WM_USER_RESTART		WM_USER+2
@@ -115,6 +121,7 @@ enum AppMode_e
 #define VK_SNAPSHOT_560		WM_USER+5
 #define VK_SNAPSHOT_280		WM_USER+6
 #define WM_USER_TCP_SERIAL	WM_USER+7
+#define WM_USER_BOOT		WM_USER+8
 
 enum eSOUNDCARDTYPE {SC_UNINIT=0, SC_NONE, SC_MOCKINGBOARD, SC_PHASOR};	// Apple soundcard type
 
@@ -123,7 +130,7 @@ enum eSLOT7TYPE {SL7_UNINIT=0, SL7_NONE, SL7_HDD, SL7_APLSPI};	// Apple Slot7 ty
 
 typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
 
-typedef struct _IMAGE__ { int unused; } *HIMAGE;
+typedef struct _IMAGE__ { int unused; } *HIMAGE;	// DiskImage's /ImageInfo/ is hidden behind HIMAGE
 
 enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC, IS_MOUSE};
 

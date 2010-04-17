@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "StdAfx.h"
-#pragma  hdrstop
+#include "Harddisk.h"
 #include "MouseInterface.h"
 #ifdef SUPPORT_CPM
 #include "z80emu.h"
@@ -1172,7 +1172,8 @@ void MemInitialize()
 	}
 
 #ifdef SUPPORT_CPM
-	ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);	// $C500 : Z80 card
+	if (g_uZ80InSlot5)
+		ConfigureSoftcard(pCxRomPeripheral, 5, g_uZ80InSlot5);	// $C500 : Z80 card
 #endif
 
 	DiskLoadRom(pCxRomPeripheral, 6);				// $C600 : Disk][ f/w

@@ -1,9 +1,9 @@
 //#define WIN32_LEAN_AND_MEAN
-#define _WIN32_WINNT 0x0400	// For CoInitializeEx() to get defined in objbase.h
+//#define _WIN32_WINNT 0x0400	// For CoInitializeEx() to get defined in objbase.h (Updated[TC]: Removed as not needed)
 
 // Mouse Wheel is not supported on Win95.
 // If we didn't care about supporting Win95 (compile/run-time errors)
-// we would just define the minmimum windows version to support.
+// we would just define the minimum windows version to support.
 // #define _WIN32_WINDOWS  0x0401
 #ifndef WM_MOUSEWHEEL
 #define WM_MOUSEWHEEL 0x020A
@@ -28,6 +28,15 @@
 #include <commctrl.h>
 #include <ddraw.h>
 #include <htmlhelp.h>
+#include <assert.h>
+
+#include <queue>
+#include <vector>
+
+#include "zlib.h"
+#include "unzip.h"
+#include "zip.h"
+#include "iowin32.h"
 
 #include "Common.h"
 #include "Structs.h"
@@ -39,9 +48,7 @@
 #include "CPU.h"
 #include "Debug.h"
 #include "Disk.h"
-#include "DiskImage.h"
 #include "Frame.h"
-#include "Harddisk.h"
 #include "Joystick.h"
 #include "Keyboard.h"
 #include "Log.h"

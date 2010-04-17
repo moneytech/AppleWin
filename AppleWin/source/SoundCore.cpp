@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "StdAfx.h"
-#pragma  hdrstop
+
 
 //-----------------------------------------------------------------------------
 
@@ -62,7 +62,7 @@ static BOOL CALLBACK DSEnumProc(LPGUID lpGUID, LPCTSTR lpszDesc, LPCTSTR lpszDrv
 		return TRUE;
 	if(lpGUID != NULL)
 		memcpy(&sound_device_guid[i], lpGUID, sizeof (GUID));
-	sound_devices[i] = strdup(lpszDesc);
+	sound_devices[i] = _strdup(lpszDesc);
 
 	if(g_fh) fprintf(g_fh, "%d: %s - %s\n",i,lpszDesc,lpszDrvName);
 
@@ -455,8 +455,8 @@ void SoundCore_SetFade(eFADE FadeType)
 
 //-----------------------------------------------------------------------------
 
-// If AppleWin started by double-clicking a .dsk, the our window won't have focus when volumes are set (so gets ignored).
-// Subsequent setting (to the same volume) will get ignores, as DirectSound thinks that volume is already set.
+// If AppleWin started by double-clicking a .dsk, then our window won't have focus when volumes are set (so gets ignored).
+// Subsequent setting (to the same volume) will get ignored, as DirectSound thinks that volume is already set.
 
 void SoundCore_TweakVolumes()
 {
@@ -568,6 +568,33 @@ LONG NewVolume(DWORD dwVolume, DWORD dwVolumeMax)
 	float fVol = (float) dwVolume / (float) dwVolumeMax;	// 0.0=Max, 1.0=Min
 
 	return (LONG) ((float) DSBVOLUME_MIN * fVol);
+}
+
+//=============================================================================
+
+static int g_nErrorInc = 20;	// Old: 1
+static int g_nErrorMax = 200;	// Old: 50
+
+int SoundCore_GetErrorInc()
+{
+	return g_nErrorInc;
+}
+
+void SoundCore_SetErrorInc(const int nErrorInc)
+{
+	g_nErrorInc = nErrorInc < g_nErrorMax ? nErrorInc : g_nErrorMax;
+	if(g_fh) fprintf(g_fh, "Speaker/MB Error Inc = %d\n", g_nErrorInc);
+}
+
+int SoundCore_GetErrorMax()
+{
+	return g_nErrorMax;
+}
+
+void SoundCore_SetErrorMax(const int nErrorMax)
+{
+	g_nErrorMax = nErrorMax < MAX_SAMPLES ? nErrorMax : MAX_SAMPLES;
+	if(g_fh) fprintf(g_fh, "Speaker/MB Error Max = %d\n", g_nErrorMax);
 }
 
 //=============================================================================

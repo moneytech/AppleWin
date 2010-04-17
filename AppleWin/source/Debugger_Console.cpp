@@ -27,8 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include "StdAfx.h"
-#pragma  hdrstop
-#include <assert.h>
+
 
 // Console ________________________________________________________________________________________
 
@@ -605,6 +604,7 @@ Update_t ConsoleBufferTryUnpause (int nLines)
 	return UPDATE_CONSOLE_DISPLAY;
 }
 
+// Flush the console
 //===========================================================================
 Update_t ConsoleUpdate ()
 {
@@ -615,4 +615,11 @@ Update_t ConsoleUpdate ()
 	}
 
 	return UPDATE_CONSOLE_DISPLAY;
+}
+
+//===========================================================================
+void ConsoleFlush ()
+{
+	int nLines = g_nConsoleBuffer;
+	ConsoleBufferTryUnpause( nLines );
 }

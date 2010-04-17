@@ -2,8 +2,6 @@
    Copyright (c) 2000-2007 Russell Marks, Matan Ziv-Av, Philip Kendall,
                            Fredrick Meunier
 
-   $Id$
-
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2 of the License, or
@@ -27,7 +25,7 @@
 // [AppleWin-TC] From FUSE's sound.c module
 
 #include "StdAfx.h"
-#pragma  hdrstop
+
 
 #include <windows.h>
 #include <stdio.h>

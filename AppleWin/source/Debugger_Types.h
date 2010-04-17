@@ -108,26 +108,6 @@
 		, NUM_ADDRESSING_MODES
 		, NUM_OPMODES = NUM_ADDRESSING_MODES
 		, AM_I = NUM_ADDRESSING_MODES, // for assemler
-
-	// Deprecated
-	/*
-		ADDR_INVALID1  =  1,
-		ADDR_INVALID2  =  2,
-		ADDR_INVALID3  =  3,
-		ADDR_IMM       =  4, // Immediate
-		ADDR_ABS       =  5, // Absolute
-		ADDR_ZP        =  6, // Zeropage
-		ADDR_ABSX      =  7, // Absolute + X
-		ADDR_ABSY      =  8, // Absolute + Y
-		ADDR_ZP_X      =  9, // Zeropage + X
-		ADDR_ZP_Y      = 10, // Zeropage + Y
-		ADDR_REL       = 11, // Relative
-		ADDR_INDX      = 12, // Indexed (Zeropage) Indirect
-		ADDR_ABSIINDX  = 13, // Indexed (Absolute) Indirect
-		ADDR_INDY      = 14, // Indirect (Zeropage) Indexed
-		ADDR_IZPG      = 15, // Indirect (Zeropage)
-		ADDR_IABS      = 16, // Indirect Absolute (i.e. JMP)
-	*/
 	};
 
 
@@ -140,6 +120,11 @@
 		NUM_PROMPTS
 	};
 
+	enum
+	{
+		// raised from 13 to 31 for Contiki
+		MAX_SYMBOLS_LEN = 31
+	};
 
 // Bookmarks ______________________________________________________________________________________
 
@@ -221,6 +206,7 @@
 		BreakpointOperator_t eOperator;
 		bool                 bSet    ; // used to be called enabled pre 2.0
 		bool                 bEnabled;
+		bool                 bTemp;    // If true then remove BP when hit or stepping cancelled (eg. G xxxx)
 	};
 
 	typedef Breakpoint_t Bookmark_t;
@@ -410,10 +396,11 @@
 	// NOTE: Commands_e and g_aCommands[] order _MUST_ match !!! Aliases are listed at the end
 	enum Commands_e
 	{
+// Assembler
+		  CMD_ASSEMBLE
 // CPU
-		  CMD_CURSOR_JUMP_PC // Shift
+		, CMD_CURSOR_JUMP_PC // Shift
 		, CMD_CURSOR_SET_PC  // Ctrl
-		, CMD_ASSEMBLE
 		, CMD_BREAK_INVALID
 		, CMD_BREAK_OPCODE
 		, CMD_GO
@@ -501,6 +488,24 @@
 		, CMD_CURSOR_PAGE_DOWN
 		, CMD_CURSOR_PAGE_DOWN_256 // Down to nearest page boundary
 		, CMD_CURSOR_PAGE_DOWN_4K // Down to nearest 4K boundary
+// Disassembler Data
+		, CMD_DISASM_DATA
+		, CMD_DISASM_CODE
+		, CMD_DISASM_LIST
+		, CMD_DEFINE_DATA_BYTE1    // DB $00,$04,$08,$0C,$10,$14,$18,$1C
+		, CMD_DEFINE_DATA_BYTE2
+		, CMD_DEFINE_DATA_BYTE4
+		, CMD_DEFINE_DATA_BYTE8
+
+		, CMD_DEFINE_DATA_WORD1    // DW $300
+		, CMD_DEFINE_DATA_WORD2
+		, CMD_DEFINE_DATA_WORD4
+		, CMD_DEFINE_DATA_STR
+//		, CMD_DEFINE_DATA_FACP
+//		, CMD_DEFINE_DATA_FACU
+//		, CMD_DATA_DEFINE_ADDR_BYTE_L  // DB< address symbol
+//		, CMD_DATA_DEFINE_ADDR_BYTE_H  // DB> address symbol
+		, CMD_DEFINE_ADDR_WORD    // .DA address symbol
 // Disk
 		, CMD_DISK
 // Flags - CPU
@@ -531,10 +536,9 @@
 // Memory		
 		, CMD_MEMORY_COMPARE
 
-		, _CMD_MEM_MINI_DUMP_HEX_1_1 // alias MD
-		, _CMD_MEM_MINI_DUMP_HEX_1_2 // alias MD = D
-		, CMD_MEM_MINI_DUMP_HEX_1
-		, CMD_MEM_MINI_DUMP_HEX_2  
+		, _CMD_MEM_MINI_DUMP_HEX_1_1 // Memory Dump
+		, CMD_MEM_MINI_DUMP_HEX_1 // Mini Memory Dump 1
+		, CMD_MEM_MINI_DUMP_HEX_2 // Mini Memory Dump 2
 		, _CMD_MEM_MINI_DUMP_HEX_1_3 // alias M1
 		, _CMD_MEM_MINI_DUMP_HEX_2_1 // alias M2
 
@@ -572,9 +576,13 @@
 // Symbols
 		, CMD_SYMBOLS_LOOKUP
 //		, CMD_SYMBOLS
-		, CMD_SYMBOLS_MAIN
-		, CMD_SYMBOLS_USER
-		, CMD_SYMBOLS_SRC
+		, CMD_SYMBOLS_ROM
+		, CMD_SYMBOLS_APPLESOFT
+		, CMD_SYMBOLS_ASSEMBLY
+		, CMD_SYMBOLS_USER_1
+		, CMD_SYMBOLS_USER_2
+		, CMD_SYMBOLS_SRC_1
+		, CMD_SYMBOLS_SRC_2
 //		, CMD_SYMBOLS_FIND
 //		, CMD_SYMBOLS_CLEAR
 		, CMD_SYMBOLS_INFO
@@ -661,11 +669,31 @@
 		, NUM_COMMANDS
 	};
 
+// Assembler
+	Update_t CmdAssemble       (int nArgs);
+
+// Disassembler Data
+	Update_t CmdDisasmDataDefCode     (int nArgs);
+	Update_t CmdDisasmDataList        (int nArgs);
+
+	Update_t CmdDisasmDataDefByte1    (int nArgs);
+	Update_t CmdDisasmDataDefByte2    (int nArgs);
+	Update_t CmdDisasmDataDefByte4    (int nArgs);
+	Update_t CmdDisasmDataDefByte8    (int nArgs);
+
+	Update_t CmdDisasmDataDefWord1    (int nArgs);
+	Update_t CmdDisasmDataDefWord2    (int nArgs);
+	Update_t CmdDisasmDataDefWord4    (int nArgs);
+
+	Update_t CmdDisasmDataDefString   (int nArgs);
+
+	Update_t CmdDisasmDataDefAddress8H(int nArgs);
+	Update_t CmdDisasmDataDefAddress8L(int nArgs);
+	Update_t CmdDisasmDataDefAddress16(int nArgs);
 
 // CPU
 	Update_t CmdCursorJumpPC(int nArgs);
 	Update_t CmdCursorSetPC (int nArgs);
-	Update_t CmdAssemble    (int nArgs);
 	Update_t CmdBreakInvalid(int nArgs); // Breakpoint IFF Full-speed!
 	Update_t CmdBreakOpcode (int nArgs); // Breakpoint IFF Full-speed!
 	Update_t CmdGo          (int nArgs);
@@ -789,11 +817,16 @@
 	Update_t CmdSymbolsList     (int nArgs);
 	Update_t CmdSymbolsLoad     (int nArgs);
 	Update_t CmdSymbolsInfo     (int nArgs);
-	Update_t CmdSymbolsMain     (int nArgs);
-	Update_t CmdSymbolsUser     (int nArgs);
 	Update_t CmdSymbolsSave     (int nArgs);
-	Update_t CmdSymbolsSource   (int nArgs);
-// View
+
+	Update_t CmdSymbolsCommand  (int nArgs);
+//	Update_t CmdSymbolsMain     (int nArgs);
+//	Update_t CmdSymbolsBasic    (int nArgs);
+//	Update_t CmdSymbolsUser     (int nArgs);
+//	Update_t CmdSymbolsAssembly (int nArgs);
+//	Update_t CmdSymbolsSource   (int nArgs);
+
+	// View
 	Update_t CmdViewOutput_Text4X (int nArgs);
 	Update_t CmdViewOutput_Text41 (int nArgs);
 	Update_t CmdViewOutput_Text42 (int nArgs);
@@ -923,17 +956,23 @@
 	{
 		nMaxAddressLen    = 40,
 		nMaxOpcodes       =  3,
-		CHARS_FOR_ADDRESS =  8, // 4 digits plus null
+		CHARS_FOR_ADDRESS =  8, // 4 digits + end-of-string + padding
 	};
 
 	struct DisasmLine_t
 	{
-		int iOpcode;
-		int iOpmode;
+		short iOpcode;
+		short iOpmode;
 		int nOpbyte;
 
 		char sAddress  [ CHARS_FOR_ADDRESS ];
 		char sOpCodes  [(nMaxOpcodes*3)+1];
+
+		// Added for Data Disassembler
+		char sLabel    [ MAX_SYMBOLS_LEN+1 ]; // label is a symbol
+		int  iNopcode; // directive / pseudo opcode
+		int  iNoptype; // element type
+		char sMnemonic [ MAX_SYMBOLS_LEN+1 ];
 
 		int  nTarget;
 		char sTarget   [nMaxAddressLen];
@@ -975,16 +1014,17 @@
 			nImmediate = 0;
 
 			sBranch   [ 0 ] = 0;
-
-			bTargetImmediate = false;
-			bTargetIndexed   = false;
-			bTargetIndirect  = false;
-//			bTargetInside    = false;
-//			bTargetOutside   = false;
-			bTargetRelative  = false;
-			bTargetX         = false;
-			bTargetY         = false; // need to dislay ",Y"
-			bTargetValue     = false;
+			ClearFlags();
+		}
+		void ClearFlags()
+		{
+			bTargetImmediate = false; // display "#"
+			bTargetIndexed   = false; // display ()
+			bTargetIndirect  = false; // display ()
+			bTargetRelative  = false; // display ()
+			bTargetX         = false; // display ",X"
+			bTargetY         = false; // display ",Y"
+			bTargetValue     = false; // display $####
 		}
 	};
 	
@@ -1055,7 +1095,10 @@
 
 	enum
 	{
+		// First 256 are 6502
+		// TODO: Second 256 are Directives/Pseudo Mnemonics
 		NUM_OPCODES      = 256,
+
 		MAX_MNEMONIC_LEN =   3,
 	};
 
@@ -1460,33 +1503,35 @@
 
 // Symbols ________________________________________________________________________________________
 
-	enum
-	{
-		// raised from 13 to 31 for Contiki
-		MAX_SYMBOLS_LEN = 31
-	};
-
 	// ****************************************
-	// WARNING: This is the simple enumeration.
+	// WARNING: This is the index (enumeration) to select which table
 	// See: g_aSymbols[]
 	// ****************************************
-	enum Symbols_e
+	enum SymbolTable_Index_e // Symbols_e -> SymbolTable_Index_e
 	{
 		SYMBOLS_MAIN,
-		SYMBOLS_USER,
-		SYMBOLS_SRC ,
-		NUM_SYMBOL_TABLES = 3
+		SYMBOLS_APPLESOFT,
+		SYMBOLS_ASSEMBLY,
+		SYMBOLS_USER_1,
+		SYMBOLS_USER_2,
+		SYMBOLS_SRC_1,
+		SYMBOLS_SRC_2,
+		NUM_SYMBOL_TABLES
 	};
 
 	// ****************************************
 	// WARNING: This is the bit-flags to select which table.
 	// See: CmdSymbolsListTable()
 	// ****************************************
-	enum SymbolTable_e
+	enum SymbolTable_Masks_e // SymbolTable_e -> 
 	{
-		SYMBOL_TABLE_MAIN = (1 << 0),
-		SYMBOL_TABLE_USER = (1 << 1),
-		SYMBOL_TABLE_SRC  = (1 << 2),
+		SYMBOL_TABLE_MAIN      = (1 << 0),
+		SYMBOL_TABLE_APPLESOFT = (1 << 1),
+		SYMBOL_TABLE_ASSEMBLY  = (1 << 2),
+		SYMBOL_TABLE_USER_1    = (1 << 3),
+		SYMBOL_TABLE_USER_2    = (1 << 4),
+		SYMBOL_TABLE_SRC_1     = (1 << 5),
+		SYMBOL_TABLE_SRC_2     = (1 << 6),
 	};
 
 	typedef map<WORD, string> SymbolTable_t;

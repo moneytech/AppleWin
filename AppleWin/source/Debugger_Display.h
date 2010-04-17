@@ -70,7 +70,7 @@
 
 	void DrawBreakpoints      ( int line);
 	void DrawConsoleInput     ();
-	void DrawConsoleLine      ( const char * pText, int y);
+	void DrawConsoleLine      ( const conchar_t * pText, int y);
 	void DrawConsoleCursor    ();
 
 	int GetDisassemblyLine(  const WORD nOffset, DisasmLine_t & line_ );
@@ -80,6 +80,8 @@
 //		char * sImmediate_, char & nImmediate_, char *sBranch_ );
 	WORD DrawDisassemblyLine  ( int line, const WORD offset );
 	void FormatDisassemblyLine( const DisasmLine_t & line, char *sDisassembly_, const int nBufferSize );
+	void FormatOpcodeBytes    ( WORD nBaseAddress, DisasmLine_t & line_ );
+	void FormatNopcodeBytes   ( WORD nBaseAddress, DisasmLine_t & line_ );
 
 	void DrawFlags            ( int line, WORD nRegFlags, LPTSTR pFlagNames_);
 	void DrawMemory           ( int line, int iMem );
