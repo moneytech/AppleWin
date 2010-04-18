@@ -944,7 +944,6 @@ static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 	bool bHDDIsEnabled = IsDlgButtonChecked(window, IDC_HDD_ENABLE) ? true : false;
 	bool bAPLSPIIsEnabled = IsDlgButtonChecked(window, IDC_APLSPI_ENABLE) ? true : false;
 
-#if 0	// For Glenn to resolve
 	if (SLOT7_IsEnabled()) {
 		// Save whatever the user picked
 		HD_SetEnabled(bHDDIsEnabled);
@@ -961,7 +960,7 @@ static void DiskDlg_OK(HWND window, UINT afterclose, UINT uNewSlot7Type)
 	//	// Need to register 
 
 	//}
-#endif
+
 
 	REGSAVE(TEXT(REGVALUE_ENHANCE_DISK_SPEED),newdisktype);
 	REGSAVE(TEXT(REGVALUE_SLOT7_ENABLED), bSLOT7IsEnabled ? 1 : 0);
