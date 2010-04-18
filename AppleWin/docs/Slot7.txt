@@ -1,0 +1,209 @@
+Slot 7 support
+
+Note: this is currently considered Alpha support and subject to change
+			Document rough draft - April 18th 2010
+
+Back Story
+
+Applewin has had Hard disk Drive emulation in Slot 7 and Uthernet emualtion 
+in slot 3. The HDD drive support only used a 256 byte ROM image for the driver 
+and Uthernet does not have an onboard ROM.
+
+I was asked by Junno Downs if I was contemplaing making an updated Uthernet
+card that might have support for an onboard pageable ROM as he was planning on 
+trying to implement ROMable IP65 code for a project he was working on the 
+the C64 and Apple II.
+
+While contemplating that I decided to try and work out the hardware and the 
+virtual version @ the same time with backward compatibility in mind.
+
+The current Uthernet is ROMless and supports all slots. Slot 3 seems to be 
+preferred as it works in conjuntion with 80 column support as it has no ROM. 
+So two for one. Adding ROM support forgoes that, so that lead me to thinking 
+about how to double up on another slot.
+
+Another side project of mine has been to implement a SPI interface for the 
+Apple II family. I beleive and it's yet to be proven that it might be easier 
+to support a single slot multifunction card if the devices accessed were using 
+an SPI interfaced. The SPI interface uses Daryl Rictors SPI logic design and  
+I have verified it works for SDCard access. I also wanted to allow for an 
+upgrade path for existing Uthernet users if possible and had to consider how 
+to integrate that support as well.
+
+So with all this in mind I started designing a card and it's virtual equivlent
+to be used with Applewin and other emulators.
+
+I will discuss the virtual vesion here. It is expected that the Hardware 
+version would be compliant with the virtual version.
+
+Phase 1 - Complete
+
+Add emulated EEPROM functionality to the existing HDD implementation. This 
+accomplishes a few things, it lets users work with existing HDD support and 
+gives us a chance to start working with EEPROM support for IP65. To use this 
+with the existing Uthernet emulation in slot 3, the IP stack would need to switch 
+out the HDD ROM to any of the available pages of the EEPROM that are used for 
+IP65 for example. Before exiting the HDD ROM should be paged back in.
+
+There are two ROM files
+ 
+AppleHDD_IN.rom - this is the image that contains a copy of the current HDD 
+driver. It would also contain any pages of IP65 code (as an aexample). All 
+other pages are set to a value that makes it easy to see what page you are on.
+
+AppleHDD_EX.rom -Initially the same as the AppleHDD_IN.rom, this is the image 
+that saved when you force a EEPROM write from within the emulator. This image 
+is also used over the internal ROM version if found when the emualtor starts up.
+
+Phase one also commited the AppleSPI driver but it is currently limted to EEPROM 
+emualtion only. It can be used if you want to use EEPROM and don't have a 
+requirement for HDD @ the same time.
+
+AppleSPI_IN.rom - It would contain any pages of IP65 code (as an aexample). All 
+other pages are set to a value that makes it easy to see what page you are on.
+
+AppleSPI_EX.rom -Initially the same as the AppleSPI_IN.rom, this is the image 
+that saved when you force a EEPROM write from within the emulator. This image 
+is also used over the internal ROM version if found when the emualtor starts up.
+
+Phase II 
+
+Add emulated SDCard access to the AppleSPI. This would effectively give you 
+HDD support while using AppleSPI but the driver would be different then the 
+current HDD and would be the same as used with the real hardware version of 
+the card.
+
+This phase would also see ethernet added to slot 7. The Plan is to support the 
+current Uthernet emulation first (compatibility mode) and then add support for 
+the new SPI based Ethernet as the hardware and driver develop.
+
+My plan is to make the real hardware verison compatible with the current 
+IP Dragon Module or with a SPI based ethernet module based on a jumper block 
+change.
+
+It remains to be seen if support for emulated slot 3 Uthernet will be left in 
+place or not.
+
+
+
+Technical details
+
+So the Slot 7 card would end up with several functions at the end of Phase II 
+(Real hardware vs Emulator support)
+
+1) First device would be a mass storage deveice 
+		(SDCard over SPI/HDD image support)
+2) Second Device would be existing CS8900A device or some SPI ethernet device 
+		(Uthernet or SPIEther/ Uthernet or SPIEther)
+3) Third device ( Wireless / Undetermined )
+4) Fourth device ( Undermined/ Undetermined )
+5) 32K EEPROM (Real chip/emulated)
+
+What follows is a proposed register map for the c0x0 space
+
+	AppleHDD
+	
+  // Current HDD support
+  C0F0	 (r)   EXECUTE AND RETURN STATUS
+	C0F1	 (r)   STATUS (or ERROR)
+	C0F2	(r/w)  COMMAND
+	C0F3	(r/w)  UNIT NUMBER
+	C0F4	(r/w)  LOW BYTE OF MEMORY BUFFER
+	C0F5	(r/w)  HIGH BYTE OF MEMORY BUFFER
+	C0F6	(r/w)  LOW BYTE OF BLOCK NUMBER
+	C0F7	(r/w)  HIGH BYTE OF BLOCK NUMBER
+  // EEPROM
+	C0F8   (r)   Write Protect status
+	C0F8   (w)   00 - Disable EEPROM Write Protect
+	C0F8   (w)   01 - Enable EEPROM Write Protect
+	C0F9	(r/w)  EEPROM Bank select
+  // Current HDD support
+	C0FA   (r)   NEXT BYTE
+  // Unmapped
+  C0FB   (?)   Unmapped 
+  C0FC   (?)   Unmapped 
+  C0FD   (?)   Unmapped 
+  C0FE   (?)   Unmapped 
+  C0FF   (?)   Unmapped 
+
+
+  AppleSPI with SPI and CS8900A
+  
+  // Uthernet
+  C0F0  (r/w)  address of 'receive/transmit data' port on Uthernet
+  C0F1  (r/w)  address of 'receive/transmit data' port on Uthernet 
+   // SPI
+  C0F2	 (r)   SPI Data In
+  C0F2   (w)   SPI Data Out 
+	C0F3	 (r)   SPI Status
+	C0F3	 (w)   SPI Control
+  // Uthernet
+	C0F4  (r/w)  address of 'transmit command' port on Uthernet
+	C0F5  (r/w)  address of 'transmit command' port on Uthernet
+	C0F6  (r/w)  address of 'transmission length' port on Uthernet
+	C0F7  (r/w)  address of 'transmission length' port on Uthernet
+  // EEPROM
+	C0F8   (r)   Write Protect status
+	C0F8   (w)   00 - Disable EEPROM Write Protect
+	C0F8   (w)   01 - Enable EEPROM Write Protect
+	C0F9	(r/w)  EEPROM Bank select
+  // Uthernet
+	C0FA  (r/w)  address of 'packet page' port on Uthernet
+	C0FB  (r/w)  address of 'packet page' port on Uthernet
+	C0FC  (r/w)  address of 'packet data' port on Uthernet
+	C0FD  (r/w)  address of 'packet data' port on Uthernet
+  // SPI
+	C0FE	(r/w)  SCLK Divisor
+	C0FF	(r/w)  Slave Select
+
+
+ EEPROM	Map for AppleSPI as follows 
+ 			(AppleHDD uses the same map except only $c700 contains code as it is fixed 
+ 			in Slot 7, no slot independant driver yet and there is no real hardware 
+ 			implementation to worry about)
+  
+			0:c000	Alternate $cn00 space cannot have slot specific code 256B
+			0:c100 Slot1 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c200 Slot2 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c300 Slot3 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c400 Slot4 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c500 Slot5 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c600 Slot6 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			0:c700 Slot7 specific code (ProDOS block driver entry + Ip65 dispatch) 256B
+			1:c800 $C800 common code bank 1 (ProDOS block driver) 2K
+			2:c800 $C800 common code bank 2 (IP65 routines) 2K
+			3:c800 $C800 common code bank 3 (IP65 routines) 2K
+			4:c800 $C800 common code bank 4 (IP65 routines) 2K
+			5:c800 $C800 common code bank 5 (IP65 routines) 2K
+			6:c800 $C800 common code bank 6 (IP65 routines) 2K
+			7:c800 $C800 common code bank 7 (IP65 routines) 2K
+			8:c800 $C800 common code bank 8 (IP65 routines) 2K
+			9:c800 $C800 common code bank 9 (IP65 routines) 2K
+			A:c800 $C800 common code bank 10 (IP65 routines) 2K
+			B:c800 $C800 common code bank 11 (IP65 routines) 2K
+			C:c800 $C800 common code bank 12 (IP65 routines) 2K
+			D:c800 $C800 common code bank 13 (IP65 routines) 2K
+			E:c800 $C800 common code bank 14 (IP65 routines) 2K
+			F:c800 $C800 common code bank 15 (IP65 routines) 2K
+
+		Bank selection via writing to $C0FC - upper address byte offset in ROM file
+		Which is the bank number shifted left 3 bits
+
+		In hex
+			00 - Rom Bank 0					(Actually 0 - 7 256B pages of Slot ROM - not
+			08 - Rom Bank 1 - F1		(normally paged into $C800 but could be if needed)
+			10 - Rom Bank 2 - F2
+			18 - Rom Bank 3 - F3
+			20 - Rom Bank 4 - F4
+			28 - Rom Bank 5 - F5
+			30 - Rom Bank 6 - F6
+			38 - Rom Bank 7 - F7
+			40 - Rom Bank 8 - F8
+			48 - Rom Bank 9 - F9
+			50 - Rom Bank 10 - FA
+			58 - Rom Bank 11 - FB
+			60 - Rom Bank 12 - FC
+			68 - Rom Bank 13 - FD
+			70 - Rom Bank 14 - FE
+			78 - Rom Bank 15 - FF
+
