@@ -3,14 +3,17 @@ Slot 7 support
 Note: this is currently considered Alpha support and subject to change
 			Document rough draft - April 18th 2010
 
+Temp Note: Trying to make some register decisions so the proposed registers
+ map does not match whats currently in SVN
+
 Back Story
 
-Applewin has had Hard disk Drive emulation in Slot 7 and Uthernet emualtion 
+Applewin has had Hard disk Drive emulation in Slot 7 and Uthernet emulation 
 in slot 3. The HDD drive support only used a 256 byte ROM image for the driver 
-and Uthernet does not have an onboard ROM.
+and Uthernet does not have an on-board ROM.
 
-I was asked by Junno Downs if I was contemplaing making an updated Uthernet
-card that might have support for an onboard pageable ROM as he was planning on 
+I was asked by Junno Downs if I was contemplating making an updated Uthernet
+card that might have support for an on-board page-able ROM as he was planning on 
 trying to implement ROMable IP65 code for a project he was working on the 
 the C64 and Apple II.
 
@@ -18,22 +21,22 @@ While contemplating that I decided to try and work out the hardware and the
 virtual version @ the same time with backward compatibility in mind.
 
 The current Uthernet is ROMless and supports all slots. Slot 3 seems to be 
-preferred as it works in conjuntion with 80 column support as it has no ROM. 
+preferred as it works in conjunction with 80 column support as it has no ROM. 
 So two for one. Adding ROM support forgoes that, so that lead me to thinking 
 about how to double up on another slot.
 
 Another side project of mine has been to implement a SPI interface for the 
-Apple II family. I beleive and it's yet to be proven that it might be easier 
+Apple II family. I believe and it's yet to be proven that it might be easier 
 to support a single slot multifunction card if the devices accessed were using 
 an SPI interfaced. The SPI interface uses Daryl Rictors SPI logic design and  
 I have verified it works for SDCard access. I also wanted to allow for an 
 upgrade path for existing Uthernet users if possible and had to consider how 
 to integrate that support as well.
 
-So with all this in mind I started designing a card and it's virtual equivlent
+So with all this in mind I started designing a card and it's virtual equiv lent
 to be used with Applewin and other emulators.
 
-I will discuss the virtual vesion here. It is expected that the Hardware 
+I will discuss the virtual version here. It is expected that the Hardware 
 version would be compliant with the virtual version.
 
 Phase 1 - Complete
@@ -48,23 +51,23 @@ IP65 for example. Before exiting the HDD ROM should be paged back in.
 There are two ROM files
  
 AppleHDD_IN.rom - this is the image that contains a copy of the current HDD 
-driver. It would also contain any pages of IP65 code (as an aexample). All 
+driver. It would also contain any pages of IP65 code (as an example). All 
 other pages are set to a value that makes it easy to see what page you are on.
 
 AppleHDD_EX.rom -Initially the same as the AppleHDD_IN.rom, this is the image 
 that saved when you force a EEPROM write from within the emulator. This image 
-is also used over the internal ROM version if found when the emualtor starts up.
+is also used over the internal ROM version if found when the emulator starts up.
 
-Phase one also commited the AppleSPI driver but it is currently limted to EEPROM 
-emualtion only. It can be used if you want to use EEPROM and don't have a 
+Phase one also committed the AppleSPI driver but it is currently limited to EEPROM 
+emulation only. It can be used if you want to use EEPROM and don't have a 
 requirement for HDD @ the same time.
 
-AppleSPI_IN.rom - It would contain any pages of IP65 code (as an aexample). All 
+AppleSPI_IN.rom - It would contain any pages of IP65 code (as an example). All 
 other pages are set to a value that makes it easy to see what page you are on.
 
 AppleSPI_EX.rom -Initially the same as the AppleSPI_IN.rom, this is the image 
 that saved when you force a EEPROM write from within the emulator. This image 
-is also used over the internal ROM version if found when the emualtor starts up.
+is also used over the internal ROM version if found when the emulator starts up.
 
 Phase II 
 
@@ -73,12 +76,12 @@ HDD support while using AppleSPI but the driver would be different then the
 current HDD and would be the same as used with the real hardware version of 
 the card.
 
-This phase would also see ethernet added to slot 7. The Plan is to support the 
+This phase would also see Ethernet added to slot 7. The Plan is to support the 
 current Uthernet emulation first (compatibility mode) and then add support for 
 the new SPI based Ethernet as the hardware and driver develop.
 
-My plan is to make the real hardware verison compatible with the current 
-IP Dragon Module or with a SPI based ethernet module based on a jumper block 
+My plan is to make the real hardware version compatible with the current 
+IP Dragon Module or with a SPI based Ethernet module based on a jumper block 
 change.
 
 It remains to be seen if support for emulated slot 3 Uthernet will be left in 
@@ -91,9 +94,9 @@ Technical details
 So the Slot 7 card would end up with several functions at the end of Phase II 
 (Real hardware vs Emulator support)
 
-1) First device would be a mass storage deveice 
+1) First device would be a mass storage device 
 		(SDCard over SPI/HDD image support)
-2) Second Device would be existing CS8900A device or some SPI ethernet device 
+2) Second Device would be existing CS8900A device or some SPI Ethernet device 
 		(Uthernet or SPIEther/ Uthernet or SPIEther)
 3) Third device ( Wireless / Undetermined )
 4) Fourth device ( Undermined/ Undetermined )
@@ -159,7 +162,7 @@ What follows is a proposed register map for the c0x0 space
 
  EEPROM	Map for AppleSPI as follows 
  			(AppleHDD uses the same map except only $c700 contains code as it is fixed 
- 			in Slot 7, no slot independant driver yet and there is no real hardware 
+ 			in Slot 7, no slot independent driver yet and there is no real hardware 
  			implementation to worry about)
   
 			0:c000	Alternate $cn00 space cannot have slot specific code 256B
