@@ -164,18 +164,18 @@ Entrypoint:				; $cx0e - entrypoint?
 Bootstrap:
 ; Lets check to see if there's an image ready
  lda #$00
- sta hd_command
+ sta hd_command+SLOT*16
 
 ; Slot 7, disk 1
- lda SLOT*16	;#$70	; Slot# << 4
- sta hd_unitnum
- lda hd_execute
+ lda #SLOT*16							;#$70	; Slot# << 4
+ sta hd_unitnum+SLOT*16
+ lda hd_execute+SLOT*16
 
 ; error capturing code.  Applewin is picky
 ; about code assigning data to registers and
 ; memory.  The safest method is via I/O port
  pha
- lda hd_error
+ lda hd_error+SLOT*16
  clc
  cmp #1
  bne noerr0
@@ -204,7 +204,7 @@ Entrypont_Cx46:	; Old f/w 'cmdproc' entrypoint
 ; image ready.  Lets boot from it.
 ; we want to load block 1 from slotx,d1 to $800 then jump there
 hdboot:
- lda SLOT*16	;#$70	; Slot# << 4
+ lda #SLOT*16	;#$70	; Slot# << 4
  sta unitnum
  lda #$0
  sta memblock
@@ -220,7 +220,7 @@ hdboot:
 goload:
 
 ; X=device
- ldx SLOT*16	;#$70	; Slot# << 4
+ ldx #SLOT*16	;#$70	; Slot# << 4
  jmp OS
 
 ; entry point for ProDOS' block driver
@@ -229,18 +229,18 @@ goload:
 cmdproc:
  clc
  lda $42
- sta hd_command
+ sta hd_command+SLOT*16
  lda $43
- sta hd_unitnum
+ sta hd_unitnum+SLOT*16
  lda $44
- sta hd_memblock
+ sta hd_memblock+SLOT*16
  lda $45
- sta hd_memblock+1
+ sta hd_memblock+SLOT*16+1
  lda $46
- sta hd_diskblock
+ sta hd_diskblock+SLOT*16
  lda $47
- sta hd_diskblock+1
- lda hd_execute
+ sta hd_diskblock+SLOT*16+1
+ lda hd_execute+SLOT*16
 
 ; check for error
  pha
@@ -249,7 +249,7 @@ cmdproc:
  bne skipSread
  jsr sread
 skipSread:
- lda hd_error
+ lda hd_error+SLOT*16
  clc
  cmp #1
  bne noerr2
@@ -274,14 +274,14 @@ sread:
  pha
  ldy #0
 loop1:
- lda hd_nextbyte
+ lda hd_nextbyte+SLOT*16
  sta (memblock),y
  iny
  bne loop1
  inc memblock+1
  ldy #0
 loop2:
- lda hd_nextbyte
+ lda hd_nextbyte+SLOT*16
  sta (memblock),y
  iny
  bne loop2
