@@ -28,6 +28,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // 05/18/2009 - RGJ	- Added EEPROM support to HDD implementation, so no loss of HDD support when EEPROM in use - this uses a second 32K ROM file
 
+// 04/19/2010 - RGJ	- Updated Register map to allow for SPI, CS8900a and EEPROM non interfearance
+//					- See Slot7.txt for more information
+//					- Changed Driver build process to generate 32K ROM file
+//					- Changed driver file to be slot independant
+
+
+
+
 
 #include "StdAfx.h"
 #include "HardDisk.h"
@@ -38,19 +46,31 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 /*
 Memory map:
 
-    C0F0	(r)   EXECUTE AND RETURN STATUS
-	C0F1	(r)   STATUS (or ERROR)
-	C0F2	(r/w) COMMAND
-	C0F3	(r/w) UNIT NUMBER
-	C0F4	(r/w) LOW BYTE OF MEMORY BUFFER
-	C0F5	(r/w) HIGH BYTE OF MEMORY BUFFER
-	C0F6	(r/w) LOW BYTE OF BLOCK NUMBER
-	C0F7	(r/w) HIGH BYTE OF BLOCK NUMBER
-	C0F8    (r)   NEXT BYTE
-	C0FC	(r/w) EEPROM Bank select
-	C0FD    (w)   Disable EEPROM Write Protect
-	C0FE    (w)   Enable EEPROM Write Protect
-	C0FF    (r)   Write Protect status
+	AppleHDD
+	
+  // Current HDD support
+  C0F0	 (r)   EXECUTE AND RETURN STATUS
+	C0F1	 (r)   STATUS (or ERROR)
+	C0F2	(r/w)  COMMAND
+	C0F3	(r/w)  UNIT NUMBER
+	C0F4	(r/w)  LOW BYTE OF MEMORY BUFFER
+	C0F5	(r/w)  HIGH BYTE OF MEMORY BUFFER
+	C0F6	(r/w)  LOW BYTE OF BLOCK NUMBER
+	C0F7	(r/w)  HIGH BYTE OF BLOCK NUMBER
+  // EEPROM
+	C0F8   (r)   Write Protect status
+	C0F8   (w)   00 - Disable EEPROM Write Protect
+	C0F8   (w)   01 - Enable EEPROM Write Protect
+	C0F9	(r/w)  EEPROM Bank select
+  // Current HDD support
+	C0FA   (r)   NEXT BYTE
+  // Unmapped
+  C0FB   (?)   Unmapped 
+  C0FC   (?)   Unmapped 
+  C0FD   (?)   Unmapped 
+  C0FE   (?)   Unmapped 
+  C0FF   (?)   Unmapped 
+
 
 */
 
@@ -473,7 +493,7 @@ bool HD_IsDriveUnplugged(const int iDrive)
 static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	BYTE r = DEVICE_OK;
-	addr &= 0xFF;
+	addr &= 0xF;
 
 	if (!HD_CardIsEnabled())
 		return r;
@@ -484,7 +504,7 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 	{
 		switch (addr)
 		{
-		case 0xF0:
+		case 0x0:
 			{
 				if (pHDD->hd_imageloaded)
 				{
@@ -575,62 +595,59 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 				}
 			}
 			break;
-		case 0xF1: // hd_error
+		case 0x1: // hd_error
 			{
 				r = pHDD->hd_error;
 			}
 			break;
-		case 0xF2:
+		case 0x2:
 			{
 				r = g_nHD_Command;
 			}
 			break;
-		case 0xF3:
+		case 0x3:
 			{
 				r = g_nHD_UnitNum;
 			}
 			break;
-		case 0xF4:
+		case 0x4:
 			{
 				r = (BYTE)(pHDD->hd_memblock & 0x00FF);
 			}
 			break;
-		case 0xF5:
+		case 0x5:
 			{
 				r = (BYTE)(pHDD->hd_memblock & 0xFF00 >> 8);
 			}
 			break;
-		case 0xF6:
+		case 0x6:
 			{
 				r = (BYTE)(pHDD->hd_diskblock & 0x00FF);
 			}
 			break;
-		case 0xF7:
+		case 0x7:
 			{
 				r = (BYTE)(pHDD->hd_diskblock & 0xFF00 >> 8);
 			}
 			break;
-		case 0xF8:
+		case 0x8: // Read EEPROM Write Protect Status
+			{
+				r = g_eepromwp;
+			}
+			break;
+		case 0x9: // Read C800 Bank register
+			{
+				r = g_c800bank;
+			}
+			break;
+		case 0xA:
 			{
 				r = pHDD->hd_buf[pHDD->hd_buf_ptr];
 				pHDD->hd_buf_ptr++;
 			}
 			break;
-		case 0xFC: // Read C800 Bank register
-			{
-				r = g_c800bank;
-			}
-			break;
 
-		case 0xFD: // Write protect enable/disable - do nothing on read
-		case 0xFE: // 
-			break;
-
-		case 0xFF: // Read EEPROM Write Protect Status
-			{
-				r = g_eepromwp;
-			}
-			break;
+			// FB to FF unimplemented
 
 		default:
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
@@ -640,12 +657,12 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 	{
 		switch (addr)
 		{
-		case 0xF2:
+		case 0x2:
 			{
 				g_nHD_Command = d;
 			}
 			break;
-		case 0xF3:
+		case 0x3:
 			{
 				// b7    = drive#
 				// b6..4 = slot#
@@ -653,28 +670,93 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 				g_nHD_UnitNum = d;
 			}
 			break;
-		case 0xF4:
+		case 0x4:
 			{
 				pHDD->hd_memblock = pHDD->hd_memblock & 0xFF00 | d;
 			}
 			break;
-		case 0xF5:
+		case 0x5:
 			{
 				pHDD->hd_memblock = pHDD->hd_memblock & 0x00FF | (d << 8);
 			}
 			break;
-		case 0xF6:
+		case 0x6:
 			{
 				pHDD->hd_diskblock = pHDD->hd_diskblock & 0xFF00 | d;
 			}
 			break;
-		case 0xF7:
+		case 0x7:
 			{
 				pHDD->hd_diskblock = pHDD->hd_diskblock & 0x00FF | (d << 8);
 			}
 			break;
 
-		case 0xFC: // Write C800 Bank register
+		case 0x8: // Handle Write Protect
+			{
+				if (d == 0)
+					{
+						g_eepromwp = false;
+					}
+				else 
+					{
+					 if (d == 1)
+						{
+							g_eepromwp = true;
+							// Copy back any changes made in the current bank
+							memcpy((g_pRomData+rombankoffset), m_pHDExpansionRom, HD_FW_SIZE);
+			
+							//flush to disk here
+							// Need to open the file
+							// Create it if it doesn't exist
+							// Write g_pRomData sizeof(HD_FW_FILE_SIZE) - ie 32K
+			
+							TCHAR sRomFileName[ 128 ];
+							_tcscpy( sRomFileName, TEXT("AppleHDD_EX.ROM") );
+			
+							TCHAR filename[MAX_PATH];
+							_tcscpy(filename,g_sProgramDir);
+							_tcscat(filename,sRomFileName );
+			
+							HANDLE hFile = CreateFile(filename,
+										GENERIC_WRITE,
+										0,
+										NULL,
+										CREATE_ALWAYS,
+										FILE_ATTRIBUTE_NORMAL,
+										NULL);
+			
+							DWORD dwError = GetLastError();
+							// Assert ciopied from SaveState - do we need it?
+							_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+			
+							if(hFile != INVALID_HANDLE_VALUE)
+								{
+									DWORD dwBytesWritten;
+									BOOL bRes = WriteFile(	hFile, g_pRomData, HD_FW_FILE_SIZE,	&dwBytesWritten,
+															NULL);
+			
+									if(!bRes || (dwBytesWritten != HD_FW_FILE_SIZE))
+										dwError = GetLastError();
+									CloseHandle(hFile);
+								}
+							else
+								{
+									dwError = GetLastError();
+								}
+			
+								// Assert ciopied from SaveState - do we need it?
+								_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+		
+						}
+					else
+						{
+							// We ignore it
+						}	
+					}
+			}
+			break;
+
+		case 0x9: // Write C800 Bank register
 			{
 				if (m_pHDExpansionRom)
 					memcpy((g_pRomData+rombankoffset), m_pHDExpansionRom, HD_FW_SIZE);
@@ -692,68 +774,7 @@ static BYTE __stdcall HD_IO_EMUL(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG 
 			}
 			break;
 
-		case 0xFD: // Disable Write Protect
-			{
-				g_eepromwp = false;
-			}
-			break;
-
-		case 0xFE: // Enable Write protect
-			{
-				g_eepromwp = true;
-				// Copy back any changes made in the current bank
-				memcpy((g_pRomData+rombankoffset), m_pHDExpansionRom, HD_FW_SIZE);
-
-				//flush to disk here
-				// Need to open the file
-				// Create it if it doesn't exist
-				// Write g_pRomData sizeof(HD_FW_FILE_SIZE) - ie 32K
-
-				TCHAR sRomFileName[ 128 ];
-				_tcscpy( sRomFileName, TEXT("AppleHDD_EX.ROM") );
-
-				TCHAR filename[MAX_PATH];
-				_tcscpy(filename,g_sProgramDir);
-				_tcscat(filename,sRomFileName );
-
-				HANDLE hFile = CreateFile(filename,
-							GENERIC_WRITE,
-							0,
-							NULL,
-							CREATE_ALWAYS,
-							FILE_ATTRIBUTE_NORMAL,
-							NULL);
-
-				DWORD dwError = GetLastError();
-				// Assert ciopied from SaveState - do we need it?
-				_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
-
-				if(hFile != INVALID_HANDLE_VALUE)
-					{
-						DWORD dwBytesWritten;
-						BOOL bRes = WriteFile(	hFile,
-												g_pRomData,
-												HD_FW_FILE_SIZE,
-												&dwBytesWritten,
-												NULL);
-
-						if(!bRes || (dwBytesWritten != HD_FW_FILE_SIZE))
-							dwError = GetLastError();
-						CloseHandle(hFile);
-					}
-					else
-					{
-						dwError = GetLastError();
-					}
-
-					// Assert ciopied from SaveState - do we need it?
-					_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
-
-			}
-			break;
-
-		case 0xFF: // Write EEPROM Write Protect Status - do nothing on write
-			break;
+			// FB to FF unimplemented
 
 		default:
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);

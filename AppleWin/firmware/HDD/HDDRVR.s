@@ -350,13 +350,18 @@ ALLOW_OVERFLOWING_ROM = 0
 
 .if ALLOW_OVERFLOWING_ROM
    .warning "Allowing ROM overflow, just to see how big the code is."
-   .byte $FF ; for $CFEF
+   .byte $FF ; for $CFFE
    .byte $FF ; for $CFFF
+;   .out .concat("Section Counter = ", .string(*))
+   
 .else
-;   .out .concat("Free bytes in EEPROM = ", .string($CFEF-*))
-   .RES $CFEF-*, fill    ; $7FE bytes avail EEPROM from $C800 to $CFEE.
+;   .out .concat("Free bytes in EEPROM = ", .string($CFFE-*))
+   .RES $CFFF-*, fill    ; $7FE bytes avail EEPROM from $C800 to $CFFE.
    .byte $FF           ; touching $CFEF turns off the AUX ROM
+   ASSERT *=$D000, "User-config section must end at $D000"
 .endif
+
+
 
 .endmacro
 

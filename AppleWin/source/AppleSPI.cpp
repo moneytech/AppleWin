@@ -46,7 +46,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 05/16/2009 - RGJ	- Changed bank select scheme to match that of probable hardware implementation
 					- Moved bank select registers to $C0FC - $C0FF see map farther in this file
 					- Bank number 1-15 shifted left 3 bits becomes the high order address byte for the correct offset into the ROM
-					- Change dummy ROM map to show what bank we are in F1 -> FF
+					- Change dummy ROM map to show what bank we are in 01 -> 0F
 					- Bank zero is now mappable into $C800, this will be useful when in place updating of the file is supported
 
 05/17/2009 - RGJ	- Add support to load AppleSPI_EX ROM image from external file
@@ -56,6 +56,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 					- Simplified Write Protect
 					- Flush EEPROM changes to disk
 
+04/19/2010 - RGJ	- Updated Register map to allow for SPI, CS8900a and EEPROMnon non interfearance
+					- Added build support for 32K EEPROM file - Doesn't do much yet on this card
+					- See Slot7.txt for more information
+
 */
 
 #include "StdAfx.h"
@@ -63,19 +67,34 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "..\resource\resource.h"
 
 /*
-Memory map:
-Refer to 65SPI data-sheet for detailed information
-
-    C0F0	(r)   SPI Data In
-    C0F0    (w)   SPI Data Out 
-	C0F1	(r)   SPI Status
-	C0F1	(w)   SPI Control
-	C0F2	(r/w) SCLK Divisor
-	C0F3	(r/w) Slave Select
-	C0FC	(r/w) EEPROM Bank select
-	C0FD    (w)   Disable EEPROM Write Protect
-	C0FE    (w)   Enable EEPROM Write Protect
-	C0FF    (r)   Write Protect status
+ AppleSPI with SPI and CS8900A
+  
+  // Uthernet
+	C0F0	(r/w)  address of 'receive/transmit data' port on Uthernet
+	C0F1	(r/w)  address of 'receive/transmit data' port on Uthernet 
+   // SPI
+	C0F2	(r)   SPI Data In
+	C0F2	(w)   SPI Data Out 
+	C0F3	(r)   SPI Status
+	C0F3	(w)   SPI Control
+  // Uthernet
+	C0F4	(r/w)  address of 'transmit command' port on Uthernet
+	C0F5	(r/w)  address of 'transmit command' port on Uthernet
+	C0F6	(r/w)  address of 'transmission length' port on Uthernet
+	C0F7	(r/w)  address of 'transmission length' port on Uthernet
+  // EEPROM
+	C0F8	(r)   Write Protect status
+	C0F8	(w)   00 - Disable EEPROM Write Protect
+	C0F8	(w)   01 - Enable EEPROM Write Protect
+	C0F9	(r/w)  EEPROM Bank select
+  // Uthernet
+	C0FA	(r/w)  address of 'packet page' port on Uthernet
+	C0FB	(r/w)  address of 'packet page' port on Uthernet
+	C0FC	(r/w)  address of 'packet data' port on Uthernet
+	C0FD	(r/w)  address of 'packet data' port on Uthernet
+  // SPI
+	C0FE	(r/w)  SCLK Divisor
+	C0FF	(r/w)  Slave Select
 
 */
 
@@ -298,7 +317,7 @@ VOID APLSPI_Load_Rom(LPBYTE pCxRomPeripheral, UINT uSlot)
 static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
 	BYTE r = DEVICE_OK;
-	addr &= 0xFF;
+	addr &= 0xF;
 
 	if (!APLSPI_CardIsEnabled())
 		return r;
@@ -310,42 +329,36 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 		switch (addr)
 
 		{
-		case 0xF0:  // SPI Read Data
+		case 0x2:  // SPI Read Data
 			{
 				 r = g_spidata;
 			}
 			break;
-		case 0xF1: // SPI Read Status
+		case 0x3: // SPI Read Status
 			{
 				r = g_spistatus;
 			}
 			break;
-		case 0xF2:  // Read SCLK Divisor
-			{
-				r = g_spiclkdiv;
-			}
-			break;
-		case 0xF3:  // Read Slave Select
-			{
-				r = g_spislaveSel;
-			}
-			break;
-		case 0xFC: // Read C800 Bank register
-			{
-				r = g_c800bank;
-			}
-			break;
-
-		case 0xFD: // Write protect enable/disable - do nothing on read
-		case 0xFE: // 
-			break;
-
-		case 0xFF: // Read EEPROM Write Protect Status
+		case 0x8: // Read EEPROM Write Protect Status
 			{
 				r = g_eepromwp;
 			}
 			break;
-
+		case 0x9: // Read C800 Bank register
+			{
+				r = g_c800bank;
+			}
+			break;
+		case 0xE:  // Read SCLK Divisor
+			{
+				r = g_spiclkdiv;
+			}
+			break;
+		case 0xF:  // Read Slave Select
+			{
+				r = g_spislaveSel;
+			}
+			break;
 		default:
 			return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 		
@@ -355,27 +368,84 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 	{
 		switch (addr)
 		{
-		case 0xF0:  // SPI WRITE Data
+		case 0x2:  // SPI WRITE Data
 			{
 				 g_spidata = d;
 			}
 			break;
-		case 0xF1: // SPI Write Control
+		case 0x3: // SPI Write Control
 			{
 				g_spistatus = d;
 			}
 			break;
-		case 0xF2:  // Write SCLK Divisor
+		case 0x8: // Write protect disable
 			{
-				g_spiclkdiv = d; 
+				if (d == 0)
+					{
+						g_eepromwp = false;
+					}
+				else	// Write protect enable
+					{
+					 if (d == 1)
+						{
+							g_eepromwp = true;
+							// Copy back any changes made in the current bank
+							memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
+
+							//flush to disk here
+							// Need to open the file
+							// Create it if it doesn't exist
+							// Write g_pRomData sizeof(APLSPI_FW_FILE_SIZE) - ie 32K
+
+							TCHAR sRomFileName[ 128 ];
+							_tcscpy( sRomFileName, TEXT("AppleSPI_EX.ROM") );
+
+							TCHAR filename[MAX_PATH];
+							_tcscpy(filename,g_sProgramDir);
+							_tcscat(filename,sRomFileName );
+
+							HANDLE hFile = CreateFile(filename,
+										GENERIC_WRITE,
+										0,
+										NULL,
+										CREATE_ALWAYS,
+										FILE_ATTRIBUTE_NORMAL,
+										NULL);
+
+							DWORD dwError = GetLastError();
+							// Assert ciopied from SaveState - do we need it?
+							_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+
+							if(hFile != INVALID_HANDLE_VALUE)
+								{
+									DWORD dwBytesWritten;
+									BOOL bRes = WriteFile(	hFile,
+															g_pRomData,
+															APLSPI_FW_FILE_SIZE,
+															&dwBytesWritten,
+															NULL);
+
+									if(!bRes || (dwBytesWritten != APLSPI_FW_FILE_SIZE))
+										dwError = GetLastError();
+									CloseHandle(hFile);
+								}
+							else
+								{
+									dwError = GetLastError();
+								}
+
+								// Assert ciopied from SaveState - do we need it?
+								_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
+							
+							}
+						else
+							{
+								// We ignore it
+							}
+						}
 			}
 			break;
-		case 0xF3:  // Write Slave Select
-			{
-				g_spislaveSel = d;
-			}
-			break;
-		case 0xFC: // Write C800 Bank register
+		case 0x9: // Write C800 Bank register
 			{
 				if (m_pAPLSPIExpansionRom)
 					memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
@@ -392,68 +462,15 @@ static BYTE __stdcall APLSPI_IO_EMUL (WORD pc, WORD addr, BYTE bWrite, BYTE d, U
 
 			}
 			break;
-
-		case 0xFD: // Write protect disable
+		case 0xE:  // Write SCLK Divisor
 			{
-				g_eepromwp = false;
+				g_spiclkdiv = d; 
 			}
 			break;
-
-		case 0xFE: // Write protect enable
+		case 0xF:  // Write Slave Select
 			{
-				g_eepromwp = true;
-				// Copy back any changes made in the current bank
-				memcpy((g_pRomData+rombankoffset), m_pAPLSPIExpansionRom, APLSPI_FW_SIZE);
-
-				//flush to disk here
-				// Need to open the file
-				// Create it if it doesn't exist
-				// Write g_pRomData sizeof(APLSPI_FW_FILE_SIZE) - ie 32K
-
-				TCHAR sRomFileName[ 128 ];
-				_tcscpy( sRomFileName, TEXT("AppleSPI_EX.ROM") );
-
-				TCHAR filename[MAX_PATH];
-				_tcscpy(filename,g_sProgramDir);
-				_tcscat(filename,sRomFileName );
-
-				HANDLE hFile = CreateFile(filename,
-							GENERIC_WRITE,
-							0,
-							NULL,
-							CREATE_ALWAYS,
-							FILE_ATTRIBUTE_NORMAL,
-							NULL);
-
-				DWORD dwError = GetLastError();
-				// Assert ciopied from SaveState - do we need it?
-				_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
-
-				if(hFile != INVALID_HANDLE_VALUE)
-					{
-						DWORD dwBytesWritten;
-						BOOL bRes = WriteFile(	hFile,
-												g_pRomData,
-												APLSPI_FW_FILE_SIZE,
-												&dwBytesWritten,
-												NULL);
-
-						if(!bRes || (dwBytesWritten != APLSPI_FW_FILE_SIZE))
-							dwError = GetLastError();
-						CloseHandle(hFile);
-					}
-					else
-					{
-						dwError = GetLastError();
-					}
-
-					// Assert ciopied from SaveState - do we need it?
-					_ASSERT((dwError == 0) || (dwError == ERROR_ALREADY_EXISTS));
-
+				g_spislaveSel = d;
 			}
-			break;
-
-		case 0xFF: // Write EEPROM Write Protect Status - do nothing on write
 			break;
 
 		default:
