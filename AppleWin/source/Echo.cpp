@@ -35,7 +35,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 CEcho::CEcho(const int nSampleRate) :
 	m_uSlot(0),
-	m_nPlaybackRate(nSampleRate)
+	m_nPlaybackRate(nSampleRate),
+	m_nAudioCounter(nSampleRate)
 {
 	m_pBuffer = new short[nSampleRate];
 
@@ -50,6 +51,7 @@ CEcho::~CEcho(void)
 
 void CEcho::Reset(void)
 {
+	m_nAudioCounter = m_nPlaybackRate;
 	m_TMS5220.tms5220_reset();
 }
 
@@ -67,6 +69,23 @@ void CEcho::Uninitialize(void)
 
 short* CEcho::AudioRequest(const UINT uNumSamples)
 {
+#if 0
+	// Calc # of TMS5220 samples, before up-sampling
+	UINT uNumTMSSamples = 0;
+	for (UINT i=0; i<uNumSamples; i++)
+	{
+		m_nAudioCounter -= 8000;	//m_TMS5220.tms5220_mixingrate;
+
+		if(m_nAudioCounter < 0)
+		{
+			m_nAudioCounter += m_nPlaybackRate;
+			uNumTMSSamples++;
+		}
+	}
+#endif
+
+	//
+
 	for (UINT i=0; i<uNumSamples; i++)
 	{
 		if(m_TMS5220.tms5220_outputbuffer_ptr >= m_TMS5220.tms5220_outputbuffer_max)
@@ -75,14 +94,8 @@ short* CEcho::AudioRequest(const UINT uNumSamples)
 			m_TMS5220.tms5220_request();
 		}
 
-		int j = (short) m_TMS5220.tms5220_outputbuffer[ m_TMS5220.tms5220_outputbuffer_ptr ];
+		m_pBuffer[i] = m_TMS5220.tms5220_outputbuffer[ m_TMS5220.tms5220_outputbuffer_ptr ];
 
-		//if(j > (short)0x7FFF)
-		//	j = (short)0x7FFF;
-		//if(j < (short)0x8000)
-		//	j =- (short)0x8000;
-
-		m_pBuffer[i] = (short) j;
 		m_nAudioCounter -= m_TMS5220.tms5220_mixingrate;
 
 		if(m_nAudioCounter < 0)
@@ -102,9 +115,10 @@ BYTE __stdcall CEcho::IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULON
 	UINT uSlot = ((uAddr & 0xff) >> 4) - 8;
 	CEcho* pEcho = (CEcho*) MemGetSlotParameters(uSlot);
 
-	char szDbg[100];
-	sprintf(szDbg, "R : $%04X (PC=$%04X)\n", uAddr, PC);
-	OutputDebugString(szDbg);
+//	char szDbg[100];
+//	WORD uCallerAddr = (*(WORD*)&mem[regs.sp+1]) - 2;
+//	sprintf(szDbg, "R : $%04X (PC=$%04X, Caller=$%04X)\n", uAddr, PC, uCallerAddr);
+//	OutputDebugString(szDbg);
 
 	return pEcho->m_TMS5220.GetStatus();
 }
@@ -114,9 +128,9 @@ BYTE __stdcall CEcho::IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULO
 	UINT uSlot = ((uAddr & 0xff) >> 4) - 8;
 	CEcho* pEcho = (CEcho*) MemGetSlotParameters(uSlot);
 
-	char szDbg[100];
-	sprintf(szDbg, "W : $%04X (PC=$%04X) Data=$%02X\n", uAddr, PC, uValue);
-	OutputDebugString(szDbg);
+//	char szDbg[100];
+//	sprintf(szDbg, "W : $%04X (PC=$%04X) Data=$%02X\n", uAddr, PC, uValue);
+//	OutputDebugString(szDbg);
 
 	pEcho->m_TMS5220.tms5220_write(uValue);
 

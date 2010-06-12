@@ -39,12 +39,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "stdafx.h"
 #include "tms5220.h"
 
-//#define CORLETT_VER2	// Corlett's 2nd version
+#define CORLETT_VER2	// Corlett's 2nd version
 
 /* TMS5220 parameters */
 short CTMS5220::tms5220_energytable[0x10]={
 0x0000,0x00C0,0x0140,0x01C0,0x0280,0x0380,0x0500,0x0740,
-0x0A00,0x0E40,0x1440,0x1C80,0x2840,0x38C0,0x5040,0x0000};
+0x0A00,0x0E40,0x1440,0x1C80,0x2840,0x38C0,0x5040,0x0000};	// MAME: Last is 0x7FC0
 
 USHORT CTMS5220::tms5220_pitchtable [0x40]={
 0x0000,0x1000,0x1100,0x1200,0x1300,0x1400,0x1500,0x1600,
@@ -241,21 +241,13 @@ void CTMS5220::tms5220_request(void)
 		else
 			tms5220_excite--;
 
-		//tms5220_outputbuffer[i]=(inputpoint>>8)&0xFF;
-
-#if 1
+		// TC: Clamp samples
 		if (inputpoint > 0x7FFF)
 			inputpoint = 0x7FFF;
 		else if (inputpoint < -0x8000)
 			inputpoint = -0x8000;
-#endif
-#if 0
-		USHORT Sample = (USHORT) inputpoint;
-		inputpoint = (int) (((Sample>>8)&0xffff) | ((Sample<<8)&0xffff));
-#endif
-		//tms5220_outputbuffer[i] = inputpoint;
-		tms5220_outputbuffer[i] = (USHORT) (((UINT)inputpoint)&0xffff);
 
+		tms5220_outputbuffer[i] = (short) inputpoint;
 
 		/* Interpolate frame data */
 		e+=de;
@@ -422,6 +414,7 @@ void CTMS5220::tms5220_write(int b)
 {
 	if(tms5220_speakext)
 	{
+		m_Status.bBufferLow = CTMS5220::ACTIVE;	// TC: Fix to get Echo working
 		tms5220_speakexternal(b);
 	}
 	else

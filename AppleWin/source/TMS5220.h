@@ -35,7 +35,8 @@ private:
 	//
 
 public:
-	USHORT tms5220_outputbuffer[TMS5220_OUTPUTBUFFER_SIZE];
+	short tms5220_outputbuffer[TMS5220_OUTPUTBUFFER_SIZE];
+
 	int tms5220_outputbuffer_ptr;
 	int tms5220_outputbuffer_max;
 	int tms5220_mixingrate;

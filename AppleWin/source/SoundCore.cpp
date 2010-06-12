@@ -160,7 +160,7 @@ bool DSGetLock(LPDIRECTSOUNDBUFFER pVoice, DWORD dwOffset, DWORD dwBytes,
 
 //-----------------------------------------------------------------------------
 
-HRESULT DSGetSoundBuffer(VOICE* pVoice, DWORD dwFlags, DWORD dwBufferSize, DWORD nSampleRate, int nChannels)
+HRESULT DSGetSoundBuffer(VOICE* pVoice, DWORD dwFlags, DWORD dwBufferSize, DWORD nSampleRate, int nChannels, UINT uNumBits/*=16*/)
 {
 	WAVEFORMATEX wavfmt;
 	DSBUFFERDESC dsbdesc;
@@ -168,8 +168,11 @@ HRESULT DSGetSoundBuffer(VOICE* pVoice, DWORD dwFlags, DWORD dwBufferSize, DWORD
 	wavfmt.wFormatTag = WAVE_FORMAT_PCM;
 	wavfmt.nChannels = nChannels;
 	wavfmt.nSamplesPerSec = nSampleRate;
-	wavfmt.wBitsPerSample = 16;
-	wavfmt.nBlockAlign = wavfmt.nChannels==1 ? 2 : 4;
+	wavfmt.wBitsPerSample = uNumBits;
+	if (uNumBits == 16)
+		wavfmt.nBlockAlign = wavfmt.nChannels==1 ? 2 : 4;
+	else
+		wavfmt.nBlockAlign = wavfmt.nChannels==1;
 	wavfmt.nAvgBytesPerSec = wavfmt.nBlockAlign * wavfmt.nSamplesPerSec;
 
 	memset (&dsbdesc, 0, sizeof (dsbdesc));

@@ -732,6 +732,8 @@ static void Votrax_Write(BYTE nDevice, BYTE nValue)
 
 //===========================================================================
 
+#define ECHO_MIX_WITH_MB
+
 static void MB_Update()
 {
 	char szDbg[200];
@@ -791,14 +793,18 @@ static void MB_Update()
 	if(nNumSamples > 2*nNumSamplesPerPeriod)
 		nNumSamples = 2*nNumSamplesPerPeriod;
 
+#ifdef ECHO_MIX_WITH_MB
 	short* pEchoBuffer = NULL;
+#endif
 
 	if(nNumSamples)
 	{
 		for(int nChip=0; nChip<NUM_AY8910; nChip++)
 			AY8910Update(nChip, &ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910], nNumSamples);
 
+#ifdef ECHO_MIX_WITH_MB
 		pEchoBuffer = sg_Echo.AudioRequest(nNumSamples);
+#endif
 	}
 
 	//
@@ -886,7 +892,9 @@ static void MB_Update()
 			nDataR += (int) ((double)ppAYVoiceBuffer[3*NUM_VOICES_PER_AY8910+j][i] * fAttenuation);
 		}
 
+#ifdef ECHO_MIX_WITH_MB
 		nDataL += (int) ((double)pEchoBuffer[i] * fAttenuation);
+#endif
 
 		// Cap the superpositioned output
 		if(nDataL < nWaveDataMin)
