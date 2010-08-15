@@ -189,7 +189,7 @@ What follows is a proposed register map for the c0x0 space
 			E:c800 $C800 common code bank 14 (IP65 routines) 2K
 			F:c800 $C800 common code bank 15 (IP65 routines) 2K
 
-		Bank selection via writing to $C0FC - upper address byte offset in ROM file
+		Bank selection via writing to $C0F9 - upper address byte offset in ROM file
 		Which is the bank number shifted left 3 bits
 
 		In hex

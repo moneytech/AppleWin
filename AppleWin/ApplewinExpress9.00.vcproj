@@ -87,8 +87,9 @@
 				OutputFile=".\Release/Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
+				AdditionalLibraryDirectories="&quot;C:\Program Files\Microsoft SDKs\Windows\v6.1\Lib&quot;;&quot;C:\Program Files\Microsoft DirectX SDK (November 2008)\Lib\x86&quot;"
 				AdditionalManifestDependencies="&quot;type=&apos;Win32&apos; name=&apos;Microsoft.Windows.Common-Controls&apos; version=&apos;6.0.0.0&apos; processorArchitecture=&apos;X86&apos; publicKeyToken=&apos;6595b64144ccf1df&apos; language=&apos;*&apos;&quot;"
-				GenerateDebugInformation="true"
+				GenerateDebugInformation="false"
 				ProgramDatabaseFile=".\Release\Applewin.pdb"
 				SubSystem="2"
 				LinkTimeCodeGeneration="1"
@@ -858,6 +859,14 @@
 			</File>
 			<File
 				RelativePath=".\resource\Apple2e_Enhanced.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\AppleHDD_EX.rom"
+				>
+			</File>
+			<File
+				RelativePath=".\resource\AppleHDD_IN.rom"
 				>
 			</File>
 			<File
