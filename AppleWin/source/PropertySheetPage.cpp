@@ -753,7 +753,7 @@ static BOOL CALLBACK InputDlgProc(HWND   window,
 
 //===========================================================================
 
-static void SoundDlg_OK(HWND window, UINT afterclose, UINT uNewSoundcardType)
+static void SoundDlg_OK(HWND window, UINT afterclose, eSOUNDCARDTYPE NewSoundcardType)
 {
 	DWORD newsoundtype  = (DWORD)SendDlgItemMessage(window,IDC_SOUNDTYPE,CB_GETCURSEL,0,0);
 
@@ -770,7 +770,7 @@ static void SoundDlg_OK(HWND window, UINT afterclose, UINT uNewSoundcardType)
 	SpkrSetVolume(dwSpkrVolume, VOLUME_MAX);
 	MB_SetVolume(dwMBVolume, VOLUME_MAX);
 
-	MB_SetSoundcardType((eSOUNDCARDTYPE)uNewSoundcardType);
+	MB_SetSoundcardType(NewSoundcardType);
 
 	REGSAVE(TEXT("Sound Emulation")   ,soundtype);
 	REGSAVE(TEXT(REGVALUE_SPKR_VOLUME),SpkrGetVolume());
@@ -795,7 +795,7 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 								   LPARAM lparam)
 {
 	static UINT afterclose = 0;
-	static UINT uNewSoundcardType = SC_UNINIT;
+	static eSOUNDCARDTYPE NewSoundcardType = SC_UNINIT;
 
 	switch (message)
 	{
@@ -810,7 +810,7 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 				break;
 			case PSN_APPLY:
 				SetWindowLong(window, DWL_MSGRESULT, PSNRET_NOERROR);	// Changes are valid
-				SoundDlg_OK(window, afterclose, uNewSoundcardType);
+				SoundDlg_OK(window, afterclose, NewSoundcardType);
 				break;
 			case PSN_QUERYCANCEL:
 				// Can use this to ask user to confirm cancel
@@ -830,15 +830,15 @@ static BOOL CALLBACK SoundDlgProc (HWND   window,
 		case IDC_MB_VOLUME:
 			break;
 		case IDC_MB_ENABLE:
-			uNewSoundcardType = SC_MOCKINGBOARD;
+			NewSoundcardType = SC_MOCKINGBOARD;
 			EnableWindow(GetDlgItem(window, IDC_MB_VOLUME), TRUE);
 			break;
 		case IDC_PHASOR_ENABLE:
-			uNewSoundcardType = SC_PHASOR;
+			NewSoundcardType = SC_PHASOR;
 			EnableWindow(GetDlgItem(window, IDC_MB_VOLUME), TRUE);
 			break;
 		case IDC_SOUNDCARD_DISABLE:
-			uNewSoundcardType = SC_NONE;
+			NewSoundcardType = SC_NONE;
 			EnableWindow(GetDlgItem(window, IDC_MB_VOLUME), FALSE);
 			break;
 		}
