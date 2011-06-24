@@ -216,128 +216,7 @@
 
 // Colors ___________________________________________________________________
 
-	enum Color_Schemes_e
-	{
-		SCHEME_COLOR, // NOTE: MUST match order in CMD_WINDOW_COLOR
-		SCHEME_MONO , // NOTE: MUST match order in CMD_WINDOW_MONOCHROME
-		SCHEME_BW   , // NOTE: MUST match order in CMD_WINDOW_BW
-//		SCHEME_CUSTOM
-		NUM_COLOR_SCHEMES
-	};
-
-	// Named, since they are easier to remember.
-	// Ok, maybe RGB + CYMK is a little "too" cute. But what the hell, it works out nicely.
- 	enum DebugPalette_e
-	{   
-		// mipmap level:   8   7   6   5   4   3   2   1   0
-		// color depth:  256 224 192 160 128  96  64  32   0
-		//               +32 +32 +32 +32 +32 +32 +32 +32 
-		// NOTE: Levels of black are redundant.
-		//                              // BGR
-		K0,                             // ---  K  
-		R8, R7, R6, R5, R4, R3, R2, R1, // --1  R  Red     
-		G8, G7, G6, G5, G4, G3, G2, G1, // -1-  G  Green   
-		Y8, Y7, Y6, Y5, Y4, Y3, Y2, Y1, // -11  Y  Yellow  
-		B8, B7, B6, B5, B4, B3, B2, B1, // 1--  B  Blue    
-		M8, M7, M6, M5, M4, M3, M2, M1, // 1-1  M  Magenta 
-		C8, C7, C6, C5, C4, C3, C2, C1, // 11-  C  Cyan    
-		W8, W7, W6, W5, W4, W3, W2, W1, // 111  W  White / Gray / Black
-
-		COLOR_CUSTOM_01, COLOR_CUSTOM_02, COLOR_CUSTOM_03, COLOR_CUSTOM_04,
-		COLOR_CUSTOM_05, COLOR_CUSTOM_06, COLOR_CUSTOM_07, COLOR_CUSTOM_08,
-		COLOR_CUSTOM_09, COLOR_CUSTOM_11, CUSTOM_COLOR_11, COLOR_CUSTOM_12,
-		COLOR_CUSTOM_13, COLOR_CUSTOM_14, COLOR_CUSTOM_15, COLOR_CUSTOM_16,
-
-		NUM_PALETTE,
-
-		// Gray Aliases		
-		G000 = K0,
-		G032 = W1,
-		G064 = W2,
-		G096 = W3,
-		G128 = W4,
-		G160 = W5,
-		G192 = W6,
-		G224 = W7,
-		G256 = W8
-	};
-
-	// Yeah, this was a PITA to organize.
-	enum DebugColors_e
-	{
-		  BG_CONSOLE_OUTPUT  // Black   Window
-		, FG_CONSOLE_OUTPUT  // White
-		, BG_CONSOLE_INPUT   // Black   Window
-		, FG_CONSOLE_INPUT   // Light Blue
-
-		, BG_DISASM_1        // Blue*   Odd address
-		, BG_DISASM_2        // Blue*   Even address
-
-		, BG_DISASM_BP_S_C   // Red     Breakpoint Set     (cursor)
-		, FG_DISASM_BP_S_C   // White   Breakpoint Set&Ena (cursor)
-
-		// Note: redundant BG_DISASM_BP_0_C = BG_DISASM_BP_S_C
-		, BG_DISASM_BP_0_C   // DimRed  Breakpoint Disabled (cursor)
-		, FG_DISASM_BP_0_C   // Gray192 Breakpoint Disabled (cursor)
-
-		, FG_DISASM_BP_S_X   // Red     Set      (not cursor)
-		, FG_DISASM_BP_0_X   // White   Disabled (not cursor)
-
-		, BG_DISASM_C        // White (Cursor)
-		, FG_DISASM_C        // Blue  (Cursor)
-
-		, BG_DISASM_PC_C     // Yellow (not cursor)
-		, FG_DISASM_PC_C     // White  (not cursor)
-
-		, BG_DISASM_PC_X     // Dim Yellow (not cursor)
-		, FG_DISASM_PC_X     // White      (not cursor)
-
-		, BG_DISASM_BOOKMARK // Lite Blue    (always)
-		, FG_DISASM_BOOKMARK // White   addr (always)
-
-		, FG_DISASM_ADDRESS  // White   addr
-		, FG_DISASM_OPERATOR // Gray192     :               $ (also around instruction addressing g_nAppMode)
-		, FG_DISASM_OPCODE   // Yellow       xx xx xx
-		, FG_DISASM_MNEMONIC // White                   LDA
-		, FG_DISASM_TARGET   // Orange                       FAC8
-		, FG_DISASM_SYMBOL   // Purple                       HOME
-		, FG_DISASM_CHAR     // Cyan                               'c'
-		, FG_DISASM_BRANCH   // Green                                   ^ = v
-
-		, BG_INFO            // Cyan    Regs/Stack/BP/Watch/ZP
-		, FG_INFO_TITLE      // White   Regs/Stack/BP/Watch/ZP
-		, FG_INFO_BULLET     //         1
-		, FG_INFO_OPERATOR   // Gray192  :    -
-		, FG_INFO_ADDRESS    // Orange    FA62 FA63 (Yellow -> Orange)
-		, FG_INFO_OPCODE     // Yellow              xx
-		, FG_INFO_REG        // Orange (Breakpoints)
-		, BG_INFO_INVERSE    // White
-		, FG_INFO_INVERSE    // Cyan
-		, BG_INFO_CHAR       // mid Cyan
-		, FG_INFO_CHAR_HI    // White
-		, FG_INFO_CHAR_LO    // Yellow
-		
-		, BG_INFO_IO_BYTE    // Orange (high bit)
-		, FG_INFO_IO_BYTE    // Orange (non-high bit)
-		                               
-		, BG_DATA_1          // Cyan*   Window
-		, BG_DATA_2          // Cyan*
-		, FG_DATA_BYTE       // default same as FG_DISASM_OPCODE
-		, FG_DATA_TEXT       // default same as FG_DISASM_NMEMONIC
-
-		, BG_SYMBOLS_1       // window
-		, BG_SYMBOLS_2        
-		, FG_SYMBOLS_ADDRESS // default same as FG_DISASM_ADDRESS
-		, FG_SYMBOLS_NAME    // default same as FG_DISASM_SYMBOL
-
-		, BG_SOURCE_TITLE
-		, FG_SOURCE_TITLE
-		, BG_SOURCE_1        // odd
-		, BG_SOURCE_2        // even
-		, FG_SOURCE
-
-		, NUM_DEBUG_COLORS
-	};
+#include "Debugger_Color.h"
 
 // Config _________________________________________________________________________________________
 	
@@ -365,7 +244,7 @@
 		UPDATE_TARGETS         = (1 << 10),
 		UPDATE_WATCH           = (1 << 11),
 		UPDATE_ZERO_PAGE       = (1 << 12),
-
+		UPDATE_SOFTSWITCHES    = (1 << 13),
 		UPDATE_ALL = -1
 	};
 
@@ -401,8 +280,6 @@
 // CPU
 		, CMD_CURSOR_JUMP_PC // Shift
 		, CMD_CURSOR_SET_PC  // Ctrl
-		, CMD_BREAK_INVALID
-		, CMD_BREAK_OPCODE
 		, CMD_GO
 		, CMD_IN
 		, CMD_INPUT_KEY
@@ -434,6 +311,8 @@
 		, CMD_BOOKMARK_GOTO
 		, CMD_BOOKMARK_SAVE
 // Breakpoints
+		, CMD_BREAK_INVALID
+		, CMD_BREAK_OPCODE
 		, CMD_BREAKPOINT
 		, CMD_BREAKPOINT_ADD_SMART // smart breakpoint
 		, CMD_BREAKPOINT_ADD_REG   // break on: PC == Address (fetch/execute)
@@ -473,6 +352,8 @@
 		, CMD_CONFIG_LOAD
 		, CMD_CONFIG_MONOCHROME // MONO  # rr gg bb
 		, CMD_CONFIG_SAVE
+		, CMD_CONFIG_GET_DEBUG_DIR
+		, CMD_CONFIG_SET_DEBUG_DIR
 // Cursor
 		, CMD_CURSOR_JUMP_RET_ADDR
 		, CMD_CURSOR_LINE_UP   // Smart Line Up
@@ -501,8 +382,8 @@
 		, CMD_DEFINE_DATA_WORD2
 		, CMD_DEFINE_DATA_WORD4
 		, CMD_DEFINE_DATA_STR
-//		, CMD_DEFINE_DATA_FACP
-//		, CMD_DEFINE_DATA_FACU
+//		, CMD_DEFINE_DATA_FACP // FAC Packed
+//		, CMD_DEFINE_DATA_FACU // FAC Unpacked
 //		, CMD_DATA_DEFINE_ADDR_BYTE_L  // DB< address symbol
 //		, CMD_DATA_DEFINE_ADDR_BYTE_H  // DB> address symbol
 		, CMD_DEFINE_ADDR_WORD    // .DA address symbol
@@ -536,11 +417,8 @@
 // Memory		
 		, CMD_MEMORY_COMPARE
 
-		, _CMD_MEM_MINI_DUMP_HEX_1_1 // Memory Dump
 		, CMD_MEM_MINI_DUMP_HEX_1 // Mini Memory Dump 1
 		, CMD_MEM_MINI_DUMP_HEX_2 // Mini Memory Dump 2
-		, _CMD_MEM_MINI_DUMP_HEX_1_3 // alias M1
-		, _CMD_MEM_MINI_DUMP_HEX_2_1 // alias M2
 
 		, CMD_MEM_MINI_DUMP_ASCII_1    // ASCII
 		, CMD_MEM_MINI_DUMP_ASCII_2
@@ -583,6 +461,8 @@
 		, CMD_SYMBOLS_USER_2
 		, CMD_SYMBOLS_SRC_1
 		, CMD_SYMBOLS_SRC_2
+		, CMD_SYMBOLS_DOS33
+		, CMD_SYMBOLS_PRODOS
 //		, CMD_SYMBOLS_FIND
 //		, CMD_SYMBOLS_CLEAR
 		, CMD_SYMBOLS_INFO
@@ -610,7 +490,7 @@
 		, CMD_VIEW_DHGR1
 		, CMD_VIEW_DHGR2
 // Watch
-		, CMD_WATCH
+		, CMD_WATCH // TODO: Deprecated ?
 		, CMD_WATCH_ADD
 		, CMD_WATCH_CLEAR
 		, CMD_WATCH_DISABLE
@@ -667,6 +547,10 @@
 		, CMD_ZEROPAGE_POINTER_SAVE
 
 		, NUM_COMMANDS
+
+		, _CMD_MEM_MINI_DUMP_HEX_1_1 // Memory Dump
+		, _CMD_MEM_MINI_DUMP_HEX_1_3 // alias M1
+		, _CMD_MEM_MINI_DUMP_HEX_2_1 // alias M2
 	};
 
 // Assembler
@@ -750,6 +634,8 @@
 	Update_t CmdConfigSave        (int nArgs);
 	Update_t CmdConfigSetFont     (int nArgs);
 	Update_t CmdConfigGetFont     (int nArgs);
+	Update_t CmdConfigGetDebugDir (int nArgs);
+	Update_t CmdConfigSetDebugDir (int nArgs);
 // Cursor
 	Update_t CmdCursorFollowTarget(int nArgs);
 	Update_t CmdCursorLineDown    (int nArgs);
@@ -916,6 +802,51 @@
 
 // Disassembly ____________________________________________________________________________________
 
+	// Data Disassembler
+	enum Nopcode_e
+	{
+		_NOP_REMOVED
+		,NOP_BYTE_1 // 1 bytes/line
+		,NOP_BYTE_2 // 2 bytes/line
+		,NOP_BYTE_4 // 4 bytes/line
+		,NOP_BYTE_8 // 8 bytes/line
+		,NOP_WORD_1 // 1 words/line = 2 bytes (no symbol lookup)
+		,NOP_WORD_2 // 2 words/line = 4 bytes
+		,NOP_WORD_4 // 4 words/line = 8 bytes
+		,NOP_ADDRESS// 1 word/line  = 2 bytes (with symbol lookup)
+		,NOP_HEX    // hex string   =16 bytes
+		,NOP_CHAR   // char string // TODO: FIXME: needed??
+		,NOP_STRING_ASCII // Low Ascii
+		,NOP_STRING_APPLE // High Ascii
+		,NOP_STRING_APPLESOFT // Mixed Low/High
+		,NOP_FAC
+		,NOP_SPRITE
+		,NUM_NOPCODE_TYPES
+	};
+
+	// Disassembler Data
+	// type symbol[start:end]
+	struct DisasmData_t
+	{
+		char sSymbol[ MAX_SYMBOLS_LEN+1 ];
+
+		Nopcode_e eElementType ; // eElementType -> iNoptype
+		int       iDirective   ; // iDirective   -> iNopcode
+
+		WORD nStartAddress; // link to block [start,end)
+		WORD nEndAddress  ; 
+		WORD nArraySize   ; // Total bytes
+//		WORD nBytePerRow  ; // 1, 8
+
+		// with symbol lookup
+		char bSymbolLookup ;
+		WORD nTargetAddress;
+
+		WORD nSpriteW;
+		WORD nSpriteH;
+	};
+
+	// Disassembler ...
 	enum DisasmBranch_e
 	{
 		  DISASM_BRANCH_OFF = 0
@@ -963,18 +894,23 @@
 	{
 		short iOpcode;
 		short iOpmode;
-		int nOpbyte;
+		int   nOpbyte;
 
 		char sAddress  [ CHARS_FOR_ADDRESS ];
 		char sOpCodes  [(nMaxOpcodes*3)+1];
 
 		// Added for Data Disassembler
 		char sLabel    [ MAX_SYMBOLS_LEN+1 ]; // label is a symbol
-		int  iNopcode; // directive / pseudo opcode
-		int  iNoptype; // element type
-		char sMnemonic [ MAX_SYMBOLS_LEN+1 ];
 
-		int  nTarget;
+		Nopcode_e iNoptype; // basic element type
+		int       iNopcode; // assembler directive / pseudo opcode
+		int       nSlack  ;
+
+		char sMnemonic [ MAX_SYMBOLS_LEN+1 ]; // either the real Mnemonic or the Assembler Directive
+const	DisasmData_t* pDisasmData;
+		//
+
+		int  nTarget; // address -> string
 		char sTarget   [nMaxAddressLen];
 
 		char sTargetOffset[ CHARS_FOR_ADDRESS ]; // +/- 255, realistically +/-1
@@ -998,23 +934,7 @@
 
 		void Clear()
 		{
-			sAddress  [ 0 ] = 0;
-			sOpCodes  [ 0 ] = 0;
-
-			nTarget = 0;
-			sTarget   [ 0 ] = 0;
-
-			sTargetOffset[ 0 ] = 0;
-			nTargetOffset = 0;
-
-			sTargetPointer[ 0 ] = 0;
-			sTargetValue  [ 0 ] = 0;
-
-			sImmediate[ 0 ] = 0;
-			nImmediate = 0;
-
-			sBranch   [ 0 ] = 0;
-			ClearFlags();
+			memset( this, 0, sizeof( *this ) );
 		}
 		void ClearFlags()
 		{
@@ -1504,7 +1424,7 @@
 // Symbols ________________________________________________________________________________________
 
 	// ****************************************
-	// WARNING: This is the index (enumeration) to select which table
+	// Note: This is the index (enumeration) to select which table
 	// See: g_aSymbols[]
 	// ****************************************
 	enum SymbolTable_Index_e // Symbols_e -> SymbolTable_Index_e
@@ -1516,12 +1436,14 @@
 		SYMBOLS_USER_2,
 		SYMBOLS_SRC_1,
 		SYMBOLS_SRC_2,
+		SYMBOLS_DOS33,
+		SYMBOLS_PRODOS,
 		NUM_SYMBOL_TABLES
 	};
 
 	// ****************************************
-	// WARNING: This is the bit-flags to select which table.
-	// See: CmdSymbolsListTable()
+	// Note: This is the bit-flags to select which table.
+	// See: CmdSymbolsListTable(), g_bDisplaySymbolTables
 	// ****************************************
 	enum SymbolTable_Masks_e // SymbolTable_e -> 
 	{
@@ -1532,6 +1454,8 @@
 		SYMBOL_TABLE_USER_2    = (1 << 4),
 		SYMBOL_TABLE_SRC_1     = (1 << 5),
 		SYMBOL_TABLE_SRC_2     = (1 << 6),
+		SYMBOL_TABLE_DOS33     = (1 << 7),
+		SYMBOL_TABLE_PRODOS    = (1 << 8),
 	};
 
 	typedef map<WORD, string> SymbolTable_t;
@@ -1541,7 +1465,7 @@
 
 	enum
 	{
-		MAX_WATCHES = 16
+		MAX_WATCHES = 8
 	};
 
 
@@ -1549,25 +1473,64 @@
 
 	enum Window_e
 	{
-		WINDOW_CODE    ,
-		WINDOW_DATA    ,
+		WINDOW_NULL    , // no window data!
 		WINDOW_CONSOLE ,
+		WINDOW_CODE    ,
+		WINDOW_DATA    , // memory view
+
+		WINDOW_INFO    , // WINDOW_REGS, WINDOW_STACK, WINDOW_BREAKPOINTS, WINDOW_WATCHES, WINDOW,
+
 		NUM_WINDOWS    ,
 // Not implemented yet
-		WINDOW_IO      , // soft switches   $addr  name   state
+		WINDOW_REGS    ,
+		WINDOW_STACK   ,
 		WINDOW_SYMBOLS ,
+		WINDOW_TARGETS ,
+
+		WINDOW_IO      , // soft switches   $addr  name   state
 		WINDOW_ZEROPAGE,
 		WINDOW_SOURCE  ,
+		WINDOW_OUTPUT  ,
+
+
+	};
+
+	enum WindowSplit_e
+	{
+		WIN_SPLIT_HORZ = (1 << 0),
+		WIN_SPLIT_VERT = (1 << 1),
+		WIN_SPLIT_PARENT_TOP = (1 << 2),
 	};
 	
 	struct WindowSplit_t
 	{
-		bool     bSplit;
+		RECT tBoundingBox; // 
+
+		int  nWidth ; // Width & Height are always valid 
+		int  nHeight; // If window is split/join, then auto-updated (right,bottom)
+
+		int  nCursorY; // Address
+		int  nCursorX; // or line,col of text file ...
+
+		int  bSplit ; 
+
+		int  iParent;// index into g_aWindowConfig
+		int  iChild ; // index into g_aWindowConfig
+
 		Window_e eTop;
 		Window_e eBot;	
-		// TODO: nTopHeight
-		// TODO: nBotHeight
 	};
+
+// Debuger_PanelInit();
+// WindowsRemoveAll()
+// int iNext = 0;
+// iNext = Panel_Add( iNext, WINDOW_CONSOLE );
+// iNext = Panel_AutoSplit( iNext, WINDOW_CODE );
+// iNext = Panel_AutoSplit( iNext, WINDOW_REGS );
+
+
+	// g_bWindowDisplayShowChild = false;
+	// g_bWindowDisplayShowRoot  = WINDOW_CODE;
 
 
 // Zero Page ______________________________________________________________________________________

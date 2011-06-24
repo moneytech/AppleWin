@@ -349,6 +349,7 @@ static BYTE __stdcall DiskControlMotor(WORD, WORD address, BYTE, BYTE, ULONG)
 static BYTE __stdcall DiskControlStepper(WORD, WORD address, BYTE, BYTE, ULONG)
 {
 	Disk_t * fptr = &g_aFloppyDisk[currdrive];
+#if 1
 	int phase     = (address >> 1) & 3;
 	int phase_bit = (1 << phase);
 
@@ -395,7 +396,29 @@ static BYTE __stdcall DiskControlStepper(WORD, WORD address, BYTE, BYTE, ULONG)
 			fptr->trackimagedata = 0;
 		}
 	}
-
+#else	// Old 1.13.1 code for Chessmaster 2000 to work! (see bug#18109)
+	const int nNumTracksInImage = ImageGetNumTracks(fptr->imagehandle);
+	if (address & 1) {
+		int phase = (address >> 1) & 3;
+		int direction = 0;
+		if (phase == ((fptr->phase+1) & 3))
+			direction = 1;
+		if (phase == ((fptr->phase+3) & 3))
+			direction = -1;
+		if (direction) {
+			fptr->phase = MAX(0,MIN(79,fptr->phase+direction));
+			if (!(fptr->phase & 1)) {
+				int newtrack = MIN(nNumTracksInImage-1,fptr->phase >> 1);
+				if (newtrack != fptr->track) {
+					if (fptr->trackimage && fptr->trackimagedirty)
+						WriteTrack(currdrive);
+					fptr->track = newtrack;
+					fptr->trackimagedata = 0;
+				}
+			}
+		}
+	}
+#endif
 	return (address == 0xE0) ? 0xFF : MemReturnRandomData(1);
 }
 
@@ -460,7 +483,7 @@ LPCTSTR DiskGetBaseName(const int iDrive)
 }
 //===========================================================================
 
-void DiskGetLightStatus(int *pDisk1Status_, int *pDisk2Status_)
+void DiskGetLightStatus(Disk_Status_e *pDisk1Status_, Disk_Status_e *pDisk2Status_)
 {
 //	*drive1 = g_aFloppyDisk[0].spinning ? g_aFloppyDisk[0].writelight ? 2 : 1 : 0;
 //	*drive2 = g_aFloppyDisk[1].spinning ? g_aFloppyDisk[1].writelight ? 2 : 1 : 0;
@@ -739,6 +762,8 @@ void DiskSelectImage(const int iDrive, LPSTR pszFilename)
 	RegLoadString(TEXT(REG_PREFS), REGVALUE_PREF_START_DIR, 1, directory, MAX_PATH);
 	_tcscpy(title, TEXT("Select Disk Image For Drive "));
 	_tcscat(title, iDrive ? TEXT("2") : TEXT("1"));
+
+	_ASSERT(sizeof(OPENFILENAME) == sizeof(OPENFILENAME_NT4));	// Required for Win98/ME support (selected by _WIN32_WINNT=0x0400 in stdafx.h)
 
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn,sizeof(OPENFILENAME));
@@ -1019,6 +1044,8 @@ DWORD DiskSetSnapshot(SS_CARD_DISK2* pSS, DWORD /*dwSlot*/)
 	for(UINT i=0; i<NUM_DRIVES; i++)
 	{
 		bool bImageError = false;
+
+		DiskEject(i);	// Remove any disk & update Registry to reflect empty drive
 
 		ZeroMemory(&g_aFloppyDisk[i], sizeof(Disk_t ));
 		if(pSS->Unit[i].szFileName[0] == 0x00)

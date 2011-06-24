@@ -64,8 +64,10 @@ AppMode_e	g_nAppMode = MODE_LOGO;
 
 static int lastmode         = MODE_LOGO;
 DWORD     needsprecision    = 0;			// Redundant
-TCHAR     g_sProgramDir[MAX_PATH] = TEXT("");
-TCHAR     g_sCurrentDir[MAX_PATH] = TEXT(""); // Also Starting Dir
+TCHAR     g_sProgramDir[MAX_PATH] = TEXT(""); // Directory of where AppleWin executable resides
+TCHAR     g_sDebugDir  [MAX_PATH] = TEXT(""); // TODO: Not currently used
+TCHAR     g_sScreenShotDir[MAX_PATH] = TEXT(""); // TODO: Not currently used
+TCHAR     g_sCurrentDir[MAX_PATH] = TEXT(""); // Also Starting Dir.  Debugger uses this when load/save
 bool      g_bResetTiming    = false;			// Redundant
 BOOL      restart           = 0;
 
@@ -97,7 +99,9 @@ HANDLE		g_hCustomRomF8 = INVALID_HANDLE_VALUE;	// Cmd-line specified custom ROM 
 static bool	g_bCustomRomF8Failed = false;			// Set if custom ROM file failed
 
 static bool	g_bEnableSpeech = false;
+#ifdef USE_SPEECH_API
 CSpeech		g_Speech;
+#endif
 
 //===========================================================================
 
@@ -171,7 +175,9 @@ void ContinueExecution()
 		// Don't call Spkr_Mute() - will get speaker clicks
 		MB_Mute();
 		SysClk_StopTimer();
+#ifdef USE_SPEECH_API
 		g_Speech.Reset();			// TODO: Put this on a timer (in emulated cycles)... otherwise CATALOG cuts out
+#endif
 
 		g_nCpuCyclesFeedback = 0;	// For the case when this is a big -ve number
 
@@ -196,7 +202,6 @@ void ContinueExecution()
 		nCyclesToExecute = 0;
 
 	DWORD dwExecutedCycles = CpuExecute(nCyclesToExecute);
-
 	g_dwCyclesThisFrame += dwExecutedCycles;
 
 	//
@@ -205,7 +210,6 @@ void ContinueExecution()
 
 	DiskUpdatePosition(dwExecutedCycles);
 	JoyUpdatePosition();
-	VideoUpdateVbl(g_dwCyclesThisFrame);
 
 	SpkrUpdate(cyclenum);
 	sg_SSC.CommUpdate(cyclenum);
@@ -257,7 +261,7 @@ void ContinueExecution()
 				static DWORD lasttime = 0;
 				DWORD currtime = GetTickCount();
 				if ((!g_bFullSpeed) ||
-					(currtime-lasttime >= (DWORD)((graphicsmode || !systemidle) ? 100 : 25)))
+					(currtime-lasttime >= (DWORD)((g_bGraphicsMode || !systemidle) ? 100 : 25)))
 				{
 					VideoRefreshScreen();
 					lasttime = currtime;
@@ -806,7 +810,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		}
 		else if(((strcmp(lpCmdLine, "-l") == 0) || (strcmp(lpCmdLine, "-log") == 0)) && (g_fh == NULL))
 		{
-			g_fh = fopen("AppleWin.log", "a+t");	// Open log file (append & text g_nAppMode)
+			g_fh = fopen("AppleWin.log", "a+t");	// Open log file (append & text mode)
 			CHAR aDateStr[80], aTimeStr[80];
 			GetDateFormat(LOCALE_SYSTEM_DEFAULT, 0, NULL, NULL, (LPTSTR)aDateStr, sizeof(aDateStr));
 			GetTimeFormat(LOCALE_SYSTEM_DEFAULT, 0, NULL, NULL, (LPTSTR)aTimeStr, sizeof(aTimeStr));
@@ -866,7 +870,10 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 		{
 			g_bEnableSpeech = true;
 		}
-
+		else if(strcmp(lpCmdLine,"-multimon") == 0)
+		{
+			g_bMultiMon = true;
+		}
 		lpCmdLine = lpNextArg;
 	}
 
@@ -925,6 +932,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	// Initialize COM - so we can use CoCreateInstance
 	// . NB. DSInit() & DIMouse::DirectInputInit are done when g_hFrameWindow is created (WM_CREATE)
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+
 	bool bSysClkOK = SysClk_InitTimer();
 #ifdef USE_SPEECH_API
 	if (g_bEnableSpeech)
@@ -945,7 +953,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	FrameRegisterClass();
 	ImageInitialize();
 	DiskInitialize();
-	CreateColorMixMap();	// For tv emulation g_nAppMode
+	CreateColorMixMap();	// For tv emulation mode
 
 	int nError = 0;	// TODO: Show error MsgBox if we get a DiskInsert error
 	if(szImageName_drive1)

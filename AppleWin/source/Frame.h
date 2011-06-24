@@ -1,7 +1,10 @@
 #pragma once
 
-// Keyboard -- keystroke type
-enum {NOT_ASCII=0, ASCII};
+// 1.19.0.0 Hard Disk Status/Indicator Light
+#define HD_LED 1
+
+	// Keyboard -- keystroke type
+	enum {NOT_ASCII=0, ASCII};
 
 // 3D Border
 	#define  VIEWPORTX   5
@@ -21,6 +24,7 @@ enum {NOT_ASCII=0, ASCII};
 	extern HWND       g_hFrameWindow;
 	extern HDC        g_hFrameDC;
 	extern BOOL       g_bIsFullScreen;
+	extern BOOL       g_bMultiMon;
 
 // Emulator
 	extern bool   g_bFreshReset;

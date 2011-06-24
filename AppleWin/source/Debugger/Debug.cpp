@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2009, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2010, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Debugger
  *
- * Author: Copyright (C) 2006-2009 Michael Pohoreski
+ * Author: Copyright (C) 2006-2010 Michael Pohoreski
  */
 
 // disable warning C4786: symbol greater than 255 character:
@@ -35,8 +35,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //	#define DEBUG_ASM_HASH 1
 #define ALLOW_INPUT_LOWERCASE 1
 
-	// See Debugger_Changelong.txt for full details
-	const int DEBUGGER_VERSION = MAKE_VERSION(2,6,2,0);
+	// See /docs/Debugger_Changelog.txt for full details
+	const int DEBUGGER_VERSION = MAKE_VERSION(2,7,0,21);
 
 
 // Public _________________________________________________________________________________________
@@ -46,15 +46,23 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Bookmarks __________________________________________________________________
 //	vector<int> g_aBookmarks;
-	int        g_nBookmarks;
+	int        g_nBookmarks = 0;
 	Bookmark_t g_aBookmarks[ MAX_BOOKMARKS ];
 
 // Breakpoints ________________________________________________________________
 
-	// Full-Speed debugging
-	int  g_nDebugOnBreakInvalid  = 0;
-	int  g_iDebugOnOpcode        = 0;
-	bool g_bDebugDelayBreakCheck = false;
+
+	// MODE_RUNNING // Normal Speed Breakpoints: Shift-F7 exit debugger, keep breakpoints active, enter run state at NORMAL speed
+	bool g_bDebugNormalSpeedBreakpoints = 0;
+
+	// MODE_STEPPING // Full Speed Breakpoints
+
+	// Any Speed Breakpoints
+	int  g_nDebugBreakOnInvalid  = 0; // Bit Flags of Invalid Opcode to break on: // iOpcodeType = AM_IMPLIED (BRK), AM_1, AM_2, AM_3
+	int  g_iDebugBreakOnOpcode   = 0;
+
+	bool g_bDebugBreakDelayCheck = false; // If exiting the debugger, allow at least one instruction to execute so we don't trigger on the same invalid opcode
+	int  g_bDebugBreakpointHit   = 0; // See: BreakpointHit_t
 
 	int          g_nBreakpoints = 0;
 	Breakpoint_t g_aBreakpoints[ MAX_BREAKPOINTS ];
@@ -97,462 +105,20 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //		"! ", // NOT_EQUAL_1
 		"> ", // GREATER_THAN
 		">=", // GREATER_EQUAL
-		"? ", // READ   // Q. IO Read  use 'I'?  A. No, since I=Interrupt
-		"@ ", // WRITE  // Q. IO Write use 'O'?  A. No, since O=Opcode
+		"? ", // READ   // Q. IO Read  use 'I'?  A. No, since I=Interrupt // Also can't use: 'r' reserver
+		"@ ", // WRITE  // Q. IO Write use 'O'?  A. No, since O=Opcode    // This is free: 'w'
 		"* ", // Read/Write
 	};
 
 
 // Commands _______________________________________________________________________________________
 
-	#define __COMMANDS_VERIFY_TXT__ "\xDE\xAD\xC0\xDE"
-	#define __PARAMS_VERIFY_TXT__   "\xDE\xAD\xDA\x1A"
-
-	int g_iCommand; // last command (enum) // used for consecuitive commands
+	int g_iCommand; // last command (enum) // used for consecutive commands
 
 	vector<int>       g_vPotentialCommands; // global, since TAB-completion also needs
 	vector<Command_t> g_vSortedCommands;
 
-	// Setting function to NULL, allows g_aCommands arguments to be safely listed here
-	// Commands should be listed alphabetically per category.
-	// For the list sorted by category, check Commands_e
-	// NOTE: Commands_e and g_aCommands[] must be kept in sync! Aliases are listed at the end.
-	Command_t g_aCommands[] =
-	{
-	// Assembler
-		{TEXT("A")           , CmdAssemble          , CMD_ASSEMBLE             , "Assemble instructions"      },
-	// Disassembler Data 
-		{TEXT("B")           , CmdDisasmDataDefByte1       , CMD_DISASM_DATA      , "Treat byte [range] as data"                },
-		{TEXT("X")           , CmdDisasmDataDefCode        , CMD_DISASM_CODE      , "Treat byte [range] as code"                },
-		{TEXT("DL")          , CmdDisasmDataList           , CMD_DISASM_LIST      , "List all byte ranges treated as data"      },
-		// without symbol lookup
-		{TEXT("DB")          , CmdDisasmDataDefByte1       , CMD_DEFINE_DATA_BYTE1, "Define byte (array)"                          },
-		{TEXT("DB2")         , CmdDisasmDataDefByte2       , CMD_DEFINE_DATA_BYTE2, "Define byte array, display 2 bytes/line"    },
-		{TEXT("DB4")         , CmdDisasmDataDefByte4       , CMD_DEFINE_DATA_BYTE4, "Define byte array, display 4 bytes/line"    },
-		{TEXT("DB8")         , CmdDisasmDataDefByte8       , CMD_DEFINE_DATA_BYTE8, "Define byte array, display 8 bytes/line"    },
-		{TEXT("DW")          , CmdDisasmDataDefWord1       , CMD_DEFINE_DATA_WORD1, "Define address array"                       },
-		{TEXT("DW2")         , CmdDisasmDataDefWord2       , CMD_DEFINE_DATA_WORD2, "Define address array, display 2 words/line" },
-		{TEXT("DW4")         , CmdDisasmDataDefWord4       , CMD_DEFINE_DATA_WORD4, "Define address array, display 4 words/line" },
-		{TEXT("DS")          , CmdDisasmDataDefString      , CMD_DEFINE_DATA_STR  , "Define string"                              },
-//		{TEXT("DF")          , CmdDisasmDataDefFloat       , CMD_DEFINE_DATA_FLOAT, "Define AppleSoft (packed) Float"            },
-//		{TEXT("DFX")         , CmdDisasmDataDefFloatUnpack , CMD_DEFINE_DATA_FLOAT2,"Define AppleSoft (unpacked) Float"          },
-		// with symbol lookup
-//		{TEXT("DA<>")        , CmdDisasmDataDefAddress8HL  , CMD_DEFINE_ADDR_8_HL , "Define split array of addresses, high byte section followed by low byte section" },
-//		{TEXT("DA><")        , CmdDisasmDataDefAddress8LH  , CMD_DEFINE_ADDR_8_LH , "Define split array of addresses, low byte section followed by high byte section" },
-//		{TEXT("DA<")         , CmdDisasmDataDefAddress8H   , CMD_DEFINE_ADDR_BYTE_H   , "Define array of high byte addresses"   },
-//		{TEXT("DB>")         , CmdDisasmDataDefAddress8L   , CMD_DEFINE_ADDR_BYTE_L   , "Define array of low byte addresses"    } 
-		{TEXT(".DA")         , CmdDisasmDataDefAddress16   , CMD_DEFINE_ADDR_WORD , "Define array of word addresses"            },
-// TODO: Rename config cmd: DISASM
-//		{TEXT("UA")          , CmdDisasmDataSmart          , CMD_SMART_DISASSEMBLE, "Analyze opcodes to determine if code or data" },		
-	// CPU (Main)
-		{TEXT(".")           , CmdCursorJumpPC      , CMD_CURSOR_JUMP_PC       , "Locate the cursor in the disasm window" }, // centered
-		{TEXT("=")           , CmdCursorSetPC       , CMD_CURSOR_SET_PC        , "Sets the PC to the current instruction" },
-		{TEXT("BRK")         , CmdBreakInvalid      , CMD_BREAK_INVALID        , "Enter debugger on BRK or INVALID" },
-		{TEXT("BRKOP")       , CmdBreakOpcode       , CMD_BREAK_OPCODE         , "Enter debugger on opcode"   },
-		{TEXT("G")           , CmdGo                , CMD_GO                   , "Run [until PC = address]"   },
-		{TEXT("IN")          , CmdIn                , CMD_IN                   , "Input byte from IO $C0xx"   },
-		{TEXT("KEY")         , CmdKey               , CMD_INPUT_KEY            , "Feed key into emulator"     },
-		{TEXT("JSR")         , CmdJSR               , CMD_JSR                  , "Call sub-routine"           },
-		{TEXT("NOP")         , CmdNOP               , CMD_NOP                  , "Zap the current instruction with a NOP" },
-		{TEXT("OUT")         , CmdOut               , CMD_OUT                  , "Output byte to IO $C0xx"    },
-		{TEXT("PROFILE")     , CmdProfile           , CMD_PROFILE              , "List/Save 6502 profiling" },
-		{TEXT("R")           , CmdRegisterSet       , CMD_REGISTER_SET         , "Set register" },
-		{TEXT("POP")         , CmdStackPop          , CMD_STACK_POP            },
-		{TEXT("PPOP")        , CmdStackPopPseudo    , CMD_STACK_POP_PSEUDO     },
-		{TEXT("PUSH")        , CmdStackPop          , CMD_STACK_PUSH           },
-//		{TEXT("RTS")         , CmdStackReturn       , CMD_STACK_RETURN         },
-		{TEXT("P")           , CmdStepOver          , CMD_STEP_OVER            , "Step current instruction"   },
-		{TEXT("RTS")         , CmdStepOut           , CMD_STEP_OUT             , "Step out of subroutine"     }, 
-		{TEXT("T")           , CmdTrace             , CMD_TRACE                , "Trace current instruction"  },
-		{TEXT("TF")          , CmdTraceFile         , CMD_TRACE_FILE           , "Save trace to filename" },
-		{TEXT("TL")          , CmdTraceLine         , CMD_TRACE_LINE           , "Trace (with cycle counting)" },
-		{TEXT("U")           , CmdUnassemble        , CMD_UNASSEMBLE           , "Disassemble instructions"   },
-//		{TEXT("WAIT")        , CmdWait              , CMD_WAIT                 , "Run until
-	// Bookmarks
-		{TEXT("BM")          , CmdBookmark          , CMD_BOOKMARK             , "Alias for BMA (Bookmark Add)"   },
-		{TEXT("BMA")         , CmdBookmarkAdd       , CMD_BOOKMARK_ADD         , "Add/Update addess to bookmark"  },
-		{TEXT("BMC")         , CmdBookmarkClear     , CMD_BOOKMARK_CLEAR       , "Clear (remove) bookmark"        },
-		{TEXT("BML")         , CmdBookmarkList      , CMD_BOOKMARK_LIST        , "List all bookmarks"             },
-		{TEXT("BMG")         , CmdBookmarkGoto      , CMD_BOOKMARK_GOTO        , "Move cursor to bookmark"        },
-//		{TEXT("BMLOAD")      , CmdBookmarkLoad      , CMD_BOOKMARK_LOAD        , "Load bookmarks"                 },
-		{TEXT("BMSAVE")      , CmdBookmarkSave      , CMD_BOOKMARK_SAVE        , "Save bookmarks"                 },
-	// Breakpoints
-		{TEXT("BP")          , CmdBreakpoint        , CMD_BREAKPOINT           , "Alias for BPR (Breakpoint Register Add)" },
-		{TEXT("BPA")         , CmdBreakpointAddSmart, CMD_BREAKPOINT_ADD_SMART , "Add (smart) breakpoint" },
-//		{TEXT("BPP")         , CmdBreakpointAddFlag , CMD_BREAKPOINT_ADD_FLAG  , "Add breakpoint on flags" },
-		{TEXT("BPR")         , CmdBreakpointAddReg  , CMD_BREAKPOINT_ADD_REG   , "Add breakpoint on register value"      }, // NOTE! Different from SoftICE !!!!
-		{TEXT("BPX")         , CmdBreakpointAddPC   , CMD_BREAKPOINT_ADD_PC    , "Add breakpoint at current instruction" },
-		{TEXT("BPIO")        , CmdBreakpointAddIO   , CMD_BREAKPOINT_ADD_IO    , "Add breakpoint for IO address $C0xx"   },
-		{TEXT("BPM")         , CmdBreakpointAddMem  , CMD_BREAKPOINT_ADD_MEM   , "Add breakpoint on memory access"       },  // SoftICE
-
-		{TEXT("BPC")         , CmdBreakpointClear   , CMD_BREAKPOINT_CLEAR     , "Clear (remove) breakpoint"             }, // SoftICE
-		{TEXT("BPD")         , CmdBreakpointDisable , CMD_BREAKPOINT_DISABLE   , "Disable breakpoint- it is still in the list, just not active" }, // SoftICE
-		{TEXT("BPEDIT")      , CmdBreakpointEdit    , CMD_BREAKPOINT_EDIT      , "Edit breakpoint"                       }, // SoftICE
-		{TEXT("BPE")         , CmdBreakpointEnable  , CMD_BREAKPOINT_ENABLE    , "(Re)Enable disabled breakpoint"        }, // SoftICE
-		{TEXT("BPL")         , CmdBreakpointList    , CMD_BREAKPOINT_LIST      , "List all breakpoints"                  }, // SoftICE
-//		{TEXT("BPLOAD")      , CmdBreakpointLoad    , CMD_BREAKPOINT_LOAD      , "Loads breakpoints" },
-		{TEXT("BPSAVE")      , CmdBreakpointSave    , CMD_BREAKPOINT_SAVE      , "Saves breakpoints" },
-	// Config
-		{TEXT("BENCHMARK")   , CmdBenchmark         , CMD_BENCHMARK            , "Benchmark the emulator" },
-		{TEXT("BW")          , CmdConfigColorMono   , CMD_CONFIG_BW            , "Sets/Shows RGB for Black & White scheme" },
-		{TEXT("COLOR")       , CmdConfigColorMono   , CMD_CONFIG_COLOR         , "Sets/Shows RGB for color scheme" },
-//		{TEXT("OPTION")      , CmdConfigMenu        , CMD_CONFIG_MENU          , "Access config options" },
-		{TEXT("DISASM")      , CmdConfigDisasm      , CMD_CONFIG_DISASM        , "Sets/Shows disassembly view options." },
-		{TEXT("FONT")        , CmdConfigFont        , CMD_CONFIG_FONT          , "Shows current font or sets new one" },
-		{TEXT("HCOLOR")      , CmdConfigHColor      , CMD_CONFIG_HCOLOR        , "Sets/Shows colors mapped to Apple HGR" },
-		{TEXT("LOAD")        , CmdConfigLoad        , CMD_CONFIG_LOAD          , "Load debugger configuration" },
-		{TEXT("MONO")        , CmdConfigColorMono   , CMD_CONFIG_MONOCHROME    , "Sets/Shows RGB for monochrome scheme" },
-		{TEXT("SAVE")        , CmdConfigSave        , CMD_CONFIG_SAVE          , "Save debugger configuration" },
-	// Cursor
-		{TEXT("RET")         , CmdCursorJumpRetAddr , CMD_CURSOR_JUMP_RET_ADDR , "Sets the cursor to the sub-routine caller" }, 
-		{TEXT(      "^")     , NULL                 , CMD_CURSOR_LINE_UP       }, // \x2191 = Up Arrow (Unicode)
-		{TEXT("Shift ^")     , NULL                 , CMD_CURSOR_LINE_UP_1     },
-		{TEXT(      "v")     , NULL                 , CMD_CURSOR_LINE_DOWN     }, // \x2193 = Dn Arrow (Unicode)
-		{TEXT("Shift v")     , NULL                 , CMD_CURSOR_LINE_DOWN_1   },
-		{TEXT("PAGEUP"   )   , CmdCursorPageUp      , CMD_CURSOR_PAGE_UP       , "Scroll up one screen"   },
-		{TEXT("PAGEUP256")   , CmdCursorPageUp256   , CMD_CURSOR_PAGE_UP_256   , "Scroll up 256 bytes"    }, // Shift
-		{TEXT("PAGEUP4K" )   , CmdCursorPageUp4K    , CMD_CURSOR_PAGE_UP_4K    , "Scroll up 4096 bytes"   }, // Ctrl
-		{TEXT("PAGEDN"     ) , CmdCursorPageDown    , CMD_CURSOR_PAGE_DOWN     , "Scroll down one scren"  }, 
-		{TEXT("PAGEDOWN256") , CmdCursorPageDown256 , CMD_CURSOR_PAGE_DOWN_256 , "Scroll down 256 bytes"  }, // Shift
-		{TEXT("PAGEDOWN4K" ) , CmdCursorPageDown4K  , CMD_CURSOR_PAGE_DOWN_4K  , "Scroll down 4096 bytes" }, // Ctrl
-	// Disk
-		{TEXT("DISK")        , CmdDisk              , CMD_DISK                 , "Access Disk Drive Functions" },
-	// Flags
-//		{TEXT("FC")          , CmdFlag              , CMD_FLAG_CLEAR , "Clear specified Flag"           }, // NVRBDIZC see AW_CPU.cpp AF_*
-		{TEXT("CL")          , CmdFlag              , CMD_FLAG_CLEAR , "Clear specified Flag"           }, // NVRBDIZC see AW_CPU.cpp AF_*
-
-		{TEXT("CLC")         , CmdFlagClear         , CMD_FLAG_CLR_C , "Clear Flag Carry"               }, // 0 // Legacy
-		{TEXT("CLZ")         , CmdFlagClear         , CMD_FLAG_CLR_Z , "Clear Flag Zero"                }, // 1
-		{TEXT("CLI")         , CmdFlagClear         , CMD_FLAG_CLR_I , "Clear Flag Interrupts Disabled" }, // 2
-		{TEXT("CLD")         , CmdFlagClear         , CMD_FLAG_CLR_D , "Clear Flag Decimal (BCD)"       }, // 3
-		{TEXT("CLB")         , CmdFlagClear         , CMD_FLAG_CLR_B , "CLear Flag Break"               }, // 4 // Legacy
-		{TEXT("CLR")         , CmdFlagClear         , CMD_FLAG_CLR_R , "Clear Flag Reserved"            }, // 5
-		{TEXT("CLV")         , CmdFlagClear         , CMD_FLAG_CLR_V , "Clear Flag Overflow"            }, // 6
-		{TEXT("CLN")         , CmdFlagClear         , CMD_FLAG_CLR_N , "Clear Flag Negative (Sign)"     }, // 7
-
-//		{TEXT("FS")          , CmdFlag              , CMD_FLAG_SET   , "Set specified Flag"             },
-		{TEXT("SE")          , CmdFlag              , CMD_FLAG_SET   , "Set specified Flag"             },
-
-		{TEXT("SEC")         , CmdFlagSet           , CMD_FLAG_SET_C , "Set Flag Carry"                 }, // 0
-		{TEXT("SEZ")         , CmdFlagSet           , CMD_FLAG_SET_Z , "Set Flag Zero"                  }, // 1 
-		{TEXT("SEI")         , CmdFlagSet           , CMD_FLAG_SET_I , "Set Flag Interrupts Disabled"   }, // 2
-		{TEXT("SED")         , CmdFlagSet           , CMD_FLAG_SET_D , "Set Flag Decimal (BCD)"         }, // 3
-		{TEXT("SEB")         , CmdFlagSet           , CMD_FLAG_SET_B , "Set Flag Break"                 }, // 4 // Legacy
-		{TEXT("SER")         , CmdFlagSet           , CMD_FLAG_SET_R , "Set Flag Reserved"              }, // 5
-		{TEXT("SEV")         , CmdFlagSet           , CMD_FLAG_SET_V , "Set Flag Overflow"              }, // 6
-		{TEXT("SEN")         , CmdFlagSet           , CMD_FLAG_SET_N , "Set Flag Negative"              }, // 7
-	// Help
-		{TEXT("?")           , CmdHelpList          , CMD_HELP_LIST            , "List all available commands"           },
-		{TEXT("HELP")        , CmdHelpSpecific      , CMD_HELP_SPECIFIC        , "Help on specific command"              },
-		{TEXT("VERSION")     , CmdVersion           , CMD_VERSION              , "Displays version of emulator/debugger" },
-		{TEXT("MOTD")        , CmdMOTD              , CMD_MOTD                 },
-	// Memory
-		{TEXT("MC")          , CmdMemoryCompare     , CMD_MEMORY_COMPARE       },
-
-		{TEXT("D")           , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  , "Hex dump in the mini memory area 1" }, // FIXME: Must also work in DATA screen
-		{TEXT("MD1")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  , "Hex dump in the mini memory area 1" },
-		{TEXT("MD2")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_2  , "Hex dump in the mini memory area 2" },
-		{TEXT("M1")          , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // alias
-		{TEXT("M2")          , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_2  }, // alias
-
-		{TEXT("MA1")         , CmdMemoryMiniDumpAscii,CMD_MEM_MINI_DUMP_ASCII_1, "ASCII text in mini memory area 1" },
-		{TEXT("MA2")         , CmdMemoryMiniDumpAscii,CMD_MEM_MINI_DUMP_ASCII_2, "ASCII text in mini memory area 2" },
-		{TEXT("MT1")         , CmdMemoryMiniDumpApple,CMD_MEM_MINI_DUMP_APPLE_1, "Apple Text in mini memory area 1" },
-		{TEXT("MT2")         , CmdMemoryMiniDumpApple,CMD_MEM_MINI_DUMP_APPLE_2, "Apple Text in mini memory area 2" },
-//		{TEXT("ML1")         , CmdMemoryMiniDumpLow , CMD_MEM_MINI_DUMP_TXT_LO_1, "Text (Ctrl) in mini memory dump area 1" },
-//		{TEXT("ML2")         , CmdMemoryMiniDumpLow , CMD_MEM_MINI_DUMP_TXT_LO_2, "Text (Ctrl) in mini memory dump area 2" },
-//		{TEXT("MH1")         , CmdMemoryMiniDumpHigh, CMD_MEM_MINI_DUMP_TXT_HI_1, "Text (High) in mini memory dump area 1" },
-//		{TEXT("MH2")         , CmdMemoryMiniDumpHigh, CMD_MEM_MINI_DUMP_TXT_HI_2, "Text (High) in mini memory dump area 2" },
-
-		{TEXT("ME")          , CmdMemoryEdit        , CMD_MEMORY_EDIT          }, // TODO: like Copy ][+ Sector Edit
-		{TEXT("MEB")         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    , "Enter byte"                   },
-		{TEXT("MEW")         , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    , "Enter word"                   },
-		{TEXT("BLOAD")       , CmdMemoryLoad        , CMD_MEMORY_LOAD          , "Load a region of memory"      },
-		{TEXT("M")           , CmdMemoryMove        , CMD_MEMORY_MOVE          , "Memory move"                  },
-		{TEXT("BSAVE")       , CmdMemorySave        , CMD_MEMORY_SAVE          , "Save a region of memory"      },
-		{TEXT("S")           , CmdMemorySearch      , CMD_MEMORY_SEARCH        , "Search memory for text / hex values" },
-		{TEXT("@")           ,_SearchMemoryDisplay  , CMD_MEMORY_FIND_RESULTS  , "Display search memory results" },
-//		{TEXT("SA")          , CmdMemorySearchAscii,  CMD_MEMORY_SEARCH_ASCII  , "Search ASCII text"            },
-//		{TEXT("ST")          , CmdMemorySearchApple , CMD_MEMORY_SEARCH_APPLE  , "Search Apple text (hi-bit)"   },
-		{TEXT("SH")          , CmdMemorySearchHex   , CMD_MEMORY_SEARCH_HEX    , "Search memory for hex values" },
-		{TEXT("F")           , CmdMemoryFill        , CMD_MEMORY_FILL          , "Memory fill"                  },
-	// Output / Scripts
-		{TEXT("CALC")        , CmdOutputCalc        , CMD_OUTPUT_CALC          , "Display mini calc result"               },
-		{TEXT("ECHO")        , CmdOutputEcho        , CMD_OUTPUT_ECHO          , "Echo string to console"                 }, // or toggle command echoing"
-		{TEXT("PRINT")       , CmdOutputPrint       , CMD_OUTPUT_PRINT         , "Display string and/or hex values"       },
-		{TEXT("PRINTF")      , CmdOutputPrintf      , CMD_OUTPUT_PRINTF        , "Display formatted string"               },
-		{TEXT("RUN")         , CmdOutputRun         , CMD_OUTPUT_RUN           , "Run script file of debugger commands"   },
-	// Source Level Debugging
-		{TEXT("SOURCE")      , CmdSource            , CMD_SOURCE               , "Starts/Stops source level debugging" },
-		{TEXT("SYNC")        , CmdSync              , CMD_SYNC                 , "Syncs the cursor to the source file" },
-	// Symbols
-		{TEXT("SYM")         , CmdSymbols           , CMD_SYMBOLS_LOOKUP       , "Lookup symbol or address, or define symbol" },
-
-		{TEXT("SYMMAIN")     , CmdSymbolsCommand    , CMD_SYMBOLS_ROM          , "Main/ROM symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMBASIC")    , CmdSymbolsCommand    , CMD_SYMBOLS_APPLESOFT    , "Applesoft symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMASM")      , CmdSymbolsCommand    , CMD_SYMBOLS_ASSEMBLY     , "Assembly symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMUSER")     , CmdSymbolsCommand    , CMD_SYMBOLS_USER_1       , "First user symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMUSER2")    , CmdSymbolsCommand    , CMD_SYMBOLS_USER_2       , "Second User symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMSRC")      , CmdSymbolsCommand    , CMD_SYMBOLS_SRC_1        , "First Source symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-		{TEXT("SYMSRC2")     , CmdSymbolsCommand    , CMD_SYMBOLS_SRC_2        , "Second Source symbol table lookup/menu" }, // CLEAR,LOAD,SAVE
-//		{TEXT("SYMCLEAR")    , CmdSymbolsClear      , CMD_SYMBOLS_CLEAR        }, // can't use SC = SetCarry
-		{TEXT("SYMINFO")     , CmdSymbolsInfo       , CMD_SYMBOLS_INFO         , "Display summary of symbols" },
-		{TEXT("SYMLIST")     , CmdSymbolsList       , CMD_SYMBOLS_LIST         , "Lookup symbol in main/user/src tables" }, // 'symbolname', can't use param '*' 
-	// Variables
-//		{TEXT("CLEAR")       , CmdVarsClear         , CMD_VARIABLES_CLEAR      }, 
-//		{TEXT("VAR")         , CmdVarsDefine        , CMD_VARIABLES_DEFINE     },
-//		{TEXT("INT8")        , CmdVarsDefineInt8    , CMD_VARIABLES_DEFINE_INT8},
-//		{TEXT("INT16")       , CmdVarsDefineInt16   , CMD_VARIABLES_DEFINE_INT16},
-//		{TEXT("VARS")        , CmdVarsList          , CMD_VARIABLES_LIST       }, 
-//		{TEXT("VARSLOAD")    , CmdVarsLoad          , CMD_VARIABLES_LOAD       },
-//		{TEXT("VARSSAVE")    , CmdVarsSave          , CMD_VARIABLES_SAVE       },
-//		{TEXT("SET")         , CmdVarsSet           , CMD_VARIABLES_SET        },
-	// View
-		{TEXT("TEXT")        , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X, "View Text screen (current page)"        },
-		{TEXT("TEXT1")       , CmdViewOutput_Text41 , CMD_VIEW_TEXT41, "View Text screen Page 1"                },
-		{TEXT("TEXT2")       , CmdViewOutput_Text42 , CMD_VIEW_TEXT42, "View Text screen Page 2"                },
-		{TEXT("TEXT80")      , CmdViewOutput_Text8X , CMD_VIEW_TEXT8X, "View 80-col Text screen (current page)" },
-		{TEXT("TEXT81")      , CmdViewOutput_Text81 , CMD_VIEW_TEXT8X, "View 80-col Text screen Page 1"         },
-		{TEXT("TEXT82")      , CmdViewOutput_Text82 , CMD_VIEW_TEXT8X, "View 80-col Text screen Page 2"         },
-		{TEXT("GR")          , CmdViewOutput_GRX    , CMD_VIEW_GRX   , "View Lo-Res screen (current page)"      },
-		{TEXT("GR1")         , CmdViewOutput_GR1    , CMD_VIEW_GR1   , "View Lo-Res screen Page 1"              },
-		{TEXT("GR2")         , CmdViewOutput_GR2    , CMD_VIEW_GR2   , "View Lo-Res screen Page 2"              },
-		{TEXT("DGR")         , CmdViewOutput_DGRX   , CMD_VIEW_DGRX  , "View Double lo-res (current page)"      },
-		{TEXT("DGR1")        , CmdViewOutput_DGR1   , CMD_VIEW_DGR1  , "View Double lo-res Page 1"              },
-		{TEXT("DGR2")        , CmdViewOutput_DGR2   , CMD_VIEW_DGR2  , "View Double lo-res Page 2"              },
-		{TEXT("HGR")         , CmdViewOutput_HGRX   , CMD_VIEW_HGRX  , "View Hi-res (current page)"             },
-		{TEXT("HGR1")        , CmdViewOutput_HGR1   , CMD_VIEW_HGR1  , "View Hi-res Page 1"                     },
-		{TEXT("HGR2")        , CmdViewOutput_HGR2   , CMD_VIEW_HGR2  , "View Hi-res Page 2"                     },
-		{TEXT("DHGR")        , CmdViewOutput_DHGRX  , CMD_VIEW_DHGRX , "View Double Hi-res (current page)"      },
-		{TEXT("DHGR1")       , CmdViewOutput_DHGR1  , CMD_VIEW_DHGR1 , "View Double Hi-res Page 1"              },
-		{TEXT("DHGR2")       , CmdViewOutput_DHGR2  , CMD_VIEW_DHGR2 , "View Double Hi-res Page 2"              },
-	// Watch
-		{TEXT("W")           , CmdWatch             , CMD_WATCH_ADD     , "Alias for WA (Watch Add)"                      },
-		{TEXT("WA")          , CmdWatchAdd          , CMD_WATCH_ADD     , "Add/Update address or symbol to watch"         },
-		{TEXT("WC")          , CmdWatchClear        , CMD_WATCH_CLEAR   , "Clear (remove) watch"                          },
-		{TEXT("WD")          , CmdWatchDisable      , CMD_WATCH_DISABLE , "Disable specific watch - it is still in the list, just not active" },
-		{TEXT("WE")          , CmdWatchEnable       , CMD_WATCH_ENABLE  , "(Re)Enable disabled watch"                     },
-		{TEXT("WL")          , CmdWatchList         , CMD_WATCH_LIST    , "List all watches"                              },
-//		{TEXT("WLOAD")       , CmdWatchLoad         , CMD_WATCH_LOAD    , "Load Watches"                                  }, // Cant use as param to W
-		{TEXT("WSAVE")       , CmdWatchSave         , CMD_WATCH_SAVE    , "Save Watches"                                  }, // due to symbol look-up
-	// Window
-		{TEXT("WIN")         , CmdWindow            , CMD_WINDOW         , "Show specified debugger window"              },
-// TODO: need to rename with data disassembly
-		{TEXT("CODE")        , CmdWindowViewCode    , CMD_WINDOW_CODE    , "Switch to full code window"                  },  // Can't use WC = WatchClear
-		{TEXT("CODE1")       , CmdWindowShowCode1   , CMD_WINDOW_CODE_1  , "Show code on top split window"               },
-		{TEXT("CODE2")       , CmdWindowShowCode2   , CMD_WINDOW_CODE_2  , "Show code on bottom split window"            },
-		{TEXT("CONSOLE")     , CmdWindowViewConsole , CMD_WINDOW_CONSOLE , "Switch to full console window"               },
-// TODO: need to rename with data disassembly
-		{TEXT("DATA")        , CmdWindowViewData    , CMD_WINDOW_DATA    , "Switch to full data window"                  },
-		{TEXT("DATA1")       , CmdWindowShowCode1   , CMD_WINDOW_CODE_1  , "Show data on top split window"               },
-		{TEXT("DATA2")       , CmdWindowShowData2   , CMD_WINDOW_DATA_2  , "Show data on bottom split window"            },
-		{TEXT("SOURCE1")     , CmdWindowShowSource1 , CMD_WINDOW_SOURCE_1, "Show source on top split screen"             },
-		{TEXT("SOURCE2")     , CmdWindowShowSource2 , CMD_WINDOW_SOURCE_2, "Show source on bottom split screen"          },
-
-		{TEXT("\\")          , CmdWindowViewOutput  , CMD_WINDOW_OUTPUT  , "Display Apple output until key pressed" },
-//		{TEXT("INFO")        , CmdToggleInfoPanel   , CMD_WINDOW_TOGGLE },
-//		{TEXT("WINSOURCE")   , CmdWindowShowSource  , CMD_WINDOW_SOURCE },
-//		{TEXT("ZEROPAGE")    , CmdWindowShowZeropage, CMD_WINDOW_ZEROPAGE },
-	// Zero Page
-		{TEXT("ZP")          , CmdZeroPage          , CMD_ZEROPAGE_POINTER       , "Alias for ZPA (Zero Page Add)"          },
-		{TEXT("ZP0")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_0     , "Set/Update/Remove ZP watch 0 "          },
-		{TEXT("ZP1")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_1     , "Set/Update/Remove ZP watch 1"           },
-		{TEXT("ZP2")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_2     , "Set/Update/Remove ZP watch 2"           },
-		{TEXT("ZP3")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_3     , "Set/Update/Remove ZP watch 3"           },
-		{TEXT("ZP4")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_4     , "Set/Update/Remove ZP watch 4"           },
-		{TEXT("ZP5")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_5     , "Set/Update/Remove ZP watch 5 "          },
-		{TEXT("ZP6")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_6     , "Set/Update/Remove ZP watch 6"           },
-		{TEXT("ZP7")         , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_7     , "Set/Update/Remove ZP watch 7"           },
-		{TEXT("ZPA")         , CmdZeroPageAdd       , CMD_ZEROPAGE_POINTER_ADD   , "Add/Update address to zero page pointer"},
-		{TEXT("ZPC")         , CmdZeroPageClear     , CMD_ZEROPAGE_POINTER_CLEAR , "Clear (remove) zero page pointer"       },
-		{TEXT("ZPD")         , CmdZeroPageDisable   , CMD_ZEROPAGE_POINTER_DISABLE,"Disable zero page pointer - it is still in the list, just not active" },
-		{TEXT("ZPE")         , CmdZeroPageEnable    , CMD_ZEROPAGE_POINTER_ENABLE, "(Re)Enable disabled zero page pointer"  },
-		{TEXT("ZPL")         , CmdZeroPageList      , CMD_ZEROPAGE_POINTER_LIST  , "List all zero page pointers"            },
-//		{TEXT("ZPLOAD")      , CmdZeroPageLoad      , CMD_ZEROPAGE_POINTER_LOAD  , "Load zero page pointers"                }, // Cant use as param to ZP
-		{TEXT("ZPSAVE")      , CmdZeroPageSave      , CMD_ZEROPAGE_POINTER_SAVE  , "Save zero page pointers"                }, // due to symbol look-up
-
-//	{TEXT("TIMEDEMO"),CmdTimeDemo, CMD_TIMEDEMO }, // CmdBenchmarkStart(), CmdBenchmarkStop()
-//	{TEXT("WC"),CmdShowCodeWindow}, // Can't use since WatchClear
-//	{TEXT("WD"),CmdShowDataWindow}, //
-
-	// Internal Consistency Check
-		{TEXT(__COMMANDS_VERIFY_TXT__), NULL, NUM_COMMANDS },
-
-	// Aliasies - Can be in any order
-		{TEXT("->")          , NULL                 , CMD_CURSOR_JUMP_PC       },
-		{TEXT("Ctrl ->" )    , NULL                 , CMD_CURSOR_SET_PC        },
-		{TEXT("Shift ->")    , NULL                 , CMD_CURSOR_JUMP_PC       }, // at top
-		{TEXT("INPUT")       , CmdIn                , CMD_IN                   },
-		// Data
-		// Flags - Clear
-		{TEXT("RC")          , CmdFlagClear         , CMD_FLAG_CLR_C , "Clear Flag Carry"               }, // 0 // Legacy
-		{TEXT("RZ")          , CmdFlagClear         , CMD_FLAG_CLR_Z , "Clear Flag Zero"                }, // 1
-		{TEXT("RI")          , CmdFlagClear         , CMD_FLAG_CLR_I , "Clear Flag Interrupts Disabled" }, // 2
-		{TEXT("RD")          , CmdFlagClear         , CMD_FLAG_CLR_D , "Clear Flag Decimal (BCD)"       }, // 3
-		{TEXT("RB")          , CmdFlagClear         , CMD_FLAG_CLR_B , "CLear Flag Break"               }, // 4 // Legacy
-		{TEXT("RR")          , CmdFlagClear         , CMD_FLAG_CLR_R , "Clear Flag Reserved"            }, // 5
-		{TEXT("RV")          , CmdFlagClear         , CMD_FLAG_CLR_V , "Clear Flag Overflow"            }, // 6
-		{TEXT("RN")          , CmdFlagClear         , CMD_FLAG_CLR_N , "Clear Flag Negative (Sign)"     }, // 7
-		// Flags - Set
-		{TEXT("SC")          , CmdFlagSet           , CMD_FLAG_SET_C , "Set Flag Carry"                 }, // 0
-		{TEXT("SZ")          , CmdFlagSet           , CMD_FLAG_SET_Z , "Set Flag Zero"                  }, // 1 
-		{TEXT("SI")          , CmdFlagSet           , CMD_FLAG_SET_I , "Set Flag Interrupts Disabled"   }, // 2
-		{TEXT("SD")          , CmdFlagSet           , CMD_FLAG_SET_D , "Set Flag Decimal (BCD)"         }, // 3
-		{TEXT("SB")          , CmdFlagSet           , CMD_FLAG_SET_B , "CLear Flag Break"               }, // 4 // Legacy
-		{TEXT("SR")          , CmdFlagSet           , CMD_FLAG_SET_R , "Clear Flag Reserved"            }, // 5
-		{TEXT("SV")          , CmdFlagSet           , CMD_FLAG_SET_V , "Clear Flag Overflow"            }, // 6
-		{TEXT("SN")          , CmdFlagSet           , CMD_FLAG_SET_N , "Clear Flag Negative"            }, // 7
-
-		{TEXT("ME8")         , CmdMemoryEnterByte   , CMD_MEMORY_ENTER_BYTE    }, // changed from EB -- bugfix: EB:## ##
-		{TEXT("ME16")        , CmdMemoryEnterWord   , CMD_MEMORY_ENTER_WORD    },
-		{TEXT("MM")          , CmdMemoryMove        , CMD_MEMORY_MOVE          },
-		{TEXT("MS")          , CmdMemorySearch      , CMD_MEMORY_SEARCH        }, // CmdMemorySearch
-		{TEXT("P0")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_0   },
-		{TEXT("P1")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_1   },
-		{TEXT("P2")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_2   },
-		{TEXT("P3")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_3   },
-		{TEXT("P4")          , CmdZeroPagePointer   , CMD_ZEROPAGE_POINTER_4   },
-		{TEXT("REGISTER")    , CmdRegisterSet       , CMD_REGISTER_SET         },
-//		{TEXT("RET")         , CmdStackReturn       , CMD_STACK_RETURN         },
-		{TEXT("TRACE")       , CmdTrace             , CMD_TRACE                },
-		{TEXT("SYMBOLS")     , CmdSymbols           , CMD_SYMBOLS_LOOKUP       , "Return " },
-//		{TEXT("SYMBOLS1")    , CmdSymbolsInfo       , CMD_SYMBOLS_1            },
-//		{TEXT("SYMBOLS2")    , CmdSymbolsInfo       , CMD_SYMBOLS_2            },
-
-		{TEXT("SYM0" )       , CmdSymbolsInfo       , CMD_SYMBOLS_ROM          },
-		{TEXT("SYM1" )       , CmdSymbolsInfo       , CMD_SYMBOLS_APPLESOFT    },
-		{TEXT("SYM2" )       , CmdSymbolsInfo       , CMD_SYMBOLS_ASSEMBLY     },
-		{TEXT("SYM3" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER_1       },
-		{TEXT("SYM4" )       , CmdSymbolsInfo       , CMD_SYMBOLS_USER_2       },
-		{TEXT("SYM5" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC_1        },
-		{TEXT("SYM6" )       , CmdSymbolsInfo       , CMD_SYMBOLS_SRC_2        },
-
-		{TEXT("TEXT40")      , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X          },
-		{TEXT("TEXT41")      , CmdViewOutput_Text41 , CMD_VIEW_TEXT41          },
-		{TEXT("TEXT42")      , CmdViewOutput_Text42 , CMD_VIEW_TEXT42          },
-
-		{TEXT("WATCH")       , CmdWatchAdd          , CMD_WATCH_ADD            },
-		{TEXT("WINDOW")      , CmdWindow            , CMD_WINDOW               },
-//		{TEXT("W?")          , CmdWatchAdd          , CMD_WATCH_ADD            },
-		{TEXT("ZAP")         , CmdNOP               , CMD_NOP                  },
-
-	// DEPRECATED  -- Probably should be removed in a future version
-		{TEXT("BENCH")       , CmdBenchmarkStart    , CMD_BENCHMARK            },
-		{TEXT("EXITBENCH")   , CmdBenchmarkStop     , CMD_BENCHMARK            },
-		{TEXT("MDB")         , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // MemoryDumpByte  // Did anyone actually use this??
-		{TEXT("MEMORY")      , CmdMemoryMiniDumpHex , CMD_MEM_MINI_DUMP_HEX_1  }, // MemoryDumpByte  // Did anyone actually use this??
-};
-
 //	static const char g_aFlagNames[_6502_NUM_FLAGS+1] = TEXT("CZIDBRVN");// Reversed since arrays are from left-to-right
-
-	const int NUM_COMMANDS_WITH_ALIASES = sizeof(g_aCommands) / sizeof (Command_t); // Determined at compile-time ;-)
-
-
-// Color ______________________________________________________________________
-
-	int g_iColorScheme = SCHEME_COLOR;
-
-	// Used when the colors are reset
-	COLORREF gaColorPalette[ NUM_PALETTE ] =
-	{
-		RGB(0,0,0),
-		// NOTE: See _SetupColorRamp() if you want to programmitically set/change
-		RGB(255,  0,  0), RGB(223,  0,  0), RGB(191,  0,  0), RGB(159,  0,  0), RGB(127,  0,  0), RGB( 95,  0,  0), RGB( 63,  0,  0), RGB( 31,  0,  0),  // 001 // Red
-		RGB(  0,255,  0), RGB(  0,223,  0), RGB(  0,191,  0), RGB(  0,159,  0), RGB(  0,127,  0), RGB(  0, 95,  0), RGB(  0, 63,  0), RGB(  0, 31,  0),  // 010 // Green
-		RGB(255,255,  0), RGB(223,223,  0), RGB(191,191,  0), RGB(159,159,  0), RGB(127,127,  0), RGB( 95, 95,  0), RGB( 63, 63,  0), RGB( 31, 31,  0),  // 011 // Yellow
-		RGB(  0,  0,255), RGB(  0,  0,223), RGB(  0,  0,191), RGB(  0,  0,159), RGB(  0,  0,127), RGB(  0,  0, 95), RGB(  0,  0, 63), RGB(  0,  0, 31),  // 100 // Blue
-		RGB(255,  0,255), RGB(223,  0,223), RGB(191,  0,191), RGB(159,  0,159), RGB(127,  0,127), RGB( 95,  0, 95), RGB( 63,  0, 63), RGB( 31,  0, 31),  // 101 // Magenta
-		RGB(  0,255,255), RGB(  0,223,223), RGB(  0,191,191), RGB(  0,159,159), RGB(  0,127,127), RGB(  0, 95, 95), RGB(  0, 63, 63), RGB(  0, 31, 31),  // 110	// Cyan
-		RGB(255,255,255), RGB(223,223,223), RGB(191,191,191), RGB(159,159,159), RGB(127,127,127), RGB( 95, 95, 95), RGB( 63, 63, 63), RGB( 31, 31, 31),  // 111 // White/Gray
-
-		// Custom Colors
-		RGB( 80,192,255), // Light  Sky Blue // Used for console FG
-		RGB(  0,128,192), // Darker Sky Blue
-		RGB(  0, 64,128), // Deep   Sky Blue
-		RGB(255,128,  0), // Orange (Full)
-		RGB(128, 64,  0), // Orange (Half)
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-		RGB(  0,  0,  0),
-	};
-
-	// Index into Palette
-	int g_aColorIndex[ NUM_DEBUG_COLORS ] =
-	{
-		K0, W8,              // BG_CONSOLE_OUTPUT   FG_CONSOLE_OUTPUT (W8)
-
-		B1, COLOR_CUSTOM_01, // BG_CONSOLE_INPUT    FG_CONSOLE_INPUT (W8)
-
-		B2, B3, // BG_DISASM_1        BG_DISASM_2
-
-		R8, W8, // BG_DISASM_BP_S_C   FG_DISASM_BP_S_C
-		R6, W5, // BG_DISASM_BP_0_C   FG_DISASM_BP_0_C
-
-		R7,    // FG_DISASM_BP_S_X    // Y8 lookes better on Info Cyan // R6
-		W5,    // FG_DISASM_BP_0_X 
-
-		W8, K0, // BG_DISASM_C        FG_DISASM_C     // B8 -> K0
-		Y8, K0, // BG_DISASM_PC_C     FG_DISASM_PC_C  // K8 -> K0
-		Y4, W8, // BG_DISASM_PC_X     FG_DISASM_PC_X
-
-		C4, // BG_DISASM_BOOKMARK
-		W8, // FG_DISASM_BOOKMARK
-
-		W8,     // FG_DISASM_ADDRESS
-		G192,   // FG_DISASM_OPERATOR
-		Y8,     // FG_DISASM_OPCODE
-		W8,     // FG_DISASM_MNEMONIC
-		COLOR_CUSTOM_04, // FG_DISASM_TARGET (or W8)
-		G8,     // FG_DISASM_SYMBOL
-		C8,     // FG_DISASM_CHAR
-		G8,		// FG_DISASM_BRANCH
-
-		C3,   // BG_INFO (C4, C2 too dark)
-		W8,   // FG_INFO_TITLE (or W8)
-		Y7,   // FG_INFO_BULLET (W8)
-		G192, // FG_INFO_OPERATOR
-		COLOR_CUSTOM_04,   // FG_INFO_ADDRESS (was Y8)
-		Y8,   // FG_INFO_OPCODE
-		COLOR_CUSTOM_01, // FG_INFO_REG (was orange)
-
-		W8,   // BG_INFO_INVERSE
-		C3,   // FG_INFO_INVERSE
-		C5,   // BG_INFO_CHAR
-		W8,   // FG_INFO_CHAR_HI
-		Y8,   // FG_INFO_CHAR_LO
-
-		COLOR_CUSTOM_04, // BG_INFO_IO_BYTE
-		COLOR_CUSTOM_04, // FG_INFO_IO_BYTE
-				
-		C2,   // BG_DATA_1
-		C3,   // BG_DATA_2
-		Y8,   // FG_DATA_BYTE
-		W8,   // FG_DATA_TEXT
-
-		G4,   // BG_SYMBOLS_1
-		G3,   // BG_SYMBOLS_2
-		W8,   // FG_SYMBOLS_ADDRESS
-		M8,   // FG_SYMBOLS_NAME
-
-		K0,   // BG_SOURCE_TITLE
-		W8,   // FG_SOURCE_TITLE
-		W2,   // BG_SOURCE_1 // C2 W2 for "Paper Look"
-		W3,   // BG_SOURCE_2
-		W8    // FG_SOURCE
-	};
-
-	COLORREF g_aColors[ NUM_COLOR_SCHEMES ][ NUM_DEBUG_COLORS ];
-
-	COLORREF DebuggerGetColor ( int iColor );
 
 
 // Cursor (Console Input) _____________________________________________________
@@ -650,120 +216,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	MemorySearchResults_t g_vMemorySearchResults;
 
 
-// Parameters _____________________________________________________________________________________
-
-	// NOTE: Order MUST match Parameters_e[] !!!
-	Command_t g_aParameters[] =
-	{
-// Breakpoint
-		{TEXT("<=")         , NULL, PARAM_BP_LESS_EQUAL     },
-		{TEXT("<" )         , NULL, PARAM_BP_LESS_THAN      },
-		{TEXT("=" )         , NULL, PARAM_BP_EQUAL          },
-		{TEXT("!=")         , NULL, PARAM_BP_NOT_EQUAL      },
-		{TEXT("!" )         , NULL, PARAM_BP_NOT_EQUAL_1    },
-		{TEXT(">" )         , NULL, PARAM_BP_GREATER_THAN   },
-		{TEXT(">=")         , NULL, PARAM_BP_GREATER_EQUAL  },
-		{TEXT("R")          , NULL, PARAM_BP_READ           },
-		{TEXT("?")          , NULL, PARAM_BP_READ           },
-		{TEXT("W")          , NULL, PARAM_BP_WRITE          },
-		{TEXT("@")          , NULL, PARAM_BP_WRITE          },
-		{TEXT("*")          , NULL, PARAM_BP_READ_WRITE     },
-// Regs (for PUSH / POP)
-		{TEXT("A")          , NULL, PARAM_REG_A          },
-		{TEXT("X")          , NULL, PARAM_REG_X          },
-		{TEXT("Y")          , NULL, PARAM_REG_Y          },
-		{TEXT("PC")         , NULL, PARAM_REG_PC         },
-		{TEXT("S")          , NULL, PARAM_REG_SP         },
-// Flags
-		{TEXT("P")          , NULL, PARAM_FLAGS          },
-		{TEXT("C")          , NULL, PARAM_FLAG_C         }, // ---- ---1 Carry
-		{TEXT("Z")          , NULL, PARAM_FLAG_Z         }, // ---- --1- Zero
-		{TEXT("I")          , NULL, PARAM_FLAG_I         }, // ---- -1-- Interrupt
-		{TEXT("D")          , NULL, PARAM_FLAG_D         }, // ---- 1--- Decimal
-		{TEXT("B")          , NULL, PARAM_FLAG_B         }, // ---1 ---- Break
-		{TEXT("R")          , NULL, PARAM_FLAG_R         }, // --1- ---- Reserved
-		{TEXT("V")          , NULL, PARAM_FLAG_V         }, // -1-- ---- Overflow
-		{TEXT("N")          , NULL, PARAM_FLAG_N         }, // 1--- ---- Sign
-// Disasm
-		{TEXT("BRANCH")     , NULL, PARAM_CONFIG_BRANCH  },
-		{TEXT("COLON")      , NULL, PARAM_CONFIG_COLON   },
-		{TEXT("OPCODE")     , NULL, PARAM_CONFIG_OPCODE  },
-		{TEXT("POINTER")    , NULL, PARAM_CONFIG_POINTER },
-		{TEXT("SPACES")		, NULL, PARAM_CONFIG_SPACES  },
-		{TEXT("TARGET")     , NULL, PARAM_CONFIG_TARGET  },
-// Disk
-		{TEXT("EJECT")      , NULL, PARAM_DISK_EJECT     },
-		{TEXT("PROTECT")    , NULL, PARAM_DISK_PROTECT   },
-		{TEXT("READ")       , NULL, PARAM_DISK_READ      },
-// Font (Config)
-		{TEXT("MODE")       , NULL, PARAM_FONT_MODE      }, // also INFO, CONSOLE, DISASM (from Window)
-// General
-		{TEXT("FIND")       , NULL, PARAM_FIND           },
-		{TEXT("BRANCH")     , NULL, PARAM_BRANCH         },
-		{"CATEGORY"         , NULL, PARAM_CATEGORY       },
-		{TEXT("CLEAR")      , NULL, PARAM_CLEAR          },
-		{TEXT("LOAD")       , NULL, PARAM_LOAD           },
-		{TEXT("LIST")       , NULL, PARAM_LIST           },
-		{TEXT("OFF")        , NULL, PARAM_OFF            },
-		{TEXT("ON")         , NULL, PARAM_ON             },
-		{TEXT("RESET")      , NULL, PARAM_RESET          },
-		{TEXT("SAVE")       , NULL, PARAM_SAVE           },
-		{TEXT("START")      , NULL, PARAM_START          }, // benchmark
-		{TEXT("STOP")       , NULL, PARAM_STOP           }, // benchmark
-// Help Categories
-		{"*"           , NULL, PARAM_WILDSTAR        },
-		{"BOOKMARKS"   , NULL, PARAM_CAT_BOOKMARKS   },
-		{"BREAKPOINTS" , NULL, PARAM_CAT_BREAKPOINTS },
-		{"CONFIG"      , NULL, PARAM_CAT_CONFIG      },
-		{"CPU"         , NULL, PARAM_CAT_CPU         },
-//		{TEXT("EXPRESSION") ,
-		{"FLAGS"       , NULL, PARAM_CAT_FLAGS       },
-		{"HELP"        , NULL, PARAM_CAT_HELP        },
-		{"KEYBOARD"    , NULL, PARAM_CAT_KEYBOARD    },
-		{"MEMORY"      , NULL, PARAM_CAT_MEMORY      }, // alias // SOURCE [SYMBOLS] [MEMORY] filename
-		{"OUTPUT"      , NULL, PARAM_CAT_OUTPUT      },
-		{"OPERATORS"   , NULL, PARAM_CAT_OPERATORS   },
-		{"RANGE"       , NULL, PARAM_CAT_RANGE       },
-//		{TEXT("REGISTERS")  , NULL, PARAM_CAT_REGISTERS   },
-		{"SYMBOLS"     , NULL, PARAM_CAT_SYMBOLS     },
-		{"VIEW"			, NULL, PARAM_CAT_VIEW        },
-		{"WATCHES"     , NULL, PARAM_CAT_WATCHES     },
-		{"WINDOW"      , NULL, PARAM_CAT_WINDOW      },
-		{"ZEROPAGE"    , NULL, PARAM_CAT_ZEROPAGE    },
-// Memory
-		{TEXT("?")          , NULL, PARAM_MEM_SEARCH_WILD },
-//		{TEXT("*")          , NULL, PARAM_MEM_SEARCH_BYTE },
-// Source level debugging
-		{TEXT("MEM")        , NULL, PARAM_SRC_MEMORY      },
-		{TEXT("MEMORY")     , NULL, PARAM_SRC_MEMORY      },
-		{TEXT("SYM")        , NULL, PARAM_SRC_SYMBOLS     },	
-		{TEXT("SYMBOLS")    , NULL, PARAM_SRC_SYMBOLS     },	
-		{TEXT("MERLIN")     , NULL, PARAM_SRC_MERLIN      },	
-		{TEXT("ORCA")       , NULL, PARAM_SRC_ORCA        },	
-// View
-//		{TEXT("VIEW")       , NULL, PARAM_SRC_??? },
-// Window                                                       Win   Cmd   WinEffects      CmdEffects
-		{TEXT("CODE")       , NULL, PARAM_CODE           }, //   x     x    code win only   switch to code window
-//		{TEXT("CODE1")      , NULL, PARAM_CODE_1         }, //   -     x    code/data win   
-		{TEXT("CODE2")      , NULL, PARAM_CODE_2         }, //   -     x    code/data win   
-		{TEXT("CONSOLE")    , NULL, PARAM_CONSOLE        }, //   x     -                    switch to console window
-		{TEXT("DATA")       , NULL, PARAM_DATA           }, //   x     x    data win only   switch to data window
-//		{TEXT("DATA1")      , NULL, PARAM_DATA_1         }, //   -     x    code/data win   
-		{TEXT("DATA2")      , NULL, PARAM_DATA_2         }, //   -     x    code/data win   
-		{TEXT("DISASM")     , NULL, PARAM_DISASM         }, //                              
-		{TEXT("INFO")       , NULL, PARAM_INFO           }, //   -     x    code/data       Toggles showing/hiding Regs/Stack/BP/Watches/ZP
-		{TEXT("SOURCE")     , NULL, PARAM_SOURCE         }, //   x     x                    switch to source window
-		{TEXT("SRC")        , NULL, PARAM_SOURCE         }, // alias                        
-//		{TEXT("SOURCE_1")   , NULL, PARAM_SOURCE_1       }, //   -     x    code/data       
-		{TEXT("SOURCE2 ")   , NULL, PARAM_SOURCE_2       }, //   -     x                    
-		{TEXT("SYMBOLS")    , NULL, PARAM_SYMBOLS        }, //   x     x    code/data win   switch to symbols window
-		{TEXT("SYM")        , NULL, PARAM_SYMBOLS        }, // alias   x                    SOURCE [SYM] [MEM] filename
-//		{TEXT("SYMBOL1")    , NULL, PARAM_SYMBOL_1       }, //   -     x    code/data win   
-		{TEXT("SYMBOL2")    , NULL, PARAM_SYMBOL_2       }, //   -     x    code/data win   
-// Internal Consistency Check
-		{ TEXT( __PARAMS_VERIFY_TXT__), NULL, NUM_PARAMS     },
-	};
-
 // Profile
 	const int NUM_PROFILE_LINES = NUM_OPCODES + NUM_OPMODES + 16;
 
@@ -781,6 +233,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	char * ProfileLinePeek ( int iLine );
 	char * ProfileLinePush ();
 	void ProfileLineReset  ();
+
+// Soft-switches __________________________________________________________________________________
 
 
 // Source Level Debugging _________________________________________________________________________
@@ -807,8 +261,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
 // Window _________________________________________________________________________________________
-	int           g_iWindowLast = WINDOW_CODE;
-	int           g_iWindowThis = WINDOW_CODE;
+	int           g_iWindowLast = WINDOW_CODE; // TODO: FIXME! should be offset into WindowConfig!!!
+	// Who has active focus
+	int           g_iWindowThis = WINDOW_CODE; // TODO: FIXME! should be offset into WindowConfig!!!
 	WindowSplit_t g_aWindowConfig[ NUM_WINDOWS ];
 
 
@@ -871,8 +326,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	void _BWZ_ListAll ( const Breakpoint_t * aBreakWatchZero, const int nMax );
 
 //	bool CheckBreakpoint (WORD address, BOOL memory);
-	bool CheckBreakpointsIO ();
-	bool CheckBreakpointsReg ();
 	bool _CmdBreakpointAddReg ( Breakpoint_t *pBP, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, WORD nAddress, int nLen, bool bIsTempBreakpoint );
 	int  _CmdBreakpointAddCommonArg ( int iArg, int nArg, BreakpointSource_t iSrc, BreakpointOperator_t iCmp, bool bIsTempBreakpoint=false );
 	void _BWZ_Clear( Breakpoint_t * aBreakWatchZero, int iSlot );
@@ -885,7 +338,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	void ConfigSave_PrepareHeader ( const Parameters_e eCategory, const Commands_e eCommandClear );
 
 // Drawing
-	static	bool DebuggerSetColor ( const int iScheme, const int iColor, const COLORREF nColor );
 	static	void _CmdColorGet ( const int iScheme, const int iColor );
 
 // Font
@@ -924,24 +376,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	void DisasmCalcBotFromTopAddress();
 	void DisasmCalcTopBotAddress ();
 	WORD DisasmCalcAddressFromLines( WORD iAddress, int nLines );
-
-	
-
-//===========================================================================
-LPCTSTR FormatAddress( WORD nAddress, int nBytes )
-{
-	// No symbol for this addres -- string with nAddress
-	static TCHAR sSymbol[8] = TEXT("");
-	switch (nBytes)
-	{
-		case  2:	wsprintf(sSymbol,TEXT("$%02X"),(unsigned)nAddress);  break;
-		case  3:	wsprintf(sSymbol,TEXT("$%04X"),(unsigned)nAddress);  break;
-		default:	sSymbol[0] = 0; break; // clear since is static
-	}
-	return sSymbol;
-}
-
-
 
 
 // Bookmarks __________________________________________________________________
@@ -1033,7 +467,7 @@ void _Bookmark_Reset()
 //===========================================================================
 int _Bookmark_Size()
 {
-	int g_nBookmarks = 0;
+	g_nBookmarks = 0;
 
 	int iBookmark;
 	for (iBookmark = 0; iBookmark < MAX_BOOKMARKS; iBookmark++ )
@@ -1279,7 +713,7 @@ Update_t CmdBenchmarkStop (int nArgs)
 {
 	g_bBenchmarking = false;
 	DebugEnd();
-	g_nAppMode = MODE_RUNNING;
+	
 	FrameRefreshStatus(DRAW_TITLE);
 	VideoRedrawScreen();
 	DWORD currtime = GetTickCount();
@@ -1379,13 +813,19 @@ _Help:
 //===========================================================================
 Update_t CmdBreakInvalid (int nArgs) // Breakpoint IFF Full-speed!
 {
-	if ((nArgs > 2) || (nArgs == 0))
+	if (nArgs > 2) // || (nArgs == 0))
 		goto _Help;
 
-	int iType = 0; // default to BRK
+	int iType = AM_IMPLIED; // default to BRK
 	int nActive = 0;
 
-//	if (nArgs == 2)
+	if (nArgs == 0)
+	{
+		nArgs = 1;
+		g_aArgs[ 1 ].nValue = AM_IMPLIED;
+		g_aArgs[ 1 ].sArg[0] = 0;
+	}
+
 	iType = g_aArgs[ 1 ].nValue;
 
 	// Cases:
@@ -1419,10 +859,10 @@ Update_t CmdBreakInvalid (int nArgs) // Breakpoint IFF Full-speed!
 	{
 		if (! nFound) // bValidParam) // case 1a or 1c
 		{
-			if ((iType < 0) || (iType > AM_3))
+			if ((iType < AM_IMPLIED) || (iType > AM_3))
 				goto _Help;
 
-			if (IsDebugBreakOnInvalid( iType ))
+			if ( IsDebugBreakOnInvalid( iType ) ) 
 				iParam = PARAM_ON;
 			else
 				iParam = PARAM_OFF;
@@ -1482,31 +922,31 @@ Update_t CmdBreakOpcode (int nArgs) // Breakpoint IFF Full-speed!
 	if (nArgs == 1)
 	{
 		int iOpcode = g_aArgs[ 1] .nValue;
-		g_iDebugOnOpcode = iOpcode & 0xFF;
+		g_iDebugBreakOnOpcode = iOpcode & 0xFF;
 
 		_tcscpy( sAction, TEXT("Setting") );
 
 		if (iOpcode >= NUM_OPCODES)
 		{
-			wsprintf( sText, TEXT("Warning: clamping opcode: %02X"), g_iDebugOnOpcode );
+			wsprintf( sText, TEXT("Warning: clamping opcode: %02X"), g_iDebugBreakOnOpcode );
 			ConsoleBufferPush( sText );
 			return ConsoleUpdate();
 		}
 	}
 
-	if (g_iDebugOnOpcode == 0)
+	if (g_iDebugBreakOnOpcode == 0)
 		// Show what the current break opcode is
 		wsprintf( sText, TEXT("%s full speed Break on Opcode: None")
 			, sAction
-			, g_iDebugOnOpcode
-			, g_aOpcodes65C02[ g_iDebugOnOpcode ].sMnemonic
+			, g_iDebugBreakOnOpcode
+			, g_aOpcodes65C02[ g_iDebugBreakOnOpcode ].sMnemonic
 		);
 	else
 		// Show what the current break opcode is
 		wsprintf( sText, TEXT("%s full speed Break on Opcode: %02X %s")
 			, sAction
-			, g_iDebugOnOpcode
-			, g_aOpcodes65C02[ g_iDebugOnOpcode ].sMnemonic
+			, g_iDebugBreakOnOpcode
+			, g_aOpcodes65C02[ g_iDebugBreakOnOpcode ].sMnemonic
 		);
 
 	ConsoleBufferPush( sText );
@@ -1603,7 +1043,7 @@ bool _CheckBreakpointValue( Breakpoint_t *pBP, int nVal )
 
 
 //===========================================================================
-bool CheckBreakpointsIO ()
+int CheckBreakpointsIO ()
 {
 	const int NUM_TARGETS = 2;
 
@@ -1613,7 +1053,7 @@ bool CheckBreakpointsIO ()
 		NO_6502_TARGET
 	};
 	int  nBytes;
-	bool bStatus = false;
+	bool bBreakpointHit = 0;
 
 	int  iTarget;
 	int  nAddress;
@@ -1636,7 +1076,7 @@ bool CheckBreakpointsIO ()
 						{
 							if (_CheckBreakpointValue( pBP, nAddress ))
 							{
-								return true;
+								return BP_HIT_MEM;
 							}
 						}
 					}
@@ -1644,14 +1084,14 @@ bool CheckBreakpointsIO ()
 			}
 		}
 	}
-	return bStatus;
+	return bBreakpointHit;
 }
 
 // Returns true if a register breakpoint is triggered
 //===========================================================================
-bool CheckBreakpointsReg ()
+int CheckBreakpointsReg ()
 {
-	bool bStatus = false;
+	int bBreakpointHit = 0;
 
 	for (int iBreakpoint = 0; iBreakpoint < MAX_BREAKPOINTS; iBreakpoint++)
 	{
@@ -1662,30 +1102,31 @@ bool CheckBreakpointsReg ()
 
 		switch (pBP->eSource)
 		{
-			case BP_SRC_REG_PC:
-				bStatus = _CheckBreakpointValue( pBP, regs.pc );
+			case BP_SRC_REG_PC: 
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.pc );
 				break;
 			case BP_SRC_REG_A:
-				bStatus = _CheckBreakpointValue( pBP, regs.a );
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.a );
 				break;
 			case BP_SRC_REG_X:
-				bStatus = _CheckBreakpointValue( pBP, regs.x );
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.x );
 				break;
 			case BP_SRC_REG_Y:
-				bStatus = _CheckBreakpointValue( pBP, regs.y );
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.y );
 				break;
 			case BP_SRC_REG_P:
-				bStatus = _CheckBreakpointValue( pBP, regs.ps );
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.ps );
 				break;
 			case BP_SRC_REG_S:
-				bStatus = _CheckBreakpointValue( pBP, regs.sp );
+				bBreakpointHit = _CheckBreakpointValue( pBP, regs.sp );
 				break;
 			default:
 				break;
 		}
 
-		if (bStatus)
+		if (bBreakpointHit)
 		{
+			bBreakpointHit = BP_HIT_REG;
 			if (pBP->bTemp)
 				_BWZ_Clear(pBP, iBreakpoint);
 
@@ -1693,7 +1134,7 @@ bool CheckBreakpointsReg ()
 		}
 	}
 
-	return bStatus;
+	return bBreakpointHit;
 }
 
 void ClearTempBreakpoints ()
@@ -1806,7 +1247,7 @@ Update_t CmdBreakpointAddReg (int nArgs)
 			}
 		}
 
-		if ((! bHaveSrc) && (! bHaveCmp))
+		if ((! bHaveSrc) && (! bHaveCmp)) // Inverted/Convoluted logic: didn't find BOTH this pass, so we must have already found them.
 		{
 			int dArgs = _CmdBreakpointAddCommonArg( iArg, nArgs, iSrc, iCmp );
 			if (!dArgs)
@@ -1961,7 +1402,8 @@ Update_t CmdBreakpointAddPC (int nArgs)
 //===========================================================================
 Update_t CmdBreakpointAddIO   (int nArgs)
 {
-	return UPDATE_CONSOLE_DISPLAY;
+	return CmdBreakpointAddMem( nArgs );
+//	return UPDATE_BREAKPOINTS | UPDATE_CONSOLE_DISPLAY;
 }
 
 
@@ -2138,7 +1580,7 @@ void _BWZ_List( const Breakpoint_t * aBreakWatchZero, const int iBWZ ) //, bool 
 	static       char sName[ MAX_SYMBOLS_LEN+1 ];
 
 	WORD nAddress = aBreakWatchZero[ iBWZ ].nAddress;
-	LPCTSTR pSymbol = GetSymbol( nAddress, 2 );
+	const char*  pSymbol = GetSymbol( nAddress, 2 );
 	if (! pSymbol)
 	{
 		sName[0] = 0;
@@ -2158,7 +1600,7 @@ void _BWZ_List( const Breakpoint_t * aBreakWatchZero, const int iBWZ ) //, bool 
 void _BWZ_ListAll( const Breakpoint_t * aBreakWatchZero, const int nMax )
 {
 	int iBWZ = 0;
-	while (iBWZ < MAX_BOOKMARKS)
+	while (iBWZ < nMax) // 
 	{
 		if (aBreakWatchZero[ iBWZ ].bSet)
 		{
@@ -2512,7 +1954,7 @@ Update_t CmdTraceFile (int nArgs)
 
 
 		char sFilePath[ MAX_PATH ];
-		strcpy(sFilePath, g_sCurrentDir); // g_sProgramDir
+		strcpy(sFilePath, g_sCurrentDir); // TODO: g_sDebugDir
 		strcat(sFilePath, sFileName );
 
 		g_hTraceFile = fopen( sFilePath, "wt" );
@@ -2683,39 +2125,6 @@ void _CmdColorGet( const int iScheme, const int iColor )
 		wsprintf( sText, "Color: %d\nOut of range!", iColor );
 		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
 	}
-}
-
-//===========================================================================
-inline COLORREF DebuggerGetColor( int iColor )
-{
-	COLORREF nColor = RGB(0,255,255); // 0xFFFF00; // Hot Pink! -- so we notice errors. Not that there is anything wrong with pink...
-
-	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_DEBUG_COLORS))
-	{
-		nColor = g_aColors[ g_iColorScheme ][ iColor ];
-	}
-
-	return nColor;
-}
-
-
-bool DebuggerSetColor( const int iScheme, const int iColor, const COLORREF nColor )
-{
-	bool bStatus = false;
-	if ((g_iColorScheme < NUM_COLOR_SCHEMES) && (iColor < NUM_DEBUG_COLORS))
-	{
-		g_aColors[ iScheme ][ iColor ] = nColor;
-		bStatus = true;
-	}
-
-	// Propogate to console since it has its own copy of colors
-	if (iColor == FG_CONSOLE_OUTPUT)
-	{
-		COLORREF nConsole = DebuggerGetColor( FG_CONSOLE_OUTPUT );
-		g_anConsoleColor[ CONSOLE_COLOR_x ] = nConsole;
-	}
-	
-	return bStatus;
 }
 
 //===========================================================================
@@ -2909,7 +2318,7 @@ void ConfigSave_PrepareHeader ( const Parameters_e eCategory, const Commands_e e
 Update_t CmdConfigSave (int nArgs)
 {
 	TCHAR sFilename[ MAX_PATH ];
-	_tcscpy( sFilename, g_sProgramDir ); // g_sCurrentDir
+	_tcscpy( sFilename, g_sProgramDir ); // TODO: g_sDebugDir
 	_tcscat( sFilename, g_sFileNameConfig );
 
 /*
@@ -2927,15 +2336,15 @@ Update_t CmdConfigSave (int nArgs)
 		int   nLen;
 		DWORD nPut;
 
-	// FIXME: Shouldn be saving in Text format, not binary!
+	// FIXME: Should be saving in Text format, not binary!
 
 		int nVersion = CURRENT_VERSION;
 		pSrc = (void *) &nVersion;
 		nLen = sizeof( nVersion );
 		WriteFile( hFile, pSrc, nLen, &nPut, NULL );
 
-		pSrc = (void *) & gaColorPalette;
-		nLen = sizeof( gaColorPalette );
+		pSrc = (void *) & g_aColorPalette;
+		nLen = sizeof( g_aColorPalette );
 		WriteFile( hFile, pSrc, nLen, &nPut, NULL );
 
 		pSrc = (void *) & g_aColorIndex;
@@ -4388,7 +3797,7 @@ static Update_t _CmdMemoryDump (int nArgs, int iWhich, int iView )
 	g_aMemDump[iWhich].bActive = true;
 	g_aMemDump[iWhich].eView = (MemoryView_e) iView;
 
-	return UPDATE_ALL; // TODO: This really needed? Don't think we do any actual ouput
+	return UPDATE_MEM_DUMP; // TODO: This really needed? Don't think we do any actual ouput
 }
 
 //===========================================================================
@@ -4583,6 +3992,22 @@ static TCHAR g_sMemoryLoadSaveFileName[ MAX_PATH ] = TEXT("");
 
 
 //===========================================================================
+Update_t CmdConfigGetDebugDir (int nArgs)
+{
+	TCHAR sPath[ MAX_PATH + 8 ] = "Path: ";
+	_tcscat( sPath, g_sCurrentDir ); // TODO: debugger dir has no ` CONSOLE_COLOR_ESCAPE_CHAR ?!?!
+	ConsoleBufferPush( sPath );
+
+	return ConsoleUpdate();
+}
+
+//===========================================================================
+Update_t CmdConfigSetDebugDir (int nArgs)
+{
+	return ConsoleUpdate();
+}
+
+//===========================================================================
 Update_t CmdMemoryLoad (int nArgs)
 {
 	// BLOAD ["Filename"] , addr[, len] 
@@ -4625,7 +4050,7 @@ Update_t CmdMemoryLoad (int nArgs)
 			return Help_Arg_1( CMD_MEMORY_SAVE );
 
 		TCHAR sLoadSaveFilePath[ MAX_PATH ];
-		_tcscpy( sLoadSaveFilePath, g_sCurrentDir ); // g_sProgramDir
+		_tcscpy( sLoadSaveFilePath, g_sCurrentDir ); // TODO: g_sDebugDir
 
 		WORD nAddressStart;
 		WORD nAddress2   = 0;
@@ -4689,9 +4114,9 @@ Update_t CmdMemoryLoad (int nArgs)
 		else
 		{
 			ConsoleBufferPush( TEXT( "ERROR: Bad filename" ) );
-			TCHAR sPath[ MAX_PATH + 8 ] = "Path: ";
-			_tcscat( sPath, g_sCurrentDir );
-			ConsoleBufferPush( sPath );
+
+			CmdConfigGetDebugDir( 0 );
+
 			TCHAR sFile[ MAX_PATH + 8 ] = "File: ";
 			_tcscat( sFile, g_sMemoryLoadSaveFileName );
 			ConsoleBufferPush( sFile );
@@ -5008,15 +4433,18 @@ Update_t _SearchMemoryDisplay (int nArgs)
 			sResult[0] = 0;
 			nLen = 0;
 
-			        StringCat( sResult, CHC_COMMAND, nBuf );
-			sprintf( sText, "%2d", iFound );
+			        StringCat( sResult, CHC_NUM_DEC, nBuf ); // 2.6.2.17 Search Results: The n'th result now using correct color (was command, now number decimal)
+			sprintf( sText, "%02X", iFound ); // BUGFIX: 2.6.2.32 n'th Search results were being displayed in dec, yet parser takes hex numbers. i.e. SH D000:FFFF A9 00
 			nLen += StringCat( sResult, sText , nBuf );
 
-			        StringCat( sResult, CHC_DEFAULT, nBuf );
+			        StringCat( sResult, CHC_DEFAULT, nBuf ); // intentional default instead of CHC_ARG_SEP for better readability
 			nLen += StringCat( sResult, ":" , nBuf );
 
+			        StringCat( sResult, CHC_ARG_SEP, nBuf );
+			nLen += StringCat( sResult, "$" , nBuf ); // 2.6.2.16 Fixed: Search Results: The hex specify for target address results now colorized properly
+
 			        StringCat( sResult, CHC_ADDRESS, nBuf );
-			sprintf( sText, "$%04X", nAddress );
+			sprintf( sText, "%04X ", nAddress ); // 2.6.2.15 Fixed: Search Results: Added space between results for better readability
 			nLen += StringCat( sResult, sText, nBuf );
 
 			// Fit on same line?
@@ -5048,21 +4476,21 @@ Update_t _SearchMemoryDisplay (int nArgs)
 		        StringCat( sResult, CHC_DEFAULT, nBuf );
 		nLen += StringCat( sResult, ": " , nBuf );
 
-		        StringCat( sResult, CHC_NUM_DEC, nBuf );
+		        StringCat( sResult, CHC_NUM_DEC, nBuf ); // intentional CHC_DEFAULT instead of 
 		sprintf( sText, "%d  ", nFound );
 		nLen += StringCat( sResult, sText, nBuf );
 
-		        StringCat( sResult, CHC_ARG_OPT, nBuf );
+		        StringCat( sResult, CHC_ARG_SEP, nBuf ); // CHC_ARC_OPT -> CHC_ARG_SEP
 		nLen += StringCat( sResult, "(" , nBuf );
 
-		        StringCat( sResult, CHC_DEFAULT, nBuf );
+		        StringCat( sResult, CHC_ARG_SEP, nBuf ); // CHC_DEFAULT
 		nLen += StringCat( sResult, "#$", nBuf );
 
 		        StringCat( sResult, CHC_NUM_HEX, nBuf );
 		sprintf( sText, "%04X", nFound );
 		nLen += StringCat( sResult, sText, nBuf );
 
-		        StringCat( sResult, CHC_ARG_OPT, nBuf );
+		        StringCat( sResult, CHC_ARG_SEP, nBuf );
 		nLen += StringCat( sResult, ")" , nBuf );
 		
 		ConsolePrint( sResult );
@@ -6269,7 +5697,8 @@ Update_t CmdWatchList (int nArgs)
 	}
 	else
 	{
-		_BWZ_List( g_aWatches, MAX_WATCHES );
+//		_BWZ_List( g_aWatches, MAX_WATCHES );
+		_BWZ_ListAll( g_aWatches, MAX_WATCHES );
 	}
 	return ConsoleUpdate();
 }
@@ -6443,6 +5872,9 @@ Update_t CmdWindowCyclePrev( int nArgs )
 //===========================================================================
 Update_t CmdWindowShowCode (int nArgs)
 {
+	// g_bWindowDisplayShowChild = false;
+	// g_bWindowDisplayShowRoot  = WINDOW_CODE;
+
 	if (g_iWindowThis == WINDOW_CODE)
 	{
 		g_aWindowConfig[ g_iWindowThis ].bSplit = false;
@@ -6464,7 +5896,7 @@ Update_t CmdWindowShowCode (int nArgs)
 Update_t CmdWindowShowCode1 (int nArgs)
 {
 /*
-	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis != WINDOW_CODE))
+	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis != WINDOW_DATA))
 	{
 		g_aWindowConfig[ g_iWindowThis ].bSplit = true;
 		g_aWindowConfig[ g_iWindowThis ].eTop = WINDOW_CODE;
@@ -6483,7 +5915,7 @@ Update_t CmdWindowShowCode1 (int nArgs)
 //===========================================================================
 Update_t CmdWindowShowCode2 (int nArgs)
 {
-	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis == WINDOW_CODE))
+	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis == WINDOW_DATA))
 	{
 		if (g_iWindowThis == WINDOW_CODE)
 		{
@@ -6541,16 +5973,16 @@ Update_t CmdWindowShowData1 (int nArgs)
 //===========================================================================
 Update_t CmdWindowShowData2 (int nArgs)
 {
-	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis == WINDOW_CODE))
+	if ((g_iWindowThis == WINDOW_CODE) || (g_iWindowThis == WINDOW_DATA))
 	{
 		if (g_iWindowThis == WINDOW_CODE)
 		{
-			_WindowJoin();
+			_WindowSplit( WINDOW_DATA );
 		}
 		else		
 		if (g_iWindowThis == WINDOW_DATA)
 		{
-			_WindowSplit( WINDOW_DATA );
+			_WindowJoin();
 		}		
 		return UPDATE_DISASM;
 
@@ -7256,10 +6688,9 @@ Update_t ExecuteCommand (int nArgs)
 
 
 //===========================================================================
+
 bool InternalSingleStep ()
 {
-	static DWORD dwCyclesThisFrame = 0;
-
 	bool bResult = false;
 	_try
 	{
@@ -7269,14 +6700,16 @@ bool InternalSingleStep ()
 		g_aProfileOpcodes[ nOpcode ].m_nCount++;
 		g_aProfileOpmodes[ nOpmode ].m_nCount++;
 
-		DWORD dwExecutedCycles = CpuExecute(g_nDebugStepCycles);
-		dwCyclesThisFrame += dwExecutedCycles;
-
-		if (dwCyclesThisFrame >= dwClksPerFrame)
+		// Like ContinueExecution()
 		{
-			dwCyclesThisFrame -= dwClksPerFrame;
+			DWORD dwExecutedCycles = CpuExecute(g_nDebugStepCycles);
+			g_dwCyclesThisFrame += dwExecutedCycles;
+
+			if (g_dwCyclesThisFrame >= dwClksPerFrame)
+			{
+				g_dwCyclesThisFrame -= dwClksPerFrame;
+			}
 		}
-		VideoUpdateVbl( dwCyclesThisFrame );
 
 		bResult = true;
 	}
@@ -7749,13 +7182,13 @@ void DebugContinueStepping ()
 	{
 		if ((regs.pc >= g_nDebugSkipStart) && (regs.pc < (g_nDebugSkipStart + g_nDebugSkipLen)))
 		{
-			// Enter turbo debugger g_nAppMode -- UI not updated, etc.
+			// Enter turbo debugger mode -- UI not updated, etc.
 			g_nDebugSteps = -1;
 			g_nAppMode = MODE_STEPPING;
 		}
 		else
 		{
-			// Enter normal debugger g_nAppMode -- UI updated every instruction, etc.
+			// Enter normal debugger mode -- UI updated every instruction, etc.
 			g_nDebugSteps = 1;
 			g_nAppMode = MODE_STEPPING;
 		}
@@ -7769,12 +7202,9 @@ void DebugContinueStepping ()
 
 		InternalSingleStep();
 
-		bool bBreak = CheckBreakpointsIO();
+		_IsDebugBreakpointHit(); // Updates g_bDebugBreakpointHit
 
-		if (CheckBreakpointsReg())
-			bBreak = true;
-
-		if ((regs.pc == g_nDebugStepUntil) || bBreak)
+		if ((regs.pc == g_nDebugStepUntil) || g_bDebugBreakpointHit)
 			g_nDebugSteps = 0;
 		else if (g_nDebugSteps > 0)
 			g_nDebugSteps--;
@@ -7784,7 +7214,7 @@ void DebugContinueStepping ()
 	{
 		if (!((++nStepsTaken) & 0xFFFF))
 		{
-			if (nStepsTaken == 0x10000)
+			if (nStepsTaken == 0x10000) // HACK_MAGIC_NUM
 				VideoRedrawScreen();
 			else
 				VideoRefreshScreen();
@@ -7796,32 +7226,11 @@ void DebugContinueStepping ()
 		FrameRefreshStatus(DRAW_TITLE);
 // BUG: PageUp, Trace - doesn't center cursor
 
-//		if ((g_nDebugStepStart < regs.pc) && (g_nDebugStepStart+3 >= regs.pc))
-		// Still within current disasm "window"?
-/*
-		if ((regs.pc >= g_nDisasmTopAddress) && (regs.pc <= g_nDisasmBotAddress))
-		{
-			int eMode = g_aOpcodes[*(mem+g_nDisasmCurAddress)].addrmode;
-			int nBytes = g_aOpmodes[ eMode ]._nBytes;
-			g_nDisasmCurAddress += nBytes;
-//			g_nDisasmTopAddress += nBytes;
-//			g_nDisasmBotAddress += nBytes;
-		}
-		else
-*/
-		{
-			g_nDisasmCurAddress = regs.pc;
-		}
+		g_nDisasmCurAddress = regs.pc;
 
 		DisasmCalcTopBotAddress();
 
-//		g_nDisasmCurAddress += g_aOpmodes[g_aOpcodes[*(mem+g_nDisasmCurAddress)].addrmode]._nBytes;
-//		DisasmCalcTopBotAddress();
-
 		Update_t bUpdate = UPDATE_ALL;
-//		if (nStepsTaken >= 0x10000) // HACK_MAGIC_NUM
-//			bUpdate = UPDATE_ALL;
-
 		UpdateDisplay( bUpdate ); // nStepsTaken >= 0x10000);
 		nStepsTaken = 0;
 	}
@@ -7878,6 +7287,8 @@ void DebugEnd ()
 	}
 
 	g_vMemorySearchResults.erase( g_vMemorySearchResults.begin(), g_vMemorySearchResults.end() );
+
+	g_nAppMode = MODE_RUNNING;
 }
 
 
@@ -7903,7 +7314,7 @@ void _SetupColorRamp( const int iPrimary, int & iColor_ )
 		int nG = bG ? nC : 0;
 		int nB = bB ? nC : 0;
 		DWORD nColor = RGB(nR,nG,nB);
-		gaColorPalette[ iColor_ ] = nColor;
+		g_aColorPalette[ iColor_ ] = nColor;
 #if DEBUG_COLOR_RAMP
 	wsprintf( sText, TEXT("RGB(%3d,%3d,%3d), "), nR, nG, nB );
 	_tcscat( sRamp, sText );
@@ -7945,7 +7356,7 @@ void _ConfigColorsReset( BYTE *pPalDst )
 	int iColor;
 	for (iColor = 0; iColor < NUM_DEBUG_COLORS; iColor++ )
 	{
-		COLORREF nColor = gaColorPalette[ g_aColorIndex[ iColor ] ];
+		COLORREF nColor = g_aColorPalette[ g_aColorIndex[ iColor ] ];
 
 		int R = (nColor >>  0) & 0xFF;
 		int G = (nColor >>  8) & 0xFF;
@@ -8139,7 +7550,7 @@ void DebugInitialize ()
 	int iColor;
 	
 	iColor = FG_CONSOLE_OUTPUT;
-	COLORREF nColor = gaColorPalette[ g_aColorIndex[ iColor ] ];
+	COLORREF nColor = g_aColorPalette[ g_aColorIndex[ iColor ] ];
 	g_anConsoleColor[ CONSOLE_COLOR_x ] = nColor;
 
 /*
@@ -8190,19 +7601,7 @@ void DebugInitialize ()
 	//	ConsoleInputReset(); already called in DebugInitialize()
 	TCHAR sText[ CONSOLE_WIDTH ];
 
-	if (_tcscmp( g_aCommands[ NUM_COMMANDS ].m_sName, TEXT(__COMMANDS_VERIFY_TXT__)))
-	{
-		wsprintf( sText, "*** ERROR *** Commands mis-matched!" );
-		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
-		PostQuitMessage( 1 );
-	}
-
-	if (_tcscmp( g_aParameters[ NUM_PARAMS ].m_sName, TEXT(__PARAMS_VERIFY_TXT__)))
-	{
-		wsprintf( sText, "*** ERROR *** Parameters mis-matched!" );
-		MessageBox( g_hFrameWindow, sText, TEXT("ERROR"), MB_OK );
-		PostQuitMessage( 2 );
-	}
+	VerifyDebuggerCommandTable();
 
 	// Check all summary help to see if it fits within the console
 	for (int iCmd = 0; iCmd < NUM_COMMANDS; iCmd++ )

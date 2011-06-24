@@ -75,30 +75,6 @@ TCHAR   soundchoices[]    =  TEXT("Disabled\0")
                              TEXT("PC Speaker (translated)\0")
                              TEXT("Sound Card\0");
 
-// Must match NUM_VIDEO_MODES!
-TCHAR   videochoices[]    =
-	TEXT("Monochrome (Custom)\0")
-	TEXT("Color (standard)\0")
-	TEXT("Color (text optimized)\0")
-	TEXT("Color (TV emulation)\0")
-	TEXT("Color (Half-Shift)\0")
-	TEXT("Monochrome - Amber\0")
-	TEXT("Monochrome - Green\0")
-	TEXT("Monochrome - White\0")
-	;
-
-char *g_apVideoModeDesc[ NUM_VIDEO_MODES ] =
-{
-	"Custom",
-	"Std.",
-	"Text",
-	"TV",
-	"HalfPixel",
-	"Amber",
-	"Green",
-	"White"
-};
-
 TCHAR   discchoices[]     =  TEXT("Authentic Speed\0")
                              TEXT("Enhanced Speed\0");
 
@@ -280,6 +256,9 @@ void Config_Load_Video()
 	REGLOAD(TEXT(REGVALUE_VIDEO_MODE           ),&g_eVideoType);
 	REGLOAD(TEXT(REGVALUE_VIDEO_HALF_SCAN_LINES),&g_uHalfScanLines);
 	REGLOAD(TEXT(REGVALUE_VIDEO_MONO_COLOR     ),&monochrome);
+
+	if (g_eVideoType >= NUM_VIDEO_MODES)
+		g_eVideoType = VT_COLOR_STANDARD; // Old default: VT_COLOR_TVEMU
 }
 
 
@@ -287,14 +266,13 @@ static void ConfigDlg_OK(HWND window, UINT afterclose)
 {
 	DWORD NewCompType = (DWORD) SendDlgItemMessage(window,IDC_COMPUTER,CB_GETCURSEL,0,0);
 	DWORD OldApple2Type = g_Apple2Type;
-	eApple2Type NewApple2Type = GetApple2Type(NewCompType, 0 );
+	eApple2Type NewApple2Type = GetApple2Type(NewCompType, 0);
 
 	DWORD newvidtype    = (DWORD)SendDlgItemMessage(window,IDC_VIDEOTYPE,CB_GETCURSEL,0,0);
 	DWORD newserialport = (DWORD)SendDlgItemMessage(window,IDC_SERIALPORT,CB_GETCURSEL,0,0);
 
 	if (OldApple2Type > (APPLECLONE_MASK|APPLE2E_MASK))
 		OldApple2Type = (APPLECLONE_MASK|APPLE2E_MASK);
-	
 
 	if (NewApple2Type != OldApple2Type)
 	{
@@ -477,7 +455,7 @@ static BOOL CALLBACK ConfigDlgProc( HWND   window,
 			else
 				FillComboBox(window,IDC_COMPUTER,computerchoices,iApple2String);
 
-			FillComboBox(window,IDC_VIDEOTYPE,videochoices,g_eVideoType);
+			FillComboBox(window,IDC_VIDEOTYPE,g_aVideoChoices,g_eVideoType);
 			CheckDlgButton(window, IDC_CHECK_HALF_SCAN_LINES, g_uHalfScanLines ? BST_CHECKED : BST_UNCHECKED);
 
 			FillComboBox(window,IDC_SERIALPORT, sg_SSC.GetSerialPortChoices(), sg_SSC.GetSerialPort());
@@ -1155,34 +1133,52 @@ static void SaveStateUpdate()
 	{
 		Snapshot_SetFilename(g_szSSNewFilename);
 
-		RegSaveString(TEXT(REG_CONFIG),REGVALUE_SAVESTATE_FILENAME,1,Snapshot_GetFilename());
+		RegSaveString(TEXT(REG_CONFIG), REGVALUE_SAVESTATE_FILENAME, 1, Snapshot_GetFilename());
 
 		if(g_szSSNewDirectory[0])
-			RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);	                         RegSaveString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,g_szSSNewDirectory);
+			RegSaveString(TEXT(REG_PREFS), REGVALUE_PREF_START_DIR, 1 ,g_szSSNewDirectory);
 	}
 }
 
+static void GetDiskBaseNameWithAWS(TCHAR* pszFilename)
+{
+	LPCTSTR pDiskName = DiskGetBaseName(DRIVE_1);
+	if (pDiskName && pDiskName[0])
+	{
+		strcpy(pszFilename, pDiskName);
+		strcpy(&pszFilename[strlen(pDiskName)], ".aws");
+	}
+}
+
+// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
 static int SaveStateSelectImage(HWND hWindow, TCHAR* pszTitle, bool bSave)
 {
 	TCHAR szDirectory[MAX_PATH] = TEXT("");
-	TCHAR szFilename[MAX_PATH];
-	
-	// Attempt to use drive1's image name as the name for the .aws file
-	LPCTSTR pDiskName0 = DiskGetBaseName(DRIVE_1);
-	if (pDiskName0 && pDiskName0[0])
+	TCHAR szFilename[MAX_PATH] = {0};
+
+	if (bSave)
 	{
-		strcpy(szFilename, pDiskName0);
-		strcpy(&szFilename[strlen(pDiskName0)], ".aws");
-		// NB. OK'ing this property sheet will call Snapshot_SetFilename() with this new filename
+		// Attempt to use drive1's image name as the name for the .aws file
+		// Else Attempt to use the Prop Sheet's filename
+		GetDiskBaseNameWithAWS(szFilename);
+		if (szFilename[0] == 0)
+		{
+			strcpy(szFilename, Snapshot_GetFilename());
+		}
 	}
-	else
+	else	// Load
 	{
+		// Attempt to use the Prop Sheet's filename first
+		// Else attempt to use drive1's image name as the name for the .aws file
 		strcpy(szFilename, Snapshot_GetFilename());
+		if (szFilename[0] == 0)
+		{
+			GetDiskBaseNameWithAWS(szFilename);
+		}
 	}
 	
-	RegLoadString(TEXT("Preferences"),REGVALUE_PREF_START_DIR,1,szDirectory,MAX_PATH);
-	
-	
+	RegLoadString(TEXT(REG_PREFS),REGVALUE_PREF_START_DIR,1,szDirectory,MAX_PATH);
+
 	//
 	
 	OPENFILENAME ofn;
@@ -1238,20 +1234,38 @@ static void InitFreezeDlgButton(HWND window)
 
 static void AdvancedDlg_OK(HWND window, UINT afterclose)
 {
-	char szFilename[MAX_PATH];
-	memset(szFilename, 0, sizeof(szFilename));
-	* (USHORT*) szFilename = sizeof(szFilename);
+	// Update save-state filename
+	{
+		char szFilename[MAX_PATH];
+		memset(szFilename, 0, sizeof(szFilename));
+		* (USHORT*) szFilename = sizeof(szFilename);
 
-	UINT nLineLength = SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_LINELENGTH,0,0);
+		UINT nLineLength = SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, EM_LINELENGTH, 0, 0);
 
-	SendDlgItemMessage(window,IDC_SAVESTATE_FILENAME,EM_GETLINE,0,(LPARAM)szFilename);
+		SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, EM_GETLINE, 0, (LPARAM)szFilename);
 
-	nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
-	szFilename[nLineLength] = 0x00;
+		nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
+		szFilename[nLineLength] = 0x00;
 
-	SaveStateUpdate();
-	RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,Printer_GetFilename());
-//	PrinterStateUpdate();
+		SaveStateUpdate();
+	}
+
+	// Update printer dump filename
+	{
+		char szFilename[MAX_PATH];
+		memset(szFilename, 0, sizeof(szFilename));
+		* (USHORT*) szFilename = sizeof(szFilename);
+
+		UINT nLineLength = SendDlgItemMessage(window, IDC_PRINTER_DUMP_FILENAME, EM_LINELENGTH, 0, 0);
+
+		SendDlgItemMessage(window, IDC_PRINTER_DUMP_FILENAME, EM_GETLINE, 0, (LPARAM)szFilename);
+
+		nLineLength = nLineLength > sizeof(szFilename)-1 ? sizeof(szFilename)-1 : nLineLength;
+		szFilename[nLineLength] = 0x00;
+
+		Printer_SetFilename(szFilename);
+		RegSaveString(TEXT(REG_CONFIG), REGVALUE_PRINTER_FILENAME, 1, Printer_GetFilename());
+	}
 
 	g_bSaveStateOnExit = IsDlgButtonChecked(window, IDC_SAVESTATE_ON_EXIT) ? true : false;
 	REGSAVE(TEXT(REGVALUE_SAVE_STATE_ON_EXIT), g_bSaveStateOnExit ? 1 : 0);
@@ -1373,15 +1387,12 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 			break;
 		case IDC_SAVESTATE_BROWSE:
 			if(SaveStateSelectImage(window, TEXT("Select Save State file"), true))
-				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM) g_szSSNewFilename);
+				SendDlgItemMessage(window, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM)g_szSSNewFilename);
 			break;
-		case IDC_DUMP_FILENAME_BROWSE:
+		case IDC_PRINTER_DUMP_FILENAME_BROWSE:
 			{				
-				char PrinterDumpLoc[MAX_PATH] = {0};
-				strcpy(PrinterDumpLoc, BrowseToFile (window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0")).c_str());
-				RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,PrinterDumpLoc);
-				SendDlgItemMessage(window, IDC_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM) PrinterDumpLoc);
-				Printer_SetFilename (PrinterDumpLoc);
+				string strPrinterDumpLoc = BrowseToFile(window, TEXT("Select printer dump file"), REGVALUE_PRINTER_FILENAME, TEXT("Text files (*.txt)\0*.txt\0") TEXT("All Files\0*.*\0"));
+				SendDlgItemMessage(window, IDC_PRINTER_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM)strPrinterDumpLoc.c_str());
 			}
 			break;
 		case IDC_SAVESTATE_ON_EXIT:
@@ -1431,7 +1442,7 @@ static BOOL CALLBACK AdvancedDlgProc (HWND   window,
 			CheckDlgButton(window, IDC_PRINTER_APPEND, g_bPrinterAppend ? BST_CHECKED : BST_UNCHECKED);
 			SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE, UDM_SETRANGE, 0, MAKELONG(999,0));
 			SendDlgItemMessage(window, IDC_SPIN_PRINTER_IDLE, UDM_SETPOS, 0, MAKELONG(Printer_GetIdleLimit (),0));
-			SendDlgItemMessage(window,IDC_DUMP_FILENAME,WM_SETTEXT,0,(LPARAM)Printer_GetFilename());
+			SendDlgItemMessage(window, IDC_PRINTER_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM)Printer_GetFilename());
 
 			FillComboBox(window, IDC_CLONETYPE, g_CloneChoices, g_uCloneType);
 			InitFreezeDlgButton(window);

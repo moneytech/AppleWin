@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2009, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2010, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,12 +21,14 @@ along with AppleWin; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-/* Description: Debugger
+/* Description: Debugger Assembler
  *
- * Author: Copyright (C) 2006-2009, Michael Pohoreski
+ * Author: Copyright (C) 2006-2010 Michael Pohoreski
  */
 
 #include "StdAfx.h"
+
+#define DEBUG_ASSEMBLER 0
 
 // Globals __________________________________________________________________
 
@@ -291,16 +293,12 @@ Fx	BEQ r  SBC (d),Y  sbc (d)  ---  ---      SBC d,X  INC d,X  ---  SED  SBC a,Y 
 
 // Private __________________________________________________________________
 
-
-//	enum Nopcode_t
-//	{
-//		NOPCODE_NONE, // line.iOpcode is valid: [0,0xFF]
-
-	// Acme
+	// NOTE: Keep in sync AsmDirectives_e g_aAssemblerDirectives !
 	AssemblerDirective_t g_aAssemblerDirectives[ NUM_ASM_DIRECTIVES ] = 
 	{
 		// NULL n/a
 		{""},
+		// Origin, Target Address, EndProg, Equate, Data, AsciiString,HexString
 		// Acme
 		{"???"},
 		// Big Mac
@@ -313,7 +311,7 @@ Fx	BEQ r  SBC (d),Y  sbc (d)  ---  ---      SBC d,X  INC d,X  ---  SED  SBC a,Y 
 		{"ASC"}, // ASC "postive" 'negative'
 		{"DDB"}, // Define Double Byte (Define WORD)
 		{"DFB"}, // DeFine Byte
-		{"DS" }, // Defin Storage
+		{"DS" }, // Define Storage
 		{"HEX"}, // HEX ###### or HEX ##,##,...
 		{"ORG"}, // Origin
 		// MicroSparc
@@ -332,6 +330,38 @@ Fx	BEQ r  SBC (d),Y  sbc (d)  ---  ---      SBC d,X  INC d,X  ---  SED  SBC a,Y 
 		{"???"},
 		// Weller
 		{"???"},
+	// User-Defined
+	// NOTE: Keep in sync AsmCustomDirective_e g_aAssemblerDirectives !
+		{"db" }, // ASM_DEFINE_BYTE
+		{"dw" }, // ASM_DEFINE_WORD
+		{"da" }, // ASM_DEFINE_ADDRESS_16
+// d    memory Dump
+// da   Memory Ascii, Define Address
+// ds   S = Ascii (Low),
+// dt   T = Apple (High)
+// dm   M = Mixed (Low,High=EndofString)
+		{"ds" }, // ASM_DEFINE_ASCII_TEXT
+		{"dt" }, // ASM_DEFINE_APPLE_TEXT
+		{"dm" }, // ASM_DEFINE_TEXT_HI_LO
+
+		{"df" }, // ASM_DEFINE_FLOAT
+		{"dfx"}, // ASM_DEFINE_FLOAT_X
+	};
+
+	int g_iAssemblerSyntax = ASM_CUSTOM; // Which assembler syntax to use
+	int g_aAssemblerFirstDirective[ NUM_ASSEMBLERS ] =
+	{
+		FIRST_A_DIRECTIVE,
+		FIRST_B_DIRECTIVE,
+		FIRST_D_DIRECTIVE,
+		FIRST_L_DIRECTIVE,
+		FIRST_M_DIRECTIVE,
+		FIRST_u_DIRECTIVE,
+		FIRST_O_DIRECTIVE,
+		FIRST_S_DIRECTIVE,
+		FIRST_T_DIRECTIVE,
+		FIRST_W_DIRECTIVE,
+		FIRST_Z_DIRECTIVE
 	};
 
 // Assemblers
@@ -384,6 +414,10 @@ Fx	BEQ r  SBC (d),Y  sbc (d)  ---  ---      SBC d,X  INC d,X  ---  SED  SBC a,Y 
 	WORD m_nAsmTargetAddress = 0;
 	WORD m_nAsmTargetValue   = 0;
 
+// Private
+	void AssemblerHashOpcodes ();
+	void AssemblerHashDirectives ();
+
 // Implementation ___________________________________________________________
 
 
@@ -424,7 +458,7 @@ bool _6502_CalcRelativeOffset( int nOpcode, int nBaseAddress, int nTargetAddress
 
 
 //===========================================================================
-int  _6502_GetOpmodeOpbyte ( const int iAddress, int & iOpmode_, int & nOpbyte_ )
+int  _6502_GetOpmodeOpbyte ( const int nBaseAddress, int & iOpmode_, int & nOpbyte_ )
 {
 #if _DEBUG
 	if (! g_aOpcodes)
@@ -433,13 +467,58 @@ int  _6502_GetOpmodeOpbyte ( const int iAddress, int & iOpmode_, int & nOpbyte_ 
 	}
 #endif
 
-// Data Disassembler
-// Smart Disassembly - Data Section
-// Assemblyer Directives - Psuedo Mnemonics
-
-	int iOpcode_ = *(mem + iAddress);
+	int iOpcode_ = *(mem + nBaseAddress);
 		iOpmode_ = g_aOpcodes[ iOpcode_ ].nAddressMode;
 		nOpbyte_ = g_aOpmodes[ iOpmode_ ].m_nBytes;
+
+	// 2.6.2.25 Fixed: DB DW custom data byte sizes weren't scrolling properly in the disasm view.
+    //          Changed _6502_GetOpmodeOpbyte() to be aware of data bytes.
+	//
+	// NOTE: _6502_GetOpmodeOpbyte() needs to (effectively) call Disassembly_GetData()
+	//    a) the CmdCursorLineUp() calls us to calc for -X bytes back up how to reach the cursor (address) line below
+	//    b) The disassembler view needs to know how many bytes each line is.
+	int nSlack;
+
+	// 2.7.0.0 TODO: FIXME: Opcode length that over-lap data, should be shortened ... if (nOpbyte_ > 1) if Disassembly_IsDataAddress( nBaseAddress + 1 ) nOpbyte_ = 1;
+	DisasmData_t* pData = Disassembly_IsDataAddress( nBaseAddress );
+	if( pData )
+	{
+	// Data Disassembler
+	// Smart Disassembly - Data Section
+	// Assemblyer Directives - Psuedo Mnemonics
+
+		switch( pData->eElementType )
+		{
+			default        : nOpbyte_ = 1; iOpmode_ = AM_M; break;
+			case NOP_BYTE_1: nOpbyte_ = 1; iOpmode_ = AM_M; break;
+			case NOP_BYTE_2: nOpbyte_ = 2; iOpmode_ = AM_M; break;
+			case NOP_BYTE_4: nOpbyte_ = 4; iOpmode_ = AM_M; break;
+			case NOP_BYTE_8: nOpbyte_ = 8; iOpmode_ = AM_M; break;
+			case NOP_WORD_1: nOpbyte_ = 2; iOpmode_ = AM_M; break;
+			case NOP_WORD_2: nOpbyte_ = 4; iOpmode_ = AM_M; break;
+			case NOP_WORD_4: nOpbyte_ = 8; iOpmode_ = AM_M; break;
+			case NOP_ADDRESS:nOpbyte_ = 2; iOpmode_ = AM_A; // BUGFIX: 2.6.2.33 Define Address should be shown as Absolute mode, not Indirect Absolute mode. DA BASIC.FPTR D000:D080 // was showing as "da (END-1)" now shows as "da END-1"
+				pData->nTargetAddress = *(LPWORD)(mem+nBaseAddress);
+				break;
+			case NOP_STRING_APPLESOFT:
+				// TODO: FIXME: scan memory for high byte
+				nOpbyte_ = 8;
+				iOpmode_ = AM_M;
+				break;
+		}
+
+		// Check if we are not element aligned ...
+		nSlack = (nOpbyte_ > 1) ? (nBaseAddress & nOpbyte_-1 ) : 0;
+		if (nSlack)
+		{
+			nOpbyte_ = nSlack;
+			iOpmode_ = AM_M;
+		}
+
+		//iOpcode_ = NUM_OPCODES; // Don't have valid opcodes ... we have data !
+		// iOpcode_ = (int)( pData ); // HACK: pass pData back to caller ...
+		iOpcode_ = 0xEA; // OP_NOP
+	}
 
 #if _DEBUG
 	if (iOpcode_ >= NUM_OPCODES)
@@ -505,6 +584,9 @@ bool _6502_GetTargets ( WORD nAddress, int *pTargetPartial_, int *pTargetPointer
 	WORD nTarget16 = *(LPWORD)(mem + nAddress + 1);
 
 	int eMode = g_aOpcodes[ nOpcode ].nAddressMode;
+
+// We really need to use the values that are code and data assembler
+// TODO: FIXME: _6502_GetOpmodeOpbyte( iAddress, iOpmode, nOpbytes );
 
 	switch (eMode)
 	{
@@ -718,9 +800,24 @@ int AssemblerHashMnemonic ( const TCHAR * pMnemonic )
 	const int    NUM_MSK_BITS =  5; //  4 ->  5 prime
 	const Hash_t BIT_MSK_HIGH = ((1 << NUM_MSK_BITS) - 1) << NUM_LOW_BITS;
 
-	for( int iChar = 0; iChar < 4; iChar++ )
+	int nLen = strlen( pMnemonic );
+
+#if DEBUG_ASSEMBLER
+	static char sText[ CONSOLE_WIDTH * 3 ];
+	static int nMaxLen = 0;
+	if (nMaxLen < nLen) {
+		nMaxLen = nLen;
+		sprintf( sText, "New Max Len: %d  %s", nMaxLen, pMnemonic );
+		ConsolePrint( sText );
+	}
+#endif
+
+	while( *pText )
+//	for( int iChar = 0; iChar < 4; iChar++ )
 	{	
-		nMnemonicHash = (nMnemonicHash << NUM_MSK_BITS) + *pText;
+		char c = tolower( *pText ); // TODO: based on ALLOW_INPUT_LOWERCASE ??
+
+		nMnemonicHash = (nMnemonicHash << NUM_MSK_BITS) + c;
 		iHighBits = (nMnemonicHash & BIT_MSK_HIGH);
 		if (iHighBits)
 		{
@@ -736,6 +833,8 @@ int AssemblerHashMnemonic ( const TCHAR * pMnemonic )
 //===========================================================================
 void AssemblerHashOpcodes ()
 {
+static char sText[ 128 ];
+
 	Hash_t nMnemonicHash;
 	int    iOpcode;
 
@@ -744,13 +843,18 @@ void AssemblerHashOpcodes ()
 		const TCHAR *pMnemonic = g_aOpcodes65C02[ iOpcode ].sMnemonic;
 		nMnemonicHash = AssemblerHashMnemonic( pMnemonic );
 		g_aOpcodesHash[ iOpcode ] = nMnemonicHash;
+#if DEBUG_ASSEMBLER
+	//OutputDebugString( "" );
+	sprintf( sText, "%s : %08X  ", pMnemonic, nMnemonicHash );
+	ConsolePrint( sText );
+	// CLC: 002B864
+#endif
 	}
-
+	ConsoleUpdate();
 }
 
-// TODO: Change .. AssemblerHashDirectives()
 //===========================================================================
-void AssemblerHashMerlinDirectives ()
+void AssemblerHashDirectives ()
 {
 	Hash_t nMnemonicHash;
 	int    iOpcode;
@@ -769,7 +873,7 @@ void AssemblerHashMerlinDirectives ()
 void AssemblerStartup()
 {
 	AssemblerHashOpcodes();
-	AssemblerHashMerlinDirectives();
+	AssemblerHashDirectives();
 }
  
 //===========================================================================
@@ -1307,6 +1411,17 @@ bool Assemble( int iArg, int nArgs, WORD nAddress )
 	TCHAR *pMnemonic = g_aArgs[ iArg ].sArg;
 	int nMnemonicHash = AssemblerHashMnemonic( pMnemonic );
 
+#if DEBUG_ASSEMBLER
+	static char sText[ CONSOLE_WIDTH * 2 ];
+	sprintf( sText, "%s%04X%s: %s%s%s -> %s%08X", 
+		CHC_ADDRESS, nAddress,
+		CHC_DEFAULT,
+		CHC_STRING, pMnemonic,
+		CHC_DEFAULT,
+		CHC_NUM_HEX, nMnemonicHash ); 
+	ConsolePrint( sText );
+#endif
+
 	m_vAsmOpcodes.clear(); // Candiate opcodes
 	int iOpcode;
 	
@@ -1323,7 +1438,6 @@ bool Assemble( int iArg, int nArgs, WORD nAddress )
 	if (! nOpcodes)
 	{
 		// Check for assembler directive
-
 
 		ConsoleBufferPush( TEXT(" Syntax Error: Invalid mnemonic") );
 		return false;

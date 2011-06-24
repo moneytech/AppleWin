@@ -1,13 +1,140 @@
 /*
-.2 Fixed help for command '@'
-.1 Added: Define Code
+2.7.0.#
+.21 Added: Help for BRK
+.20 Moved: BRK and BRKOP now under HELP BREAKPOINTS
+.19 Added: Shift-F7 will run the emulator at normal speed but with debugger breakpoints active!
+.18 Added: Implemented BPIO -- currently is the same as BPM
+.17 Fixed: HELP <category> wasn't displaying when category was one of: FLAGS, OUTPUT, WATCHES
+.16 Fixed: WL was displaying number of watches
+.15 Fixed: Memory Dump was over-writing watches.
+.14 Added: Debugger display flag to update soft switches. (Related to .12)
+.13 Fixed: Targets of PC instruction weren't displaying.
+.12 Fixed: Fixed scrolling to only update the diasm window.
+.11 Fixed: Breakpoints and Watches no longer disappear.
+.10 Added: Watches now show (dynamic) raw hex bytes
+    Changed: Lowered watches down from 16 to 8.
+
+ .9 Fixed: Bookmarks weren't initialized to zero.
+ .8 Added: New command PWD to display the current debugger directory.
+    This is the directory used for scripts, loading/saving memory, and trace files.
+    Currently the debugger uses the same directory that the last disk image was loaded from.
+    It will have its own directory in a future version.
+ .7 Fixed: Cleaned up display of soft-switches to show address.
+ .6 Removed: Unused aliases.
+    Reason: When a symbol table is specified with no args, the total # of symbols will be shown.
+    SYMBOLS1, SYMBOLS2, SYM0, SYM1, SYM2, SYM3, SYM4, SYM5, SYM6 
+ .5 Fixed: Increased console output height so that you can view all the SYMBASIC * output.
+ .4 Added: Two aliases for Dos 3.3 and Prodos symbol tables
+    SYMDOS
+    SYMPRO
+ .3 Added: Two new symbol tables added Dos 3.3 and Prodos.
+    SYMDOS33 
+    SYMPRODOS
+ .2 Fixed: Fixed: Debug build of debugger force display all CPU info window wasn't calling DrawTargets()
+ .1 Added: Soft Switches displayed in CPU info window
+
+
+2.7.0.0 Released with Applewin 1.19.1.0
+
+
+.33 Fixed: Define Address should be shown as Absolute mode, not Indirect Absolute mode.
+    Example:
+       U D000
+       DA BASIC.FPTR D000:D081 // was showing as "da (END-1)" now shows as "da END-1"
+.32 Fixed: n'th Search results were being displayed in dec, yet parser takes hex numbers.
+    Example:
+       SH D000:FFFF A9 00
+       U @A // used to show 10th search result as 10:DE60, now 0A:DE60
+.31 Fixed: Disasm list containing data address table was bailing on first possible match.
+    Example:
+       DA BASIC.FPTR D000:D080
+       U D000 // was showing da STOP+1, instead of END-1
+.30 Added: DA now works!  It is similar to DW except it does symbol lookups!
+    (DW = Define Word.  DA = Define Address)
+    Example:
+       U D000
+       DA BASIC.FPTR D000:D080
+.29 Fixed: Pretty print DB2 DB4 DB8 without commas
+.28 Fixed: DB2 DB4 DB8 DW DW2 DW4 now work/display properly.
+    DB (Define Byte) shows bytes in big endian order.
+    DW (Define Word) shows addresses (2 bytes) in little endian order.
+    Example:
+       U D000
+       DB2 REV.FPTR D000:D080
+       X
+       DW BASIC.FPT D000:D080
+       X
+    Or for those minimal types who hate wasting screen real estate
+        DW4 COMPACT D000:D080
+        X
+        DB8 RA8 D000:D080
+        X
+.27 Fixed: Don't do symbol look up for data bytes that don't request it. (Groundwork for Define Address)
+.26 Changed: Code portability. Slowly remove the LPCTSTR taint of Windowisms.
+.25 Fixed: DB DW custom data byte sizes weren't scrolling properly in the disasm view.
+    Changed _6502_GetOpmodeOpbyte() to be aware of data bytes.
+.24 Changed: 2.6.2.24 Changed: Tone-downed the alt. background cyan for the DATA window. C2, C3 -> C1,C2
+.23 Changed: Increased number of lines for console output buffer (from 384 to 512)
+.22 Changed: Re-enabled magenta/purple for warnings (i.e. symbol table disabled)
+.21 Fixed: Missing GPL / copyright on some debugger files, updated year.
+.20 Changed: Output of found symbol more table friendly.  Symbol table name displayed first.
+    Example: SYM HOME     // <SymbolTable>:  $<Address> <Symbol>
+.19 Changed: Unified format & colors for summary of symbol tables and symbol table names.
+    A symbol table that has been disabled will display in purple / magenta.
+    Example: SYM HOME     // 'Main' shown in yellow
+    Example: SYMBASIC OFF
+    Example: SYM
+.18 Fixed: Search Results: Total summary line unified colors.
+.17 Fixed: Search Results: The n'th result now using correct color (was command, now number decimal)
+.16 Fixed: Search Results: The hex literal prefix '$' for target address results now colorized properly.
+.15 Fixed: Search Results: Added space between results for better readability.
+.14 Fixed: Help description for Save/Load parameter help was swapped.
+    Example: HELP SYMMAIN
+.13 Added: Can now enable/disable selected symbol table(s) !
+    Example: SYMMAIN OFF
+    Example: SYMBASIC OFF
+    Note: If you need to search for symbols ON, OFF, CLEAR, use SYM. i.e. SYM ON.
+.12 Fixed: Following symbol tables were all hard-coded to act on SYMMAIN
+		SYMBASIC
+		SYMASM
+		SYMUSER
+		SYMUSER2
+		SYMSRC
+		SYMSRC2
+	Example: SYMBASIC CLEAR
+.11 Added: Command line now accepts Indirect mode via ( )
+    Example:  U (BRKV)
+.10 Added: Pretty printing 'B' of all bytes treated as data.
+.9 Fixed: Renamed ambiguous command 'DL' to 'B' to list all bytes being treated as data
+          Renamed command: 'B' to 'Z' as an alias to treat byte(s) as data
+.8 Fixed: Define Code 'X' wasn't removing entries
+.7 Fixed: DATA1 was using call win setup for code, not data.
+.6 Cleanup of command table to have the proper internal command enum.
+		D      // CMD_MEM_MINI_DUMP_HEX_1 moved to alias section
+		M1     // CMD_MEM_MINI_DUMP_HEX_1 moved to alias section
+		M2     // CMD_MEM_MINI_DUMP_HEX_2 moved to alias section
+		TEXT81 // CMD_VIEW_TEXT81         <- CMD_VIEW_TEXT8X
+		TEXT82 // CMD_VIEW_TEXT82         <- CMD_VIEW_TEXT8X
+		W      // CMD_WATCH               <- CMD_WATCH_ADD
+.5 Added: Internal consistency checking for commands and their internal command enum.
+.4 Fixed: Added custom assembler type and debugger disassembly display uses variable
+          instead of always being hard-coded to Merlin directives.
+.5 Fixed: Data disassembler help -- was using wrong command help offset due to wrong order of commands.
+.3 Fixed: Assembler now accepts lower-case mnemonics
+.2 Fixed: help for command '@'
+.1 Added: new command: 'X' to Define Code 
     Remove address being treated as data
-.0 Added: Define Byte Pseudo Mnemonic
-    DB
-    DB symbol
+    X                    // uses address cursor is on
+	X symbol             // uses address cursor is on
+	X symbol address
+.0 Added: new command "DB" to Define Byte / Pseudo Mnemonic / Assembler Directive
+    DB                  // uses address cursor is on
+    DB symbol           // uses address cursor is on
     DB symbol address
     DB symbol start:end
-2.6.2.x
+    Example:
+       DB zp 0:ff
+2.6.2.0 Released with AppleWin 1.17.2.0
 
 2.6.1.x
 .35 Fixed: Pressing enter on blank line while in assembler wouldn't exit it.

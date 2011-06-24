@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2007, Tom Charlesworth, Michael Pohoreski
+Copyright (C) 2006-2010, Tom Charlesworth, Michael Pohoreski
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,14 +23,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /* Description: Debugger
  *
- * Author: Copyright (C) 2006, Michael Pohoreski
+ * Author: Copyright (C) 2006-2010 Michael Pohoreski
  */
 
 #include "StdAfx.h"
 
 
-// NEW UI debugging
+// NEW UI debugging - force display ALL meta-info (regs, stack, bp, watches, zp) for debugging purposes
 #define DEBUG_FORCE_DISPLAY 0
+
+#define SOFTSWITCH_OLD 0
 
 #if _DEBUG
 	#define DEBUG_FONT_NO_BACKGROUND_CHAR      0
@@ -57,6 +59,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Private ________________________________________________________________________________________
 
+
+// HACK HACK HACK
+	//g_nDisasmWinHeight
+	WindowSplit_t *g_pDisplayWindow = 0; // HACK
+// HACK
+
 // Display - Win32
 //	HDC     g_hDstDC = NULL; // App Window
 
@@ -67,19 +75,21 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	HBRUSH g_hConsoleBrushFG = NULL;
 	HBRUSH g_hConsoleBrushBG = NULL;
 
+	// NOTE: Keep in sync ConsoleColors_e g_anConsoleColor !
 	COLORREF g_anConsoleColor[ NUM_CONSOLE_COLORS ] =
-	{
-		RGB(   0,   0,   0 ), // 0 000 K
-		RGB( 255,  32,  32 ), // 1 001 R
-		RGB(   0, 255,   0 ), // 2 010 G
-		RGB( 255, 255,   0 ), // 3 011 Y
-		RGB(  64,  64, 255 ), // 4 100 B
-//		RGB( 255,   0, 255 ), // 5 101 M Purple/Magenta is useless
-		RGB(  80, 192, 255 ),
-		RGB(   0, 255, 255 ), // 6 110 C
-		RGB( 255, 255, 255 ), // 7 111 W
-		RGB( 255, 128,   0 ), // 8     Orange
-		RGB( 128, 128, 128 )  // 9     Grey
+	{                         // # <Bright Blue Green Red>
+		RGB(   0,   0,   0 ), // 0 0000 K
+		RGB( 255,  32,  32 ), // 1 1001 R
+		RGB(   0, 255,   0 ), // 2 1010 G
+		RGB( 255, 255,   0 ), // 3 1011 Y
+		RGB(  64,  64, 255 ), // 4 1100 B
+		RGB( 255,   0, 255 ), // 5 1101 M Purple/Magenta now used for warnings.
+		RGB(   0, 255, 255 ), // 6 1110 C
+		RGB( 255, 255, 255 ), // 7 1111 W
+		RGB( 255, 128,   0 ), // 8 0011 Orange
+		RGB( 128, 128, 128 ), // 9 0111 Grey
+
+		RGB(  80, 192, 255 )  // Lite Blue
 	};
 
 // Disassembly
@@ -124,12 +134,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #if USE_APPLE_FONT
 		// Horizontal Column (pixels) of Stack & Regs
-		const int INFO_COL_1 = (51 * 7); // nFontWidth
-		const int DISPLAY_REGS_COLUMN    = INFO_COL_1;
-		const int DISPLAY_FLAG_COLUMN    = INFO_COL_1;
-		const int DISPLAY_STACK_COLUMN   = INFO_COL_1;
-		const int DISPLAY_TARGETS_COLUMN = INFO_COL_1;
-		const int DISPLAY_ZEROPAGE_COLUMN= INFO_COL_1;
+		const int INFO_COL_1 = (51 * CONSOLE_FONT_WIDTH);
+		const int DISPLAY_REGS_COLUMN       = INFO_COL_1;
+		const int DISPLAY_FLAG_COLUMN       = INFO_COL_1;
+		const int DISPLAY_STACK_COLUMN      = INFO_COL_1;
+		const int DISPLAY_TARGETS_COLUMN    = INFO_COL_1;
+		const int DISPLAY_ZEROPAGE_COLUMN   = INFO_COL_1;
+		const int DISPLAY_SOFTSWITCH_COLUMN = INFO_COL_1 - (CONSOLE_FONT_WIDTH/2) + 1;;
 
 		// Horizontal Column (pixels) of BPs, Watches & Mem
 		const int INFO_COL_2 = (62 * 7); // nFontWidth
@@ -137,11 +148,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		const int DISPLAY_WATCHES_COLUMN = INFO_COL_2;
 		const int DISPLAY_MINIMEM_COLUMN = INFO_COL_2;
 #else
-		const int DISPLAY_REGS_COLUMN    = SCREENSPLIT1;
-		const int DISPLAY_FLAG_COLUMN    = SCREENSPLIT1; // + 63;
-		const int DISPLAY_STACK_COLUMN   = SCREENSPLIT1;
-		const int DISPLAY_TARGETS_COLUMN = SCREENSPLIT1;
-		const int DISPLAY_ZEROPAGE_COLUMN= SCREENSPLIT1;
+		const int DISPLAY_CPU_INFO_LEFT_COLUMN = SCREENSPLIT1
+
+		const int DISPLAY_REGS_COLUMN       = DISPLAY_CPU_INFO_LEFT_COLUMN;
+		const int DISPLAY_FLAG_COLUMN       = DISPLAY_CPU_INFO_LEFT_COLUMN;
+		const int DISPLAY_STACK_COLUMN      = DISPLAY_CPU_INFO_LEFT_COLUMN;
+		const int DISPLAY_TARGETS_COLUMN    = DISPLAY_CPU_INFO_LEFT_COLUMN;
+		const int DISPLAY_ZEROPAGE_COLUMN   = DISPLAY_CPU_INFO_LEFT_COLUMN;
+		const int DISPLAY_SOFTSWITCH_COLUMN = DISPLAY_CPU_INFO_LEFT_COLUMN - (CONSOLE_FONT_WIDTH/2);
 
 		const int SCREENSPLIT2 = SCREENSPLIT1 + (12 * 7); // moved left 3 chars to show B. prefix in breakpoint #, W. prefix in watch #
 		const int DISPLAY_BP_COLUMN      = SCREENSPLIT2;
@@ -151,6 +165,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 		int MAX_DISPLAY_REGS_LINES        = 7;
 		int MAX_DISPLAY_STACK_LINES       = 8;
+		int MAX_DISPLAY_TARGET_PTR_LINES  = 2;
 		int MAX_DISPLAY_ZEROPAGE_LINES    = 8;
 
 //		int MAX_DISPLAY_BREAKPOINTS_LINES = 7; // 7
@@ -604,7 +619,7 @@ void PrintGlyph( const int x, const int y, const char glyph )
 
 	SelectObject( g_hDstDC, g_hConsoleBrushFG );
 
-	// Use Source ask mask to make color Pattern mask (AND), then apply to dest (OR)
+	// Use Source as mask to make color Pattern mask (AND), then apply to dest (OR)
 	// D | (P & S) ->  DPSao
 	BitBlt(
 		g_hFrameDC,
@@ -916,6 +931,20 @@ char ColorizeSpecialChar( char * sText, BYTE nData, const MemoryView_e iView,
 	return nChar;
 }
 
+void ColorizeFlags( bool bSet )
+{
+	if (bSet)
+	{
+		DebuggerSetColorBG( DebuggerGetColor( BG_INFO_INVERSE ));
+		DebuggerSetColorFG( DebuggerGetColor( FG_INFO_INVERSE ));
+	}
+	else
+	{
+		DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+		DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ));
+	}
+}
+
 
 // Main Windows ___________________________________________________________________________________
 
@@ -1035,10 +1064,10 @@ void DrawBreakpoints ( int line )
 			DebuggerSetColorFG( DebuggerGetColor( iForeground ) );
 
 #if DEBUG_FORCE_DISPLAY
-	extern COLORREF gaColorPalette[ NUM_PALETTE ];
+	
 
 	int iColor = R8 + iBreakpoint;
-	COLORREF nColor = gaColorPalette[ iColor ];
+	COLORREF nColor = g_aColorPalette[ iColor ];
 	if (iBreakpoint >= 8)
 	{
 		DebuggerSetColorBG( DebuggerGetColor( BG_DISASM_BP_S_C ) );
@@ -1071,7 +1100,7 @@ void DrawBreakpoints ( int line )
 				DebuggerSetColorBG( DebuggerGetColor( iBackground ) );
 				DebuggerSetColorFG( DebuggerGetColor( iForeground ) );
 #if DEBUG_FORCE_DISPLAY
-	COLORREF nColor = gaColorPalette[ iColor ];
+	COLORREF nColor = g_aColorPalette[ iColor ];
 	if (iBreakpoint >= 8)
 	{
 		nColor = DebuggerGetColor( BG_INFO );
@@ -1200,7 +1229,7 @@ void DrawConsoleInput ()
 // Disassembly ____________________________________________________________________________________
 
 
-// Get the data needed to disassemble one line of opcodes
+// Get the data needed to disassemble one line of opcodes. Fills in the DisasmLine info.
 // Disassembly formatting flags returned
 //	@parama sTargetValue_ indirect/indexed final value
 //===========================================================================
@@ -1217,11 +1246,12 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 	int nOpbyte;
 
 	iOpcode = _6502_GetOpmodeOpbyte( nBaseAddress, iOpmode, nOpbyte );
+	DisasmData_t* pData = Disassembly_IsDataAddress( nBaseAddress );
+	line_.pDisasmData = pData;
 
 	line_.iOpcode = iOpcode;
 	line_.iOpmode = iOpmode;
 	line_.nOpbyte = nOpbyte;
-	
 
 #if _DEBUG
 //	if (iLine != 41)
@@ -1253,17 +1283,23 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 
 	// Composite string that has the symbol or target nAddress
 	WORD nTarget = 0;
-	line_.nTargetOffset = 0;
 
-//	if (g_aOpmodes[ iMode ]._sFormat[0])
 	if ((iOpmode != AM_IMPLIED) &&
 		(iOpmode != AM_1) &&
 		(iOpmode != AM_2) &&
 		(iOpmode != AM_3))
 	{
-		nTarget = *(LPWORD)(mem+nBaseAddress+1);
-		if (nOpbyte == 2)
-			nTarget &= 0xFF;
+		// Assume target address starts after the opcode ...
+		// BUT in the Assembler Directve / Data Disassembler case for define addr/word
+		// the opcode literally IS the target address!
+		if( pData )
+		{
+			nTarget = pData->nTargetAddress;
+		} else {
+			nTarget = *(LPWORD)(mem+nBaseAddress+1);
+			if (nOpbyte == 2)
+				nTarget &= 0xFF;
+		}
 
 		if (iOpmode == AM_R) // Relative
 		{
@@ -1306,12 +1342,20 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 			(iOpmode == AM_IAX) || // Indexed (Absolute Indirect, X)
 			(iOpmode == AM_NZY) || // Indirect (Zeropage) Index, Y
 			(iOpmode == AM_NZ ) || // Indirect (Zeropage)
-			(iOpmode == AM_NA ))   // Indirect Absolute
+			(iOpmode == AM_NA ))   //(Indirect Absolute)
 		{
 			line_.nTarget  = nTarget;
 
-			LPCTSTR pTarget = NULL;
-			LPCTSTR pSymbol = FindSymbolFromAddress( nTarget );
+			const char* pTarget = NULL;
+			const char* pSymbol = 0;
+
+			pSymbol = FindSymbolFromAddress( nTarget );
+
+			// Data Assembler
+			if (pData && (!pData->bSymbolLookup))
+				pSymbol = 0;
+
+			// Try exact match first
 			if (pSymbol)
 			{
 				bDisasmFormatFlags |= DISASM_FORMAT_SYMBOL;
@@ -1330,7 +1374,17 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 				}
 			}
 			
-			if (! (bDisasmFormatFlags & DISASM_FORMAT_SYMBOL))
+			// Old Offset search: (Search +1 First) nTarget-1, (Search -1 Second) nTarget+1
+			//    Problem: U D038 shows as A.TRACE+1
+			// New Offset search: (Search -1 First) nTarget+1, (Search +1 Second) nTarget+1
+			//    Problem: U D834, D87E shows as P.MUL-1, instead of P.ADD+1
+			// 2.6.2.31 Fixed: address table was bailing on first possible match. U D000 -> da STOP+1, instead of END-1
+			// 2.7.0.0: Try to match nTarget-1, nTarget+1, AND if we have both matches
+			// Then we need to decide which one to show. If we have pData then pick this one.
+			// TODO: Do we need to let the user decide which one they want searched first?
+			//    nFirstTarget = g_bDebugConfig_DisasmMatchSymbolOffsetMinus1First ? nTarget-1 : nTarget+1;
+			//    nSecondTarget = g_bDebugConfig_DisasmMatchSymbolOffsetMinus1First ? nTarget+1 : nTarget-1;
+			if (! (bDisasmFormatFlags & DISASM_FORMAT_SYMBOL) || pData)
 			{
 				pSymbol = FindSymbolFromAddress( nTarget + 1 );
 				if (pSymbol)
@@ -1432,6 +1486,18 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 	// Opcode Bytes
 	FormatOpcodeBytes( nBaseAddress, line_ );
 
+// Data Disassembler
+	if( pData )
+	{
+		line_.iNoptype = pData->eElementType;
+		line_.iNopcode = pData->iDirective;
+		strcpy( line_.sMnemonic, g_aAssemblerDirectives[ line_.iNopcode ].m_pMnemonic );
+
+		FormatNopcodeBytes( nBaseAddress, line_ );
+	} else { // Regular 6502/65C02 opcode -> mnemonic
+		strcpy( line_.sMnemonic, g_aOpcodes[ line_.iOpcode ].sMnemonic );
+	}
+
 	int nSpaces = strlen( line_.sOpCodes );
     while (nSpaces < (int)nMinBytesLen)
 	{
@@ -1441,6 +1507,23 @@ int GetDisassemblyLine ( WORD nBaseAddress, DisasmLine_t & line_ )
 
 	return bDisasmFormatFlags;
 }	
+
+
+//===========================================================================
+const char* FormatAddress( WORD nAddress, int nBytes )
+{
+	// There is no symbol for this nAddress
+	static TCHAR sSymbol[8] = TEXT("");
+	switch (nBytes)
+	{
+		case  2:	wsprintf(sSymbol,TEXT("$%02X"),(unsigned)nAddress);  break;
+		case  3:	wsprintf(sSymbol,TEXT("$%04X"),(unsigned)nAddress);  break;
+		// TODO: FIXME: Can we get called with nBytes == 16 ??
+		default:	sSymbol[0] = 0; break; // clear since is static
+	}
+	return sSymbol;
+}
+
 
 //===========================================================================
 void FormatOpcodeBytes ( WORD nBaseAddress, DisasmLine_t & line_ )
@@ -1475,22 +1558,32 @@ void FormatNopcodeBytes ( WORD nBaseAddress, DisasmLine_t & line_ )
 		switch( line_.iNoptype )
 		{
 			case NOP_BYTE_1:
-				sprintf( pDst, "$%02X", nTarget8 ); // sBytes+strlen(sBytes)
-				pDst += 3;
+			case NOP_BYTE_2:
+			case NOP_BYTE_4:
+			case NOP_BYTE_8:
+				sprintf( pDst, "%02X", nTarget8 ); // sBytes+strlen(sBytes)
+				pDst += 2;
 				iByte++;
-				if( iByte < line_.nOpbyte )
-				{
-					*pDst++ = ',';
-				}
+				if( line_.iNoptype == NOP_BYTE_1)
+					if( iByte < line_.nOpbyte )
+					{
+						*pDst++ = ',';
+					}
 				break;
 			case NOP_WORD_1:
-				sprintf( pDst, "$%04X", nTarget16 ); // sBytes+strlen(sBytes)
-				pDst += 5;
+			case NOP_WORD_2:
+			case NOP_WORD_4:
+				sprintf( pDst, "%04X", nTarget16 ); // sBytes+strlen(sBytes)
+				pDst += 4;
 				iByte+= 2;
 				if( iByte < line_.nOpbyte )
 				{
 					*pDst++ = ',';
 				}
+				break;
+			case NOP_ADDRESS:
+				// Nothing to do, already handled :-)
+				iByte += 2;
 				break;
 			case NOP_STRING_APPLESOFT:
 				iByte = line_.nOpbyte;
@@ -1498,20 +1591,17 @@ void FormatNopcodeBytes ( WORD nBaseAddress, DisasmLine_t & line_ )
 				pDst += iByte;
 				*pDst = 0;
 			default:
+#if _DEBUG
+	int *FATAL = 0;
+	*FATAL = 0xDEADC0DE;
+#endif				
+				iByte++;
 				break;
 		}
-//		else // 4 bytes
-//		if( line_.nOpbyte == 4)
-//		{
-//		}		
-//		else // 8 bytes
-//		if( line_.nOpbyte == 8)
-//		{
-//		}		
 	}
 }
 
-
+//===========================================================================
 void FormatDisassemblyLine( const DisasmLine_t & line, char * sDisassembly, const int nBufferSize )
 {
 	//> Address Seperator Opcodes   Label Mnemonic Target [Immediate] [Branch]
@@ -1587,28 +1677,17 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 	int iOpmode;
 	int nOpbyte;
 	DisasmLine_t line;
-	LPCSTR pSymbol = NULL;
-	const char * pMnemonic = NULL;
+	const char* pSymbol = FindSymbolFromAddress( nBaseAddress );
+	const char* pMnemonic = NULL;
 
+	// Data Disassembler
 	int bDisasmFormatFlags = GetDisassemblyLine( nBaseAddress, line );
-	DisasmData_t *pData = Disassembly_IsDataAddress( nBaseAddress );
-	if( pData )
-	{
-		Disassembly_GetData( nBaseAddress, pData, line );
-//		pSymbol = line.sLabel;
-	}
-
-	{
-		pSymbol = FindSymbolFromAddress( nBaseAddress );
-//		strcpy( line.sLabel, pSymbol );
-	}
+	const DisasmData_t *pData = line.pDisasmData;
 
 	iOpcode = line.iOpcode;	
 	iOpmode = line.iOpmode;
 	nOpbyte = line.nOpbyte;
 
-	// Data Disassembler
-	//
 	// sAddress, sOpcodes, sTarget, sTargetOffset, nTargetOffset, sTargetPointer, sTargetValue, sImmediate, nImmediate, sBranch );
 	//> Address Seperator Opcodes   Label Mnemonic Target [Immediate] [Branch]
 	//
@@ -1831,7 +1910,6 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 	// Label
 		linerect.left = (int) aTabs[ TS_LABEL ];
 
-		LPCSTR pSymbol = FindSymbolFromAddress( nBaseAddress );
 		if (pSymbol)
 		{
 			if (! bCursorLine)
@@ -1845,18 +1923,14 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 		linerect.left = (int) aTabs[ TS_INSTRUCTION ];
 
 		if (! bCursorLine)
-			DebuggerSetColorFG( DebuggerGetColor( iForeground ) );
-
-		if( pData )
 		{
-//			pMnemonic = g_aAssemblerDirectives[ line.iNopcode ].sMnemonic;
-			pMnemonic = line.sMnemonic;
-		}
-		else
-		{
-			pMnemonic = g_aOpcodes[ iOpcode ].sMnemonic;
+			if( pData ) // Assembler Data Directive / Data Disassembler
+				DebuggerSetColorFG( DebuggerGetColor( FG_DISASM_DIRECTIVE ) ); // TODO: FIXME: HACK? Is the color fine?
+			else
+				DebuggerSetColorFG( DebuggerGetColor( iForeground ) );
 		}
 
+		pMnemonic = line.sMnemonic;
 		PrintTextCursorX( pMnemonic, linerect );
 		PrintTextCursorX( " ", linerect );
 
@@ -1905,11 +1979,6 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 		}
 		PrintTextCursorX( pTarget, linerect );
 //		PrintTextCursorX( " ", linerect );
-
-		if( pData )
-		{
-			return nOpbyte;
-		}
 
 		// Target Offset +/-		
 		if (bDisasmFormatFlags & DISASM_FORMAT_OFFSET)
@@ -1969,6 +2038,12 @@ WORD DrawDisassemblyLine ( int iLine, const WORD nBaseAddress )
 					DebuggerSetColorFG( DebuggerGetColor( FG_INFO_REG ) );
 				PrintTextCursorX( "Y", linerect );
 			}
+		}
+
+		// BUGFIX: 2.6.2.30:  DA $target --> show right paren
+		if( pData )
+		{
+			return nOpbyte;
 		}
 
 	// Memory Pointer and Value
@@ -2193,6 +2268,12 @@ void DrawMemory ( int line, int iMemDump )
 		return;
 
 	MemoryDump_t* pMD = &g_aMemDump[ iMemDump ];
+	bool bActive = pMD->bActive;
+#if DEBUG_FORCE_DISPLAY
+	bActive = true;
+#endif
+	if( !bActive )
+		return;
 
 	USHORT       nAddr   = pMD->nAddress;
 	DEVICE_e     eDevice = pMD->eDevice;
@@ -2343,7 +2424,17 @@ void DrawMemory ( int line, int iMemDump )
 					{
 						DebuggerSetColorFG( DebuggerGetColor( FG_INFO_IO_BYTE ));
 					}
-					sprintf(sText, "%02X ", nData );
+
+
+					if (nCols == 6)
+					{
+						if ((iCol & 1) == 1)
+							DebuggerSetColorBG( DebuggerGetColor( WATCH_ZERO_BG )); // BG_DATA_2
+						else
+							DebuggerSetColorBG( DebuggerGetColor( BG_DATA_2 ));
+						sprintf(sText, "%02X", nData );
+					} else
+						sprintf(sText, "%02X ", nData );
 				}
 				else
 				{
@@ -2456,6 +2547,171 @@ void DrawRegister ( int line, LPCTSTR name, const int nBytes, const WORD nValue,
 	PrintText( sValue, rect );
 }
 
+//===========================================================================
+void DrawRegisters ( int line )
+{
+	const char **sReg = g_aBreakpointSource;
+
+	DrawRegister( line++, sReg[ BP_SRC_REG_A ] , 1, regs.a , PARAM_REG_A  );
+	DrawRegister( line++, sReg[ BP_SRC_REG_X ] , 1, regs.x , PARAM_REG_X  );
+	DrawRegister( line++, sReg[ BP_SRC_REG_Y ] , 1, regs.y , PARAM_REG_Y  );
+	DrawRegister( line++, sReg[ BP_SRC_REG_PC] , 2, regs.pc, PARAM_REG_PC );
+	DrawFlags   ( line  , regs.ps, NULL);
+	line += 2;
+	DrawRegister( line++, sReg[ BP_SRC_REG_S ] , 2, regs.sp, PARAM_REG_SP );
+}
+
+// 2.7.0.7 Cleaned up display of soft-switches to show address.
+//===========================================================================
+void _DrawSoftSwitch( RECT & rect, int nAddress, bool bSet, char *sPrefix, char *sOn, char *sOff, const char *sSuffix = NULL )
+{
+	RECT temp = rect;
+	char sText[ 4 ] = "";
+
+	DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+//	DebuggerSetColorFG( DebuggerGetColor( FG_DISASM_ADDRESS ));
+	DebuggerSetColorFG( DebuggerGetColor( FG_DISASM_TARGET ));
+	sprintf( sText, "%02X", (nAddress & 0xFF) );
+	PrintTextCursorX( sText, temp );
+	DebuggerSetColorFG( DebuggerGetColor( FG_DISASM_OPERATOR ) );
+	PrintTextCursorX( ":", temp );
+
+	DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ));
+	if( sPrefix )
+		PrintTextCursorX( sPrefix, temp );
+
+	ColorizeFlags( bSet );
+	PrintTextCursorX( sOn, temp );
+
+	DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+	DebuggerSetColorFG( DebuggerGetColor( FG_DISASM_OPERATOR ) );
+	PrintTextCursorX( "/", temp );
+
+	ColorizeFlags( !bSet );
+	PrintTextCursorX( sOff, temp );
+
+	DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+	DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ));
+	if ( sSuffix )
+		PrintTextCursorX( sSuffix, temp );
+
+	rect.top    += g_nFontHeight;
+	rect.bottom += g_nFontHeight;
+}
+
+
+// 2.7.0.1 Display state of soft switches
+//===========================================================================
+void DrawSoftSwitches( int iSoftSwitch )
+{
+	RECT rect;
+	RECT temp;
+	int nFontWidth = g_aFontConfig[ FONT_INFO ]._nFontWidthAvg;
+
+		rect.left   = DISPLAY_SOFTSWITCH_COLUMN;
+		rect.top    = iSoftSwitch * g_nFontHeight;
+		rect.right = rect.left + (10 * nFontWidth) + 1;
+		rect.bottom = rect.top + g_nFontHeight;
+		temp = rect;
+
+		DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+		DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ));
+
+		char sText[16] = "";
+		
+#if SOFTSWITCH_OLD
+		// $C050 / $C051 = TEXTOFF/TEXTON = SW.TXTCLR/SW.TXTSET
+		// GR  / TEXT
+		// GRAPH/TEXT
+		// TEXT ON/OFF
+		sprintf( sText, !(g_bVideoMode & VF_TEXT) ? "GR  / ----" : "--  / TEXT" );
+		PrintTextCursorY( sText, rect );
+
+		// $C052 / $C053 = MIXEDOFF/MIXEDON = SW.MIXCLR/SW.MIXSET
+		// FULL/MIXED
+		// MIX OFF/ON
+		sprintf( sText, !(g_bVideoMode & VF_MIXED) ? "FULL/-----" : "----/MIXED" );
+		PrintTextCursorY( sText, rect );
+
+		// $C054 / $C055 = PAGE1/PAGE2 = PAGE2OFF/PAGE2ON = SW.LOWSCR/SW.HISCR
+		// PAGE 1 / 2
+		sprintf( sText, !(g_bVideoMode & VF_PAGE2) ? "PAGE 1 / -" : "PAGE - / 2" );
+		PrintTextCursorY( sText, rect );
+		
+		// $C056 / $C057 LORES/HIRES = HIRESOFF/HIRESON = SW.LORES/SW.HIRES
+		// LO / HIRES
+		// LO / -----
+		// -- / HIRES
+		sprintf( sText, !(g_bVideoMode & VF_HIRES) ? "LO /-- RES" : "---/HI RES" );
+		PrintTextCursorY( sText, rect );
+
+		PrintTextCursorY( "", rect );
+
+		// Extended soft switches
+		sprintf( sText, !(g_bVideoMode & VF_80COL) ? "40 / -- COL" : "-- / 80 COL" );
+		PrintTextCursorY( sText, rect );
+
+		sprintf(sText, (g_nAltCharSetOffset == 0) ? "ASCII/-----" : "-----/MOUSE" );
+		PrintTextCursorY( sText, rect );
+
+		// 280/560 HGR
+		sprintf(sText, !(g_bVideoMode & VF_DHIRES) ? "HGR / ----" : "--- / DHGR" );
+		PrintTextCursorY( sText, rect );
+#else //SOFTSWITCH_OLD
+		// See: VideoSetMode()
+
+		// $C050 / $C051 = TEXTOFF/TEXTON = SW.TXTCLR/SW.TXTSET
+		// GR  / TEXT
+		// GRAPH/TEXT
+		// TEXT ON/OFF
+		bool bSet;
+
+		// $C050 / $C051 = TEXTOFF/TEXTON = SW.TXTCLR/SW.TXTSET
+		bSet = !(g_bVideoMode & VF_TEXT);
+		_DrawSoftSwitch( rect, 0xC050, bSet, NULL, "GR.", "TEXT" );
+
+		// $C052 / $C053 = MIXEDOFF/MIXEDON = SW.MIXCLR/SW.MIXSET
+		// FULL/MIXED
+		// MIX OFF/ON
+		bSet = !(g_bVideoMode & VF_MIXED);
+		_DrawSoftSwitch( rect, 0xC052, bSet, NULL, "FULL", "MIX" );
+
+		// $C054 / $C055 = PAGE1/PAGE2 = PAGE2OFF/PAGE2ON = SW.LOWSCR/SW.HISCR
+		// PAGE 1 / 2
+		bSet = !(g_bVideoMode & VF_PAGE2);
+		_DrawSoftSwitch( rect, 0xC054, bSet, "PAGE ", "1", "2" );
+		
+		// $C056 / $C057 LORES/HIRES = HIRESOFF/HIRESON = SW.LORES/SW.HIRES
+		// LO / HIRES
+		// LO / -----
+		// -- / HIRES
+		bSet = !(g_bVideoMode & VF_HIRES);
+		_DrawSoftSwitch( rect, 0xC056, bSet, NULL, "LO", "HI", "RES" );
+
+		DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+		DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ));
+		PrintTextCursorY( "", rect ); // force print blank line
+
+		// 280/560 HGR
+		// C05E = ON, C05F = OFF
+		bSet = (g_bVideoMode & VF_DHIRES) ? true : false;
+		_DrawSoftSwitch( rect, 0xC05E, bSet, NULL, "DHGR", "HGR" );
+
+		// Extended soft switches
+		// C00C = off, C00D = on
+		bSet = !(g_bVideoMode & VF_80COL);
+		_DrawSoftSwitch( rect, 0xC00C, bSet, "Col", "40", "80" );
+
+		// C00E = off, C00F = on
+		bSet = (g_nAltCharSetOffset == 0);
+		_DrawSoftSwitch( rect, 0xC00E, bSet, NULL, "ASC", "MOUS" ); // ASCII/MouseText
+
+		// C000 = 80STOREOFF, C001 = 80STOREON
+		bSet = !(g_bVideoMode & VF_MASK2);
+		_DrawSoftSwitch( rect, 0xC000, bSet, "80Sto", "0", "1" );
+#endif // SOFTSWITCH_OLD
+}
+
 
 //===========================================================================
 void DrawSourceLine( int iSourceLine, RECT &rect )
@@ -2492,7 +2748,7 @@ void DrawStack ( int line)
 		return;
 
 	unsigned nAddress = regs.sp;
-#if DEBUG_FORCE_DISPLAY
+#if DEBUG_FORCE_DISPLAY // Stack
 	nAddress = 0x100;
 #endif
 
@@ -2544,7 +2800,7 @@ void DrawTargets ( int line)
 	RECT rect;
 	int nFontWidth = g_aFontConfig[ FONT_INFO ]._nFontWidthAvg;
 	
-	int iAddress = 2;
+	int iAddress = MAX_DISPLAY_TARGET_PTR_LINES;
 	while (iAddress--)
 	{
 		// .6 Bugfix: DrawTargets() should draw target byte for IO address: R PC FB33
@@ -2554,7 +2810,7 @@ void DrawTargets ( int line)
 		char sAddress[8] = "-none-";
 		char sData[8]    = "";
 
-#if DEBUG_FORCE_DISPLAY
+#if DEBUG_FORCE_DISPLAY // Targets
 		if (aTarget[iAddress] == NO_6502_TARGET)
 			aTarget[iAddress] = 0;
 #endif
@@ -2590,7 +2846,7 @@ void DrawTargets ( int line)
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPCODE )); // Target Bytes
 
 		PrintText( sData, rect );
-  }
+	}
 }
 
 //===========================================================================
@@ -2617,7 +2873,7 @@ void DrawWatches (int line)
 	int iWatch;
 	for (iWatch = 0; iWatch < MAX_WATCHES; iWatch++ )
 	{
-#if DEBUG_FORCE_DISPLAY
+#if DEBUG_FORCE_DISPLAY // Watch
 		if (true)
 #else
 		if (g_aWatches[iWatch].bEnabled)
@@ -2625,7 +2881,7 @@ void DrawWatches (int line)
 		{
 			RECT rect2 = rect;
 
-//			DebuggerSetColorBG( DebuggerGetColor( BG_INFO ));
+			DebuggerSetColorBG( DebuggerGetColor( WATCH_ZERO_BG )); // BG_INFO
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_TITLE ) );
 			PrintTextCursorX( "W", rect2 );
 
@@ -2643,23 +2899,60 @@ void DrawWatches (int line)
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPERATOR ));
 			PrintTextCursorX( ":", rect2 );
 
-			BYTE nTarget8 = (unsigned)*(LPBYTE)(mem+g_aWatches[iWatch].nAddress);
+			BYTE nTarget8 = 0;
+			BYTE nValue8 = 0;
+
+			nTarget8 = (unsigned)*(LPBYTE)(mem+g_aWatches[iWatch].nAddress);
 			sprintf(sText,"%02X", nTarget8 );
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPCODE ));
 			PrintTextCursorX( sText, rect2 );
 
+			nTarget8 = (unsigned)*(LPBYTE)(mem+g_aWatches[iWatch].nAddress + 1);
+			sprintf(sText,"%02X", nTarget8 );
+			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPCODE ));
+			PrintTextCursorX( sText, rect2 );
+
+			sprintf( sText,"(" );
+			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPERATOR ));
+			PrintTextCursorX( sText, rect2 );
+
 			WORD nTarget16 = (unsigned)*(LPWORD)(mem+g_aWatches[iWatch].nAddress);
-			sprintf( sText," %04X", nTarget16 );
+			sprintf( sText,"%04X", nTarget16 );
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_ADDRESS ));
 			PrintTextCursorX( sText, rect2 );
 
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPERATOR ));
-			PrintTextCursorX( ":", rect2 );
+//			PrintTextCursorX( ":", rect2 );
+			PrintTextCursorX( ")", rect2 );
 
-			BYTE nValue8 = (unsigned)*(LPBYTE)(mem + nTarget16);
-			sprintf(sText,"%02X", nValue8 );
+//			BYTE nValue8 = (unsigned)*(LPBYTE)(mem + nTarget16);
+//			sprintf(sText,"%02X", nValue8 );
+//			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPCODE ));
+//			PrintTextCursorX( sText, rect2 );
+
+			rect.top    += g_nFontHeight;
+			rect.bottom += g_nFontHeight;
+
+// 1.19.4 Added: Watch show (dynamic) raw hex bytes
+			rect2 = rect;
+
 			DebuggerSetColorFG( DebuggerGetColor( FG_INFO_OPCODE ));
-			PrintTextCursorX( sText, rect2 );
+			for( int iByte = 0; iByte < 8; iByte++ )
+			{
+				if  ((iByte & 3) == 0) {
+					DebuggerSetColorBG( DebuggerGetColor( WATCH_ZERO_BG )); // BG_INFO
+					PrintTextCursorX( " ", rect2 );
+				}
+
+				if ((iByte & 1) == 1)
+					DebuggerSetColorBG( DebuggerGetColor( WATCH_ZERO_BG )); // BG_DATA_2
+				else
+					DebuggerSetColorBG( DebuggerGetColor( BG_DATA_2 ));
+
+				BYTE nValue8 = (unsigned)*(LPBYTE)(mem + nTarget16 + iByte );
+				sprintf(sText,"%02X", nValue8 );
+				PrintTextCursorX( sText, rect2 );
+			}
 		}
 		rect.top    += g_nFontHeight;
 		rect.bottom += g_nFontHeight;
@@ -2693,7 +2986,7 @@ void DrawZeroPagePointers ( int line )
 		Breakpoint_t *pZP = &g_aZeroPagePointers[iZP];
 		bool bEnabled = pZP->bEnabled;
 
-#if DEBUG_FORCE_DISPLAY
+#if DEBUG_FORCE_DISPLAY // Zero-Page
 		bEnabled = true;
 #endif
 		if (bEnabled)
@@ -2852,8 +3145,14 @@ void DrawSubWindow_Data (Update_t bUpdate)
 	DEVICE_e     eDevice  = pMD->eDevice;
 	MemoryView_e iView    = pMD->eView;
 
-	if (!pMD->bActive)
-		return;
+//	if (!pMD->bActive)
+//		return;
+
+//	int iWindows = g_iThisWindow;
+//	WindowSplit_t * pWindow = &g_aWindowConfig[ iWindow ];
+
+	RECT rect;
+	rect.top = 0 + 0;
 
 	int  iByte;
 	WORD iAddress = nAddress;
@@ -2879,9 +3178,7 @@ void DrawSubWindow_Data (Update_t bUpdate)
 		int nFontHeight = g_aFontConfig[ FONT_DISASM_DEFAULT ]._nLineHeight;
 
 	// Draw
-		RECT rect;
 		rect.left   = 0;
-		rect.top    = iLine * nFontHeight;
 		rect.right  = DISPLAY_DISASM_RIGHT;
 		rect.bottom = rect.top + nFontHeight;
 
@@ -2962,90 +3259,77 @@ void DrawSubWindow_Data (Update_t bUpdate)
 		PrintTextCursorX( "  |  ", rect );
 
 		nAddress += nMaxOpcodes;
+
+		rect.top    += nFontHeight;
 	}
 }
 
-
-// DrawRegisters();
 //===========================================================================
-void DrawSubWindow_Info( int iWindow )
+void DrawSubWindow_Info ( Update_t bUpdate, int iWindow )
 {
 	if (g_iWindowThis == WINDOW_CONSOLE)
 		return;
 
-	const char **sReg = g_aBreakpointSource;
+	// Left Side
+		int yRegs     = 0; // 12
+		int yStack    = yRegs  + MAX_DISPLAY_REGS_LINES  + 0; // 0
+		int yTarget   = yStack + MAX_DISPLAY_STACK_LINES - 1; // 9
+		int yZeroPage = 16; // yTarget 
+		int ySoft = yZeroPage + (2 * MAX_DISPLAY_ZEROPAGE_LINES) + 1;
 
-	int yRegs     = 0; // 12
-	int yStack    = yRegs  + MAX_DISPLAY_REGS_LINES  + 0; // 0
-	int yTarget   = yStack + MAX_DISPLAY_STACK_LINES - 1; // 9
-	int yZeroPage = 16; // 19
+		if ((bUpdate & UPDATE_REGS) || (bUpdate & UPDATE_FLAGS))
+			DrawRegisters( yRegs );
 
-	DrawRegister( yRegs++, sReg[ BP_SRC_REG_A ] , 1, regs.a , PARAM_REG_A  );
-	DrawRegister( yRegs++, sReg[ BP_SRC_REG_X ] , 1, regs.x , PARAM_REG_X  );
-	DrawRegister( yRegs++, sReg[ BP_SRC_REG_Y ] , 1, regs.y , PARAM_REG_Y  );
-	DrawRegister( yRegs++, sReg[ BP_SRC_REG_PC] , 2, regs.pc, PARAM_REG_PC );
-	DrawFlags   ( yRegs  , regs.ps, NULL);
-	yRegs += 2;
-	DrawRegister( yRegs++, sReg[ BP_SRC_REG_S ] , 2, regs.sp, PARAM_REG_SP );
+		if (bUpdate & UPDATE_STACK)
+			DrawStack( yStack );
 
-	DrawStack( yStack );
+		// 2.7.0.2 Fixed: Debug build of debugger force display all CPU info window wasn't calling DrawTargets()
+		bool bForceDisplayTargetPtr = DEBUG_FORCE_DISPLAY || (g_bConfigInfoTargetPointer);
+		if (bForceDisplayTargetPtr || (bUpdate & UPDATE_TARGETS))
+			DrawTargets( yTarget );
+		
+		if (bUpdate & UPDATE_ZERO_PAGE)
+			DrawZeroPagePointers( yZeroPage );
 
-	if (g_bConfigInfoTargetPointer)
-	{
-		DrawTargets( yTarget );
-	}
-	
-	DrawZeroPagePointers( yZeroPage );
+		bool bForceDisplaySoftSwitches = DEBUG_FORCE_DISPLAY || (bUpdate & UPDATE_SOFTSWITCHES);
+			DrawSoftSwitches( ySoft );
 
-#if defined(SUPPORT_Z80_EMU) && defined(OUTPUT_Z80_REGS)
-	DrawRegister( 19,"AF",2,*(WORD*)(membank+REG_AF));
-	DrawRegister( 20,"BC",2,*(WORD*)(membank+REG_BC));
-	DrawRegister( 21,"DE",2,*(WORD*)(membank+REG_DE));
-	DrawRegister( 22,"HL",2,*(WORD*)(membank+REG_HL));
-	DrawRegister( 23,"IX",2,*(WORD*)(membank+REG_IX));
-#endif
+	#if defined(SUPPORT_Z80_EMU) && defined(OUTPUT_Z80_REGS)
+		DrawRegister( 19,"AF",2,*(WORD*)(membank+REG_AF));
+		DrawRegister( 20,"BC",2,*(WORD*)(membank+REG_BC));
+		DrawRegister( 21,"DE",2,*(WORD*)(membank+REG_DE));
+		DrawRegister( 22,"HL",2,*(WORD*)(membank+REG_HL));
+		DrawRegister( 23,"IX",2,*(WORD*)(membank+REG_IX));
+	#endif
 
 	// Right Side
-	int yBreakpoints = 0;
-	int yWatches     = yBreakpoints + MAX_BREAKPOINTS; // MAX_DISPLAY_BREAKPOINTS_LINES; // 7
-	int yMemory      = yWatches     + MAX_WATCHES    ; // MAX_DISPLAY_WATCHES_LINES    ; // 14
+		int yBreakpoints = 0;
+		int yWatches     = yBreakpoints + MAX_BREAKPOINTS; // MAX_DISPLAY_BREAKPOINTS_LINES; // 7
+		int yMemory      = yWatches     + (MAX_WATCHES*2); // MAX_DISPLAY_WATCHES_LINES    ; // 14 // 2.7.0.15 Fixed: Memory Dump was over-writing watches
 
-//	if ((MAX_DISPLAY_BREAKPOINTS_LINES + MAX_DISPLAY_WATCHES_LINES) < 12)
-//		yWatches++;
+	//	if ((MAX_DISPLAY_BREAKPOINTS_LINES + MAX_DISPLAY_WATCHES_LINES) < 12)
+	//		yWatches++;
 
-#if DEBUG_FORCE_DISPLAY
-	if (true)
-#else
-	if (g_nBreakpoints)
-#endif
-		DrawBreakpoints( yBreakpoints );
+		bool bForceDisplayBreakpoints = DEBUG_FORCE_DISPLAY || (g_nBreakpoints > 0); // 2.7.0.11 Fixed: Breakpoints and Watches no longer disappear.
+		if ( bForceDisplayBreakpoints || (bUpdate & UPDATE_BREAKPOINTS))
+			DrawBreakpoints( yBreakpoints );
 
-#if DEBUG_FORCE_DISPLAY
-	if (true)
-#else
-	if (g_nWatches)
-#endif
-		DrawWatches( yWatches );
+		bool bForceDisplayWatches = DEBUG_FORCE_DISPLAY || (g_nWatches > 0); // 2.7.0.11 Fixed: Breakpoints and Watches no longer disappear.
+		if ( bForceDisplayWatches || (bUpdate & UPDATE_WATCH))
+			DrawWatches( yWatches );
 
-	g_nDisplayMemoryLines = MAX_DISPLAY_MEMORY_LINES_1;
+		g_nDisplayMemoryLines = MAX_DISPLAY_MEMORY_LINES_1;
 
-#if DEBUG_FORCE_DISPLAY
-	if (true)
-#else
-	if (g_aMemDump[0].bActive)
-#endif
-		DrawMemory( yMemory, 0 ); // g_aMemDump[0].nAddress, g_aMemDump[0].eDevice);
+		bool bForceDisplayMemory1 = DEBUG_FORCE_DISPLAY || (g_aMemDump[0].bActive);
+		if (bForceDisplayMemory1 || (bUpdate & UPDATE_MEM_DUMP))
+			DrawMemory( yMemory, 0 ); // g_aMemDump[0].nAddress, g_aMemDump[0].eDevice);
 
-	yMemory += (g_nDisplayMemoryLines + 1);
-	g_nDisplayMemoryLines = MAX_DISPLAY_MEMORY_LINES_2;
+		yMemory += (g_nDisplayMemoryLines + 1);
+		g_nDisplayMemoryLines = MAX_DISPLAY_MEMORY_LINES_2;
 
-#if DEBUG_FORCE_DISPLAY
-	if (true)
-#else
-	if (g_aMemDump[1].bActive)
-#endif
-		DrawMemory( yMemory, 1 ); // g_aMemDump[1].nAddress, g_aMemDump[1].eDevice);
-
+		bool bForceDisplayMemory2 = DEBUG_FORCE_DISPLAY || (g_aMemDump[1].bActive);
+		if (bForceDisplayMemory2 || (bUpdate & UPDATE_MEM_DUMP))
+			DrawMemory( yMemory, 1 ); // g_aMemDump[1].nAddress, g_aMemDump[1].eDevice);
 }
 
 //===========================================================================
@@ -3154,7 +3438,7 @@ void DrawWindow_Code( Update_t bUpdate )
 //	DrawWindowTop( g_iWindowThis );
 	DrawWindowBottom( bUpdate, g_iWindowThis );
 
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 // Full Screen console
@@ -3172,34 +3456,34 @@ void DrawWindow_Console( Update_t bUpdate )
 void DrawWindow_Data( Update_t bUpdate )
 {
 	DrawSubWindow_Data( g_iWindowThis );
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 //===========================================================================
 void DrawWindow_IO( Update_t bUpdate )
 {
 	DrawSubWindow_IO( g_iWindowThis );
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 //===========================================================================
 void DrawWindow_Source( Update_t bUpdate )
 {
 	DrawSubWindow_Source( g_iWindowThis );
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 //===========================================================================
 void DrawWindow_Symbols( Update_t bUpdate )
 {
 	DrawSubWindow_Symbols( g_iWindowThis );
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 void DrawWindow_ZeroPage( Update_t bUpdate )
 {
 	DrawSubWindow_ZeroPage( g_iWindowThis );
-	DrawSubWindow_Info( g_iWindowThis );
+	DrawSubWindow_Info( bUpdate, g_iWindowThis );
 }
 
 //===========================================================================
@@ -3272,7 +3556,7 @@ void UpdateDisplay (Update_t bUpdate)
 	SetTextAlign( g_hFrameDC, TA_TOP | TA_LEFT);
 
 	if ((bUpdate & UPDATE_BREAKPOINTS)
-		|| (bUpdate & UPDATE_DISASM)
+//		|| (bUpdate & UPDATE_DISASM)
 		|| (bUpdate & UPDATE_FLAGS)
 		|| (bUpdate & UPDATE_MEM_DUMP)
 		|| (bUpdate & UPDATE_REGS)
@@ -3344,12 +3628,11 @@ void DrawWindowBottom ( Update_t bUpdate, int iWindow )
 		return;
 
 	WindowSplit_t * pWindow = &g_aWindowConfig[ iWindow ];
+	g_pDisplayWindow = pWindow;
 
-//	if (pWindow->eBot == WINDOW_DATA)
-//	{
-//		DrawWindow_Data( bUpdate, false );
-//	}
-	
+	if (pWindow->eBot == WINDOW_DATA)
+		DrawWindow_Data( bUpdate ); // false
+	else	
 	if (pWindow->eBot == WINDOW_SOURCE)
 		DrawSubWindow_Source2( bUpdate );
 }
@@ -3358,6 +3641,8 @@ void DrawWindowBottom ( Update_t bUpdate, int iWindow )
 void DrawSubWindow_Code ( int iWindow )
 {
 	int nLines = g_nDisasmWinHeight;
+
+//	WindowSplit_t * pWindow = &g_aWindowConfig[ iWindow ];
 
 	// Check if we have a bad disasm
 	// BUG: This still doesn't catch all cases

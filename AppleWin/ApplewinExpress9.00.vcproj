@@ -54,7 +54,7 @@
 				FavorSizeOrSpeed="1"
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
-				AdditionalIncludeDirectories="zlib;zip_lib"
+				AdditionalIncludeDirectories="source\cpu;source\emulator;source\debugger;zlib;zip_lib"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -62,10 +62,10 @@
 				EnableEnhancedInstructionSet="1"
 				FloatingPointModel="2"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\Release/Applewin.pch"
-				AssemblerListingLocation=".\Release/"
-				ObjectFile=".\Release/"
-				ProgramDataBaseFileName=".\Release/"
+				PrecompiledHeaderFile=".\Release\Applewin.pch"
+				AssemblerListingLocation=".\Release\"
+				ObjectFile=".\Release\"
+				ProgramDataBaseFileName=".\Release\"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DisableSpecificWarnings="4819;4996"
@@ -84,7 +84,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
-				OutputFile=".\Release/Applewin.exe"
+				OutputFile=".\Release\Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalManifestDependencies="&quot;type=&apos;Win32&apos; name=&apos;Microsoft.Windows.Common-Controls&apos; version=&apos;6.0.0.0&apos; processorArchitecture=&apos;X86&apos; publicKeyToken=&apos;6595b64144ccf1df&apos; language=&apos;*&apos;&quot;"
@@ -152,15 +152,15 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/Zm200 "
 				Optimization="0"
-				AdditionalIncludeDirectories="zlib;zip_lib"
+				AdditionalIncludeDirectories="source\cpu;source\emulator;source\debugger;zlib;zip_lib"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
 				MinimalRebuild="true"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\Debug/Applewin.pch"
-				AssemblerListingLocation=".\Debug/"
-				ObjectFile=".\Debug/"
-				ProgramDataBaseFileName=".\Debug/"
+				PrecompiledHeaderFile=".\Debug\Applewin.pch"
+				AssemblerListingLocation=".\Debug\"
+				ObjectFile=".\Debug\"
+				ProgramDataBaseFileName=".\Debug\"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -181,12 +181,211 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
-				OutputFile=".\Debug/Applewin.exe"
+				OutputFile=".\Debug\Applewin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalManifestDependencies="&quot;type=&apos;Win32&apos; name=&apos;Microsoft.Windows.Common-Controls&apos; version=&apos;6.0.0.0&apos; processorArchitecture=&apos;X86&apos; publicKeyToken=&apos;6595b64144ccf1df&apos; language=&apos;*&apos;&quot;"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug\Applewin.pdb"
+				SubSystem="2"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				TargetMachine="1"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release-Win98|Win32"
+			OutputDirectory=".\Release-Win98"
+			IntermediateDirectory=".\Release-Win98"
+			ConfigurationType="1"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Release/Applewin.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalOptions="/Zm200 "
+				Optimization="2"
+				InlineFunctionExpansion="2"
+				EnableIntrinsicFunctions="true"
+				FavorSizeOrSpeed="1"
+				OmitFramePointers="true"
+				WholeProgramOptimization="true"
+				AdditionalIncludeDirectories="source\cpu;source\emulator;source\debugger;zlib;zip_lib"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
+				StringPooling="true"
+				RuntimeLibrary="0"
+				EnableFunctionLevelLinking="true"
+				EnableEnhancedInstructionSet="1"
+				FloatingPointModel="2"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\Release-Win98\Applewin.pch"
+				AssemblerListingLocation=".\Release-Win98\"
+				ObjectFile=".\Release-Win98\"
+				ProgramDataBaseFileName=".\Release-Win98\"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DisableSpecificWarnings="4819;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
+				OutputFile=".\Release-Win98\Applewin.exe"
+				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				AdditionalManifestDependencies=""
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile=".\Release-Win98\Applewin.pdb"
+				SubSystem="2"
+				LinkTimeCodeGeneration="1"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				TargetMachine="1"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Debug-Win98|Win32"
+			OutputDirectory=".\Debug-Win98"
+			IntermediateDirectory=".\Debug-Win98"
+			ConfigurationType="1"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Debug/Applewin.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalOptions="/Zm200 "
+				Optimization="0"
+				AdditionalIncludeDirectories="source\cpu;source\emulator;source\debugger;zlib;zip_lib"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;NO_DSHOW_STRSAFE"
+				MinimalRebuild="true"
+				RuntimeLibrary="1"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\Debug-Win98\Applewin.pch"
+				AssemblerListingLocation=".\Debug-Win98\"
+				ObjectFile=".\Debug-Win98\"
+				ProgramDataBaseFileName=".\Debug-Win98\"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DebugInformationFormat="3"
+				DisableSpecificWarnings="4819;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="_DEBUG"
+				Culture="1033"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="htmlhelp.lib comctl32.lib ddraw.lib winmm.lib dsound.lib dxguid.lib version.lib strmiids.lib dinput8.lib user32.lib gdi32.lib Advapi32.lib shell32.lib Comdlg32.lib ole32.lib wsock32.lib"
+				OutputFile=".\Debug-Win98\Applewin.exe"
+				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				AdditionalManifestDependencies=""
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile=".\Debug-Win98\Applewin.pdb"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
@@ -241,6 +440,22 @@
 						UsePrecompiledHeader="1"
 					/>
 				</FileConfiguration>
+				<FileConfiguration
+					Name="Release-Win98|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug-Win98|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\source\Applewin.h"
@@ -250,79 +465,99 @@
 				Name="Debugger"
 				>
 				<File
-					RelativePath=".\source\Debug.cpp"
+					RelativePath=".\source\Debugger\Debug.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debug.h"
+					RelativePath=".\source\Debugger\Debug.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Assembler.cpp"
+					RelativePath=".\source\Debugger\Debugger_Assembler.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Assembler.h"
+					RelativePath=".\source\Debugger\Debugger_Assembler.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Console.cpp"
+					RelativePath=".\source\Debugger\Debugger_Color.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Console.h"
+					RelativePath=".\source\Debugger\Debugger_Color.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_DisassemblerData.cpp"
+					RelativePath=".\source\Debugger\Debugger_Commands.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_DisassemblerData.h"
+					RelativePath=".\source\Debugger\Debugger_Console.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Display.cpp"
+					RelativePath=".\source\Debugger\Debugger_Console.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Display.h"
+					RelativePath=".\source\Debugger\Debugger_DisassemblerData.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Help.cpp"
+					RelativePath=".\source\Debugger\Debugger_DisassemblerData.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Help.h"
+					RelativePath=".\source\Debugger\Debugger_Display.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Parser.cpp"
+					RelativePath=".\source\Debugger\Debugger_Display.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Parser.h"
+					RelativePath=".\source\Debugger\Debugger_Help.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Range.cpp"
+					RelativePath=".\source\Debugger\Debugger_Help.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Range.h"
+					RelativePath=".\source\Debugger\Debugger_Parser.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Symbols.cpp"
+					RelativePath=".\source\Debugger\Debugger_Parser.h"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Symbols.h"
+					RelativePath=".\source\Debugger\Debugger_Range.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\source\Debugger_Types.h"
+					RelativePath=".\source\Debugger\Debugger_Range.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Debugger\Debugger_Symbols.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Debugger\Debugger_Symbols.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Debugger\Debugger_Types.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Util_MemoryTextFile.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Util_MemoryTextFile.h"
 					>
 				</File>
 			</Filter>
@@ -368,6 +603,22 @@
 							UsePrecompiledHeader="0"
 						/>
 					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Tfe.h"
@@ -386,6 +637,22 @@
 					</FileConfiguration>
 					<FileConfiguration
 						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
 						>
 						<Tool
 							Name="VCCLCompilerTool"
@@ -416,6 +683,22 @@
 							UsePrecompiledHeader="0"
 						/>
 					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Tfe\Tfesupp.h"
@@ -434,6 +717,22 @@
 					</FileConfiguration>
 					<FileConfiguration
 						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
 						>
 						<Tool
 							Name="VCCLCompilerTool"
@@ -468,6 +767,22 @@
 							UsePrecompiledHeader="0"
 						/>
 					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Z80VICE\daa.h"
@@ -492,6 +807,22 @@
 							UsePrecompiledHeader="0"
 						/>
 					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\source\Z80VICE\z80.h"
@@ -510,6 +841,22 @@
 					</FileConfiguration>
 					<FileConfiguration
 						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release-Win98|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug-Win98|Win32"
 						>
 						<Tool
 							Name="VCCLCompilerTool"
@@ -570,62 +917,6 @@
 					>
 				</File>
 				<File
-					RelativePath=".\source\CPU.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\CPU.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Disk.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Disk.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\DiskImage.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\DiskImage.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\DiskImageHelper.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\DiskImageHelper.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Echo.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Echo.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Frame.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Frame.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Harddisk.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Harddisk.h"
-					>
-				</File>
-				<File
 					RelativePath=".\source\Joystick.cpp"
 					>
 				</File>
@@ -658,6 +949,18 @@
 					>
 				</File>
 				<File
+					RelativePath=".\source\Echo.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Echo.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Frame.cpp"
+					>
+				</File>
+				<File
 					RelativePath=".\source\Mockingboard.cpp"
 					>
 				</File>
@@ -671,6 +974,14 @@
 				</File>
 				<File
 					RelativePath=".\source\MouseInterface.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\NoSlotClock.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\NoSlotClock.h"
 					>
 				</File>
 				<File
@@ -762,22 +1073,6 @@
 					>
 				</File>
 				<File
-					RelativePath=".\source\Util_MemoryTextFile.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Util_MemoryTextFile.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Video.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Video.h"
-					>
-				</File>
-				<File
 					RelativePath=".\source\z80emu.cpp"
 					>
 				</File>
@@ -810,6 +1105,90 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="CPU"
+				>
+				<File
+					RelativePath=".\source\CPU.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU\cpu6502.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU\cpu65d02.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU\cpu_general.inl"
+					>
+				</File>
+				<File
+					RelativePath=".\source\CPU\cpu_instructions.inl"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Disk"
+				>
+				<File
+					RelativePath=".\source\Disk.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Disk.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\DiskImage.cpp"
+				>
+				</File>
+				<File
+					RelativePath=".\source\DiskImage.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\DiskImageHelper.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\DiskImageHelper.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Harddisk.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Harddisk.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Video"
+				>
+				<File
+					RelativePath=".\source\Frame.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Frame.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Video.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Video.h"
+					>
+				</File>
+		</Filter>
 		</Filter>
 		<Filter
 			Name="Docs"
@@ -820,6 +1199,10 @@
 			</File>
 			<File
 				RelativePath=".\docs\Debugger_Changelog.txt"
+				>
+			</File>
+			<File
+				RelativePath=".\docs\FAQ.txt"
 				>
 			</File>
 			<File
@@ -881,6 +1264,24 @@
 				</FileConfiguration>
 				<FileConfiguration
 					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+						AdditionalIncludeDirectories="RESOURCE"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release-Win98|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+						AdditionalIncludeDirectories="RESOURCE"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug-Win98|Win32"
 					>
 					<Tool
 						Name="VCResourceCompilerTool"

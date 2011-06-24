@@ -174,13 +174,25 @@ bool CImageBase::ReadBlock(ImageInfo* pImageInfo, const int nBlock, LPBYTE pBloc
 bool CImageBase::WriteBlock(ImageInfo* pImageInfo, const int nBlock, LPBYTE pBlockBuffer)
 {
 	long Offset = pImageInfo->uOffset + nBlock * HD_BLOCK_SIZE;
+	const bool bGrowImageBuffer = (UINT)Offset+HD_BLOCK_SIZE > pImageInfo->uImageSize;
 
 	if (pImageInfo->FileType == eFileGZip || pImageInfo->FileType == eFileZip)
 	{
-		if ((UINT)Offset+HD_BLOCK_SIZE > pImageInfo->uImageSize)
+		if (bGrowImageBuffer)
 		{
-			_ASSERT(0);
-			return false;
+			// Horribly inefficient! (Unzip to a normal file if you want better performance!)
+			const UINT uNewImageSize = Offset+HD_BLOCK_SIZE;
+			BYTE* pNewImageBuffer = new BYTE [uNewImageSize];
+			_ASSERT(pNewImageBuffer);
+			if (!pNewImageBuffer)
+				return false;
+
+			memcpy(pNewImageBuffer, pImageInfo->pImageBuffer, pImageInfo->uImageSize);
+			memset(&pNewImageBuffer[pImageInfo->uImageSize], 0, uNewImageSize-pImageInfo->uImageSize);	// Should always be HD_BLOCK_SIZE (so this is redundant)
+
+			delete [] pImageInfo->pImageBuffer;
+			pImageInfo->pImageBuffer = pNewImageBuffer;
+			pImageInfo->uImageSize = uNewImageSize;
 		}
 
 		memcpy(&pImageInfo->pImageBuffer[Offset], pBlockBuffer, HD_BLOCK_SIZE);
@@ -197,6 +209,9 @@ bool CImageBase::WriteBlock(ImageInfo* pImageInfo, const int nBlock, LPBYTE pBlo
 		BOOL bRes = WriteFile(pImageInfo->hFile, pBlockBuffer, HD_BLOCK_SIZE, &dwBytesWritten, NULL);
 		if (!bRes || dwBytesWritten != HD_BLOCK_SIZE)
 			return false;
+
+		if (bGrowImageBuffer)
+			pImageInfo->uImageSize += HD_BLOCK_SIZE;
 	}
 	else if (pImageInfo->FileType == eFileGZip)
 	{
@@ -1072,7 +1087,7 @@ eDetectResult C2IMGHelper::DetectHdr(LPBYTE& pImage, DWORD& dwImageSize, DWORD& 
 BYTE C2IMGHelper::GetVolumeNumber(void)
 {
 	if (m_Hdr.ImageFormat != e2IMGFormatDOS33 || !m_Hdr.Flags.bDOS33VolumeNumberValid)
-		return 254;
+		return DEFAULT_VOLUME_NUMBER;
 
 	return m_Hdr.Flags.VolumeNumber;
 }
@@ -1487,10 +1502,14 @@ CImageBase* CDiskImageHelper::Detect(LPBYTE pImage, DWORD dwSize, const TCHAR* p
 
 		if (m_Result2IMG == eMatch)
 		{
-			pImageType->m_uVolumeNumber = m_2IMGHelper.GetVolumeNumber();
+			pImageType->SetVolumeNumber( m_2IMGHelper.GetVolumeNumber() );
 
 			if (m_2IMGHelper.IsLocked() && !*pWriteProtected_)
 				*pWriteProtected_ = 1;
+		}
+		else
+		{
+			pImageType->SetVolumeNumber(DEFAULT_VOLUME_NUMBER);
 		}
 	}
 

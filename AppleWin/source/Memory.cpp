@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Harddisk.h"
 #include "MouseInterface.h"
 #include "Echo.h"
+#include "NoSlotClock.h"
 #ifdef SUPPORT_CPM
 #include "z80emu.h"
 #include "Z80VICE\z80.h"
@@ -148,6 +149,8 @@ static BOOL    modechanging = 0;
 static BOOL    Pravets8charmode = 0;
 MemoryInitPattern_e g_eMemoryInitPattern = MIP_FF_FF_00_00;
 
+static CNoSlotClock g_NoSlotClock;
+
 #ifdef RAMWORKS
 UINT			g_uMaxExPages	= 1;			// user requested ram pages
 static LPBYTE	RWpages[128];					// pointers to RW memory banks
@@ -212,7 +215,7 @@ static BYTE __stdcall IORead_C02x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 
 static BYTE __stdcall IOWrite_C02x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft)
 {
-	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);	// $C020 TAPEOUT
 }
 
 //-------------------------------------
@@ -303,7 +306,7 @@ static BYTE __stdcall IORead_C06x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG
 	//If (CAPS lOCK of Pravets8A/C is on or Shift is pressed) and (MODE is enabled), bit7 in $C000 is 1; Else it is 0
 	//Writing into $C060 sets MODE on and off. If bit 0 is 0 the the MODE is set 0, if bit 0 is 1 then MODE is set to 1 (8-bit)
 
-	case 0x0:	return TapeRead(pc, addr, bWrite, d, nCyclesLeft); 
+	case 0x0:	return TapeRead(pc, addr, bWrite, d, nCyclesLeft);		// $C060 TAPEIN
 	case 0x1:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C061 Digital input 0 (If bit 7=1 then JoyButton 0 or OpenApple is pressed)
 	case 0x2:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C062 Digital input 1 (If bit 7=1 then JoyButton 1 or ClosedApple is pressed)
 	case 0x3:	return JoyReadButton(pc, addr, bWrite, d, nCyclesLeft);  //$C063 Digital input 2
@@ -387,20 +390,14 @@ static BYTE __stdcall IOWrite_C07x(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULON
 	case 0xA:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0xB:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 	case 0xC:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
-//	case 0xD:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
-	case 0xD:	// No Slot Clock Hack for ProDOS
-#if CLOCK_HACK_PRODOS
-		Clock_Generic_UpdateProDos();	
-#endif
-		return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
+	case 0xD:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft);
 
-	//http://www.1000bit.net/support/manuali/apple/technotes/aiie/tn.aiie.10.html
-	//IOUDIS (W): $C07E
-	//    There is no IOU to disable
-	//IOUDIS (W): $C07F
-	//    There is no IOU to enable
-	//RDIOUDIS (R7): $C07E
-	//    There is no IOUDIS switch to read
+	//http://www.kreativekorp.com/miscpages/a2info/iomemory.shtml
+	//- Apparently Apple//e & //c (but maybe enhanced//e not //e?)
+	//IOUDISON  (W): $C07E  Disable IOU
+	//IOUDISOFF (W): $C07F  Enable IOU
+	//RDIOUDIS (R7): $C07E  Status of IOU Disabling
+	//RDDHIRES (R7): $C07F  Status of Double HiRes
 	case 0xE:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft); // TODO: IOUDIS
 	case 0xF:	return IO_Null(pc, addr, bWrite, d, nCyclesLeft); // TODO: IOUDIS
 	}
@@ -465,6 +462,14 @@ BYTE __stdcall IO_Annunciator(WORD programcounter, WORD address, BYTE write, BYT
 		return MemReadFloatingBus(nCyclesLeft);
 	else
 		return 0;
+}
+
+inline bool IsPotentialNoSlotClockAccess(const WORD address)
+{
+	// Ref: Sather UAIIe 5-28
+	const BYTE AddrHi = address >>  8;
+	return ( ((!SW_SLOTCXROM || !SW_SLOTC3ROM) && (AddrHi == 0xC3)) ||	// Internal ROM at [$C100-CFFF or $C300-C3FF] && AddrHi == $C3
+			  (!SW_SLOTCXROM && (AddrHi == 0xC8)) );					// Internal ROM at [$C100-CFFF]               && AddrHi == $C8
 }
 
 // Enabling expansion ROM ($C800..$CFFF]:
@@ -549,6 +554,13 @@ BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE v
 		}
 	}
 
+	if (IsPotentialNoSlotClockAccess(address))
+	{
+		int data = 0;
+		if (g_NoSlotClock.Read(address, data))
+			return (BYTE) data;
+	}
+
 	if (!IS_APPLE2 && !SW_SLOTCXROM)
 	{
 		// !SW_SLOTC3ROM = Internal ROM: $C300-C3FF
@@ -576,6 +588,11 @@ BYTE __stdcall IORead_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE v
 
 BYTE __stdcall IOWrite_Cxxx(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCyclesLeft)
 {
+	if (IsPotentialNoSlotClockAccess(address))
+	{
+		g_NoSlotClock.Write(address);
+	}
+
 	return 0;
 }
 
@@ -1135,10 +1152,10 @@ void MemInitialize()
 	{
 		sg_Mouse.Initialize(pCxRomPeripheral, 4);	// $C400 : Mouse f/w
 	}
-	else if (g_Slot4 == CT_GenericClock)
-	{
+//	else if (g_Slot4 == CT_GenericClock)
+//	{
 //		LoadRom_Clock_Generic(pCxRomPeripheral, 4);
-	}
+//	}
 	else if (g_Slot4 == CT_Mockingboard)
 	{
 		const UINT uSlot4 = 4;

@@ -4,7 +4,7 @@ AppleWin : An Apple //e emulator for Windows
 Copyright (C) 1994-1996, Michael O'Brien
 Copyright (C) 1999-2001, Oliver Schmidt
 Copyright (C) 2002-2005, Tom Charlesworth
-Copyright (C) 2006-2008, Tom Charlesworth, Michael Pohoreski, Nick Westgate
+Copyright (C) 2006-2010, Tom Charlesworth, Michael Pohoreski, Nick Westgate
 
 AppleWin is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,6 +28,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 #include "..\resource\resource.h"
+
+#define HALF_PIXEL_SOLID 1
+#define HALF_PIXEL_BLEED 0
+
+#define COLORS_TWEAKED 1 
 
 /* reference: technote tn-iigs-063 "Master Color Values"
 
@@ -57,35 +62,23 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #define HALF_SHIFT_DITHER 0
 
-
-// STANDARD WINDOWS COLORS
-#define  CREAM            0xF6
-#define  MEDIUM_GRAY      0xF7
-#define  DARK_GRAY        0xF8
-#define  RED              0xF9
-#define  GREEN            0xFA
-#define  YELLOW           0xFB
-#define  BLUE             0xFC
-#define  MAGENTA          0xFD
-#define  CYAN             0xFE
-#define  WHITE            0xFF
-
-
 enum Color_Palette_Index_e
 {
-	// Really need to have Quater Green and Quarter Blue for Hi-Res
-	  BLACK            
-	, DARK_RED         
-	, DARK_GREEN       // Half Green
-	, DARK_YELLOW      
-	, DARK_BLUE        // Half Blue
-	, DARK_MAGENTA     
-	, DARK_CYAN        
-	, LIGHT_GRAY       
-	, MONEY_GREEN      
-	, SKY_BLUE         
+	// The first 10 are the DEFAULT Windows colors (as it reserves 20 colors)
+	  BLACK        = 0x00 // 0x00,0x00,0x00 
+	, DARK_RED     = 0x01 // 0x80,0x00,0x00 
+	, DARK_GREEN   = 0x02 // 0x00,0x80,0x00 (Half Green)
+	, DARK_YELLOW  = 0x03 // 0x80,0x80,0x00
+	, DARK_BLUE    = 0x04 // 0x00,0x00,0x80 (Half Blue)
+	, DARK_MAGENTA = 0x05 // 0x80,0x00,0x80
+	, DARK_CYAN    = 0x06 // 0x00,0x80,0x80
+	, LIGHT_GRAY   = 0x07 // 0xC0,0xC0,0xC0
+	, MONEY_GREEN  = 0x08 // 0xC0,0xDC,0xC0 // not used
+	, SKY_BLUE     = 0x09 // 0xA6,0xCA,0xF0 // not used
 
-// OUR CUSTOM COLORS
+// Really need to have Quarter Green and Quarter Blue for Hi-Res
+// OUR CUSTOM COLORS -- the extra colors HGR mode can display
+//	, DEEP_BLUE // Breaks TV Emulation Reference Test !?!?   // Breaks the dam palette -- black monochrome TEXT output bug *sigh*
 	, DEEP_RED         
 	, LIGHT_BLUE       
 	, BROWN            
@@ -93,13 +86,13 @@ enum Color_Palette_Index_e
 	, PINK             
 	, AQUA             
 
-// CUSTOM HGR COLORS (don't change order) - For tv emulation g_nAppMode
+// CUSTOM HGR COLORS (don't change order) - For tv emulation HGR Video Mode
 	, HGR_BLACK        
 	, HGR_WHITE        
-	, HGR_BLUE         
-	, HGR_RED          
-	, HGR_GREEN        
-	, HGR_MAGENTA      
+	, HGR_BLUE         // HCOLOR=6 BLUE   , $81
+	, HGR_RED          // HCOLOR=5 ORANGE , $82
+	, HGR_GREEN        // HCOLOR=1 GREEN  , $01 
+	, HGR_MAGENTA      // HCOLOR=2 MAGENTA, $02
 	, HGR_GREY1        
 	, HGR_GREY2        
 	, HGR_YELLOW       
@@ -107,13 +100,16 @@ enum Color_Palette_Index_e
 	, HGR_PURPLE       
 	, HGR_PINK         
 
-// USER CUSTOMIZABLE COLOR
-	, MONOCHROME_CUSTOM
-
-// Pre-set "Monochromes"
+// MONOCHROME
+	// NOTE: 50% is assumed to come after 100% luminance !!!  See: V_CreateLookup_MonoHiRes()
+	// User customizable
+	, MONOCHROME_CUSTOM     // 100% luminance
+	, MONOCHROME_CUSTOM_50  //  50% luminance
+	// Pre-set "Monochromes"
 	, MONOCHROME_AMBER
+//	, MONOCHROME_AMBER_50 // BUG - something trashing our palette entry !!!
 	, MONOCHROME_GREEN
-	, MONOCHROME_WHITE
+//	, MONOCHROME_GREEN_50 // BUG - something trashing our palette entry !!!
 
 	, DEBUG_COLORS_START
 	, DEBUG_COLORS_END = DEBUG_COLORS_START + NUM_DEBUG_COLORS
@@ -123,59 +119,89 @@ enum Color_Palette_Index_e
 //	, LOGO_COLORS_END = LOGO_COLORS_START + 128
 
 	, NUM_COLOR_PALETTE
+
+	// The last 10 are the DEFAULT Windows colors (as it reserves 20 colors)
+	, CREAM       = 0xF6
+	, MEDIUM_GRAY = 0xF7
+	, DARK_GRAY   = 0xF8
+	, RED         = 0xF9
+	, GREEN       = 0xFA
+	, YELLOW      = 0xFB
+	, BLUE        = 0xFC
+	, MAGENTA     = 0xFD
+	, CYAN        = 0xFE
+	, WHITE       = 0xFF
 };
 
+// __ Map HGR color index to Palette index
+	enum ColorMapping
+	{
+		  CM_Magenta
+		, CM_Blue
+		, CM_Green
+		, CM_Orange
+		, CM_Black
+		, CM_White
+		, NUM_COLOR_MAPPING
+	};
 
-//#define  SRCOFFS_40COL    0
-//#define  SRCOFFS_IIPLUS   (SRCOFFS_40COL  + 256) 
-//#define  SRCOFFS_80COL    (SRCOFFS_IIPLUS + 256)
-//#define  SRCOFFS_LORES    (SRCOFFS_80COL  +  128)
-//#define  SRCOFFS_HIRES    (SRCOFFS_LORES  +   16)
-//#define  SRCOFFS_DHIRES   (SRCOFFS_HIRES  +  512)
-//#define  SRCOFFS_TOTAL    (SRCOFFS_DHIRES + 2560)
+const BYTE HiresToPalIndex[ NUM_COLOR_MAPPING ] =
+	{
+		  HGR_MAGENTA
+		, HGR_BLUE
+		, HGR_GREEN
+		, HGR_RED
+		, HGR_BLACK
+		, HGR_WHITE
+	};
 
-const int SRCOFFS_40COL   = 0;
-const int SRCOFFS_IIPLUS  = (SRCOFFS_40COL  +  256);
-const int SRCOFFS_80COL   = (SRCOFFS_IIPLUS +  256);
-const int SRCOFFS_LORES   = (SRCOFFS_80COL  +  128);
-const int SRCOFFS_HIRES   = (SRCOFFS_LORES  +   16);
-const int SRCOFFS_DHIRES  = (SRCOFFS_HIRES  +  512);
-const int SRCOFFS_TOTAL   = (SRCOFFS_DHIRES + 2560);
+const BYTE LoresResColors[16] = {
+//		BLACK,     DEEP_RED, DARK_BLUE, MAGENTA,
+//		DARK_GREEN,DARK_GRAY,BLUE,      LIGHT_BLUE,
+//		BROWN,     ORANGE,   LIGHT_GRAY,PINK,
+//		GREEN,     YELLOW,   AQUA,      WHITE
+		BLACK,     DEEP_RED, DARK_BLUE, MAGENTA,
+		DARK_GREEN,DARK_GRAY,BLUE,      LIGHT_BLUE,
+		BROWN,     ORANGE,   LIGHT_GRAY,PINK,
+		GREEN,     YELLOW,   AQUA,      HGR_WHITE
+	};
 
-//#define  VF_80COL         0x00000001
-//#define  VF_DHIRES        0x00000002
-//#define  VF_HIRES         0x00000004
-//#define  VF_MASK2         0x00000008
-//#define  VF_MIXED         0x00000010
-//#define  VF_PAGE2         0x00000020
-//#define  VF_TEXT          0x00000040
 
-enum VideoFlag_e
-{
-	VF_80COL  = 0x00000001,
-	VF_DHIRES = 0x00000002,
-	VF_HIRES  = 0x00000004,
-	VF_MASK2  = 0x00000008,
-	VF_MIXED  = 0x00000010,
-	VF_PAGE2  = 0x00000020,
-	VF_TEXT   = 0x00000040
-};
+const BYTE DoubleHiresPalIndex[16] = {
+//		BLACK,   DARK_BLUE, DARK_GREEN,BLUE,
+//		BROWN,   LIGHT_GRAY,GREEN,     AQUA,
+//		DEEP_RED,MAGENTA,   DARK_GRAY, LIGHT_BLUE,
+//		ORANGE,  PINK,      YELLOW,    WHITE
+		BLACK,   DARK_BLUE, DARK_GREEN,BLUE,
+		BROWN,   LIGHT_GRAY, GREEN,     AQUA,
+		DEEP_RED,MAGENTA,   DARK_GRAY, LIGHT_BLUE,
+		ORANGE,  PINK,      YELLOW,    HGR_WHITE
+	};
 
-#define  SW_80COL         (vidmode & VF_80COL)
-#define  SW_DHIRES        (vidmode & VF_DHIRES)
-#define  SW_HIRES         (vidmode & VF_HIRES)
-#define  SW_MASK2         (vidmode & VF_MASK2)
-#define  SW_MIXED         (vidmode & VF_MIXED)
-#define  SW_PAGE2         (vidmode & VF_PAGE2)
-#define  SW_TEXT          (vidmode & VF_TEXT)
+	const int SRCOFFS_40COL   = 0;                       //    0
+	const int SRCOFFS_IIPLUS  = (SRCOFFS_40COL  +  256); //  256
+	const int SRCOFFS_80COL   = (SRCOFFS_IIPLUS +  256); //  512
+	const int SRCOFFS_LORES   = (SRCOFFS_80COL  +  128); //  640
+	const int SRCOFFS_HIRES   = (SRCOFFS_LORES  +   16); //  656
+	const int SRCOFFS_DHIRES  = (SRCOFFS_HIRES  +  512); // 1168
+	const int SRCOFFS_TOTAL   = (SRCOFFS_DHIRES + 2560); // 3278
+
+	#define  SW_80COL         (g_bVideoMode & VF_80COL)
+	#define  SW_DHIRES        (g_bVideoMode & VF_DHIRES)
+	#define  SW_HIRES         (g_bVideoMode & VF_HIRES)
+	#define  SW_MASK2         (g_bVideoMode & VF_MASK2)
+	#define  SW_MIXED         (g_bVideoMode & VF_MIXED)
+	#define  SW_PAGE2         (g_bVideoMode & VF_PAGE2)
+	#define  SW_TEXT          (g_bVideoMode & VF_TEXT)
 
 #define  SETSOURCEPIXEL(x,y,c)  g_aSourceStartofLine[(y)][(x)] = (c)
 
-#define  SETFRAMECOLOR(i,r,g,b)  g_pFramebufferinfo->bmiColors[i].rgbRed   = r; \
-                                 g_pFramebufferinfo->bmiColors[i].rgbGreen = g; \
-                                 g_pFramebufferinfo->bmiColors[i].rgbBlue  = b;
+#define  SETFRAMECOLOR(i,r,g,b)  g_pFramebufferinfo->bmiColors[i].rgbRed      = r; \
+                                 g_pFramebufferinfo->bmiColors[i].rgbGreen    = g; \
+                                 g_pFramebufferinfo->bmiColors[i].rgbBlue     = b; \
+								 g_pFramebufferinfo->bmiColors[i].rgbReserved = PC_NOCOLLAPSE;
 
-#define  HGR_MATRIX_YOFFSET 2	// For tv emulation g_nAppMode
+#define  HGR_MATRIX_YOFFSET 2	// For tv emulation HGR Video Mode
 
 // video scanner constants
 int const kHBurstClock      =    53; // clock when Color Burst starts
@@ -195,13 +221,15 @@ int const kVPresetLine      =   256; // line when V state presets
 int const kVSyncLines       =     4; // lines per VSync duration
 
 static BYTE          celldirty[40][32];
-static COLORREF      customcolors[NUM_COLOR_PALETTE];	// MONOCHROME is last custom color
+// NUM_COLOR_PALETTE
+static COLORREF      customcolors[256];	// MONOCHROME is last custom color
+
 static HBITMAP       g_hDeviceBitmap;
 static HDC           g_hDeviceDC;
        LPBYTE        g_pFramebufferbits = NULL; // last drawn frame
 static LPBITMAPINFO  g_pFramebufferinfo = NULL;
 
-static LPBYTE        frameoffsettable[FRAMEBUFFER_H]; // array of pointers to start of each scanline
+static LPBYTE        g_aFrameBufferOffset[FRAMEBUFFER_H]; // array of pointers to start of each scanline
 static LPBYTE        g_pHiresBank1;
 static LPBYTE        g_pHiresBank0;
        HBITMAP       g_hLogoBitmap;
@@ -215,31 +243,31 @@ static LPBYTE        g_aSourceStartofLine[ MAX_SOURCE_Y ];
 static LPBYTE        g_pTextBank1; // Aux
 static LPBYTE        g_pTextBank0; // Main
 
-// For tv emulation g_nAppMode
+// For tv emulation HGR Video Mode
 // 2 extra scan lines on bottom?
 static BYTE          hgrpixelmatrix[FRAMEBUFFER_W/2][FRAMEBUFFER_H/2 + 2 * HGR_MATRIX_YOFFSET];
 static BYTE          colormixbuffer[6];
 static WORD          colormixmap[6][6][6];
 //
 
-static int       g_nAltCharSetOffset  = 0; // alternate character set
+	int       g_nAltCharSetOffset  = 0; // alternate character set
 
-		bool      g_bVideoDisplayPage2 = 0;
-		bool      g_VideoForceFullRedraw = 1;
+	bool      g_bVideoDisplayPage2 = 0;
+	bool      g_VideoForceFullRedraw = 1;
 
 static LPBYTE    framebufferaddr  = (LPBYTE)0;
-static LONG      framebufferpitch = 0;
-BOOL      graphicsmode     = 0;
+static LONG      g_nFrameBufferPitch = 0;
+BOOL             g_bGraphicsMode     = 0;
 static BOOL      hasrefreshed     = 0;
 static DWORD     lastpageflip     = 0;
-COLORREF  monochrome       = RGB(0xC0,0xC0,0xC0);
+COLORREF         monochrome       = RGB(0xC0,0xC0,0xC0);
 static BOOL      rebuiltsource    = 0;
-static DWORD     dwVBlCounter     = 0;
 static LPBYTE    vidlastmem       = NULL;
-static DWORD     vidmode          = VF_TEXT;
 
-DWORD     g_eVideoType        = VT_COLOR_TVEMU;
-DWORD     g_uHalfScanLines = false; // drop 50% scan lines for a more authentic look
+	int           g_bVideoMode          = VF_TEXT;
+
+	DWORD     g_eVideoType     = VT_COLOR_TVEMU;
+	DWORD     g_uHalfScanLines = true; // drop 50% scan lines for a more authentic look
 
 
 static bool g_bTextFlashState = false;
@@ -250,112 +278,350 @@ static bool bVideoScannerNTSC = true;  // NTSC video scanning (or PAL)
 //-------------------------------------
 
 // Video consts:
-const UINT nVBlStop_NTSC	= 21;
-const UINT nVBlStop_PAL		= 29;
+	const UINT nVBlStop_NTSC	= 21;
+	const UINT nVBlStop_PAL		= 29;
+
+	// NOTE: KEEP IN SYNC: VideoType_e g_aVideoChoices g_apVideoModeDesc
+	TCHAR g_aVideoChoices[] =
+		TEXT("Monochrome (Custom Luminance)\0")
+		TEXT("Color (Standard)\0")
+		TEXT("Color (Text Optimized)\0")
+		TEXT("Color (TV emulation)\0")
+#if _DEBUG
+		TEXT("Color (Fake Half-Shift)\0")
+		TEXT("ORIGINAL Color (Standard)\0")
+		TEXT("ORIGINAL Color (Text optimized)\0")
+		TEXT("Column Visualizer (Psychedelic)\0")
+#endif
+		TEXT("Monochrome (Amber)\0")
+		TEXT("Monochrome (Green)\0")
+		TEXT("Monochrome (White)\0")
+#if _DEBUG
+		TEXT("Monochrome (Custom)\0")
+		TEXT("Mono Colorize\0")
+		TEXT("Mono Half Pixel Colorize\0")
+		TEXT("Mono Half Pixel 75%\0")
+		TEXT("Mono Half Pixel 95%\0")
+		TEXT("Mono Half Pixel Emboss\0")
+		TEXT("Mono Half Pixel Fake\0")
+#endif
+		;
+
+	// AppleWin 1.19.4 VT_COLOR_AUTHENTIC -> VT_COLOR_HALFPIXEL -> VT_COLOR_STANDARD "Color Half-Pixel Authentic
+	// NOTE: KEEP IN SYNC: VideoType_e g_aVideoChoices g_apVideoModeDesc
+	// The window title will be set to this.
+	char *g_apVideoModeDesc[ NUM_VIDEO_MODES ] =
+	{
+		  "Monochrome (Custom)"
+		, "Standard"        
+		, "Text Optimized"
+		, "TV"
+#if _DEBUG
+		, "Fake Half-Pixel (Retro)"
+		, "ORIGINAL Standard"
+		, "ORIGINAL Text"
+		, "Column Visualizer (Psychedelic)"
+#endif
+		, "Amber"
+		, "Green"
+		, "White"
+#if _DEBUG
+		, "Custom"
+		, "Monochrome Colorize"
+		, "Monochrome Half-Pixel Colorize"
+		, "Monochrome Half-Pixel 75"
+		, "Monochrome Half-Pixel 95"
+		, "Monochrome Half-Pixel Emboss"
+		, "Monochrome Half-Pixel Fake"
+#endif
+	};
 
 // Prototypes (Private) _____________________________________________
 
-void DrawDHiResSource ();
-void DrawHiResSource ();
-void DrawHiResSourceHalfShiftFull ();
-void DrawHiResSourceHalfShiftDim ();
-void DrawLoResSource ();
-void DrawMonoDHiResSource ();
-void DrawMonoHiResSource ();
-void DrawMonoLoResSource ();
-void DrawMonoTextSource (HDC dc);
-void DrawTextSource (HDC dc);
+	void V_CreateLookup_DoubleHires ();
+	void V_CreateLookup_Hires (); // Old "Full-Pixel" support only: STANDARD, TEXT_OPTIMIZED, TVEMU
+	void V_CreateLookup_HiResHalfPixel_Authentic (); // New "Half_Pixel" support: STANDARD, TEXT_OPTIMIZED
+	void V_CreateLookup_HiresHalfShiftFull ();
+	void V_CreateLookup_HiresHalfShiftDim ();
+	void V_CreateLookup_Lores ();
+	void V_CreateLookup_Text (HDC dc);
+	void V_CreateLookup_ColumnVisualizer ();
+// Monochrome Full-Pixel Support
+	void V_CreateLookup_MonoDoubleHiRes ();
+	void V_CreateLookup_MonoHiRes ();
+	void V_CreateLookup_MonoLoRes ();
+	void V_CreateLookup_MonoText (HDC dc);
+// Monochrome Half-Pixel Support
+	void V_CreateLookup_MonoHiResHalfPixel_75 ();
+	void V_CreateLookup_MonoHiResHalfPixel_95 ();
+	void V_CreateLookup_MonoHiResHalfPixel_Emboss ();
+	void V_CreateLookup_MonoHiResHalfPixel_Fake ();
+	void V_CreateLookup_MonoHiResHalfPixel_Real ();
+	void V_CreateLookup_MonoHiResHalfPixel_Colorize ();
+	void V_CreateLookup_MonoHiRes_Colorize ();
 
-bool g_bDisplayPrintScreenFileName = false;
-void Util_MakeScreenShotFileName( char *pFinalFileName_ );
-bool Util_TestScreenShotFileName( const char *pFileName );
-// true  = 280x192
-// false = 560x384
-void Video_SaveScreenShot( const char *pScreenShotFileName );
-void Video_MakeScreenShot( FILE *pFile );
+	bool g_bDisplayPrintScreenFileName = false;
+	void Util_MakeScreenShotFileName( char *pFinalFileName_ );
+	bool Util_TestScreenShotFileName( const char *pFileName );
+	// true  = 280x192
+	// false = 560x384
+	void Video_SaveScreenShot( const char *pScreenShotFileName );
+	void Video_MakeScreenShot( FILE *pFile );
 
-int GetMonochromeIndex();
+	int GetMonochromeIndex();
 
-//===========================================================================
-void __stdcall CopySource (int destx, int desty,
-                           int xsize, int ysize,
-                           int sourcex, int sourcey)
+	void V_CreateIdentityPalette ();
+	void V_CreateDIBSections ();
+	HBRUSH V_CreateCustomBrush (COLORREF nColor);
+
+
+/** Our BitBlit() / VRAM_Copy()
+	@param dx Dst X
+	@param dy Dst Y
+	@param w  Width (same for src & dst)
+	@param h  Height (same for src & dst)
+	@param sx Src X
+	@param sy Src Y
+// =========================================================================== */
+void CopySource (int dx, int dy, int w, int h, int sx, int sy )
 {
-  LPBYTE currdestptr   = frameoffsettable [desty]  +destx;
-  LPBYTE currsourceptr = g_aSourceStartofLine[sourcey]+sourcex;
-  int bytesleft;
-  while (ysize--)
-  {
-    bytesleft = xsize;
-    while (bytesleft & 3)
+	LPBYTE pDst = g_aFrameBufferOffset[ dy ] + dx;
+	LPBYTE pSrc = g_aSourceStartofLine[ sy ] + sx;
+	int nBytes;
+
+	while (h--)
 	{
-      --bytesleft;
-      *(currdestptr+bytesleft) = *(currsourceptr+bytesleft);
-    }
-    while (bytesleft)
-	{
-      bytesleft -= 4;
-      *(LPDWORD)(currdestptr+bytesleft) = *(LPDWORD)(currsourceptr+bytesleft);
-    }
-    currdestptr   -= framebufferpitch;
-    currsourceptr -= SRCOFFS_TOTAL;
-  }
+		nBytes = w;
+
+		// If not multiple of 3 bytes, copy first 3 bytes, so the next copy is 4-byte aligned.
+		while (nBytes & 3)
+		{
+		  --nBytes;
+		  *(pDst+nBytes) = *(pSrc+nBytes);
+		}
+
+		// Copy 4 bytes at a time
+		while (nBytes)
+		{
+		  nBytes -= 4;
+		  *(LPDWORD)(pDst+nBytes) = *(LPDWORD)(pSrc+nBytes);
+		}
+
+		pDst -= g_nFrameBufferPitch;
+		pSrc -= SRCOFFS_TOTAL;
+	}
+}
+
+
+//===========================================================================
+void CreateFrameOffsetTable (LPBYTE addr, LONG pitch)
+{
+	if ((framebufferaddr  == addr) && (g_nFrameBufferPitch == pitch))
+		return;
+
+	framebufferaddr  = addr;
+	g_nFrameBufferPitch = pitch;
+
+	// CREATE THE OFFSET TABLE FOR EACH SCAN LINE IN THE FRAME BUFFER
+	for (int y = 0; y < FRAMEBUFFER_H; y++)
+		g_aFrameBufferOffset[y] = framebufferaddr + g_nFrameBufferPitch*((FRAMEBUFFER_H-1)-y);
 }
 
 //===========================================================================
-void CreateFrameOffsetTable (LPBYTE addr, LONG pitch) {
-  if (framebufferaddr  == addr &&
-      framebufferpitch == pitch)
-      return;
-  framebufferaddr  = addr;
-  framebufferpitch = pitch;
+void VideoInitialize ()
+{
+	// CREATE A BUFFER FOR AN IMAGE OF THE LAST DRAWN MEMORY
+	vidlastmem = (LPBYTE)VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE);
+	ZeroMemory(vidlastmem,0x10000);
 
-  // CREATE THE OFFSET TABLE FOR EACH SCAN LINE IN THE FRAME BUFFER
-  for (int y = 0; y < FRAMEBUFFER_H; y++)
-    frameoffsettable[y] = framebufferaddr + framebufferpitch*((FRAMEBUFFER_H-1)-y);
+	// LOAD THE LOGO
+	g_hLogoBitmap = (HBITMAP)LoadImage(g_hInstance, MAKEINTRESOURCE(IDB_APPLEWIN), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+
+	// CREATE A BITMAPINFO STRUCTURE FOR THE FRAME BUFFER
+	g_pFramebufferinfo = (LPBITMAPINFO)VirtualAlloc(
+		NULL,
+		sizeof(BITMAPINFOHEADER) + 256*sizeof(RGBQUAD),
+		MEM_COMMIT,
+		PAGE_READWRITE);
+
+	ZeroMemory(g_pFramebufferinfo,sizeof(BITMAPINFOHEADER)+256*sizeof(RGBQUAD));
+	g_pFramebufferinfo->bmiHeader.biSize     = sizeof(BITMAPINFOHEADER);
+	g_pFramebufferinfo->bmiHeader.biWidth    = FRAMEBUFFER_W;
+	g_pFramebufferinfo->bmiHeader.biHeight   = FRAMEBUFFER_H;
+	g_pFramebufferinfo->bmiHeader.biPlanes   = 1;
+	g_pFramebufferinfo->bmiHeader.biBitCount = 8;
+	g_pFramebufferinfo->bmiHeader.biClrUsed  = 256;
+
+	// CREATE A BITMAPINFO STRUCTURE FOR THE SOURCE IMAGE
+	g_pSourceHeader = (LPBITMAPINFO)VirtualAlloc(
+		NULL,
+		sizeof(BITMAPINFOHEADER) + 256*sizeof(RGBQUAD),
+		MEM_COMMIT,
+		PAGE_READWRITE);
+
+	ZeroMemory(g_pSourceHeader,sizeof(BITMAPINFOHEADER));
+	g_pSourceHeader->bmiHeader.biSize     = sizeof(BITMAPINFOHEADER);
+	g_pSourceHeader->bmiHeader.biWidth    = SRCOFFS_TOTAL;
+	g_pSourceHeader->bmiHeader.biHeight   = 512;
+	g_pSourceHeader->bmiHeader.biPlanes   = 1;
+	g_pSourceHeader->bmiHeader.biBitCount = 8;
+	g_pSourceHeader->bmiHeader.biClrUsed  = 256;
+
+	// VideoReinitialize() ... except we set the frame buffer palette....
+		V_CreateIdentityPalette();
+
+		//RGB() -> none
+		//PALETTERGB() -> PC_EXPLICIT
+		//??? RGB() -> PC_NOCOLLAPSE
+		for( int iColor = 0; iColor < NUM_COLOR_PALETTE; iColor++ )
+			customcolors[ iColor ] = ((DWORD)PC_EXPLICIT << 24) | RGB(
+			g_pFramebufferinfo->bmiColors[iColor].rgbRed,
+			g_pFramebufferinfo->bmiColors[iColor].rgbGreen,
+			g_pFramebufferinfo->bmiColors[iColor].rgbBlue
+		);
+
+		// CREATE THE FRAME BUFFER DIB SECTION AND DEVICE CONTEXT,
+		// CREATE THE SOURCE IMAGE DIB SECTION AND DRAW INTO THE SOURCE BIT BUFFER
+		V_CreateDIBSections();
+
+	// RESET THE VIDEO MODE SWITCHES AND THE CHARACTER SET OFFSET
+	VideoResetState();
 }
 
 //===========================================================================
-void CreateIdentityPalette ()
+int GetMonochromeIndex()
+{
+	int iMonochrome;
+	
+	switch (g_eVideoType)
+	{
+#if _DEBUG
+		case VT_MONO_CUSTOM: iMonochrome = MONOCHROME_CUSTOM; break;
+#endif
+		case VT_MONO_AMBER : iMonochrome = MONOCHROME_AMBER ; break;
+		case VT_MONO_GREEN : iMonochrome = MONOCHROME_GREEN ; break;
+		case VT_MONO_WHITE : iMonochrome = HGR_WHITE        ; break;
+		default            : iMonochrome = MONOCHROME_CUSTOM; break; // caller will use MONOCHROME_CUSTOM MONOCHROME_CUSTOM_50 !
+	}
+
+	return iMonochrome;
+}
+
+//===========================================================================
+void V_CreateIdentityPalette ()
 {
 	if (g_hPalette)
 	{
 		DeleteObject(g_hPalette);
 	}
+	g_hPalette = (HPALETTE)0;
+
+	SETFRAMECOLOR(BLACK,       0x00,0x00,0x00); // 0
+	SETFRAMECOLOR(DARK_RED,    0x80,0x00,0x00); // 1 // used by TV 
+	SETFRAMECOLOR(DARK_GREEN,  0x00,0x80,0x00); // 2
+	SETFRAMECOLOR(DARK_YELLOW, 0x80,0x80,0x00); // 3
+	SETFRAMECOLOR(DARK_BLUE,   0x00,0x00,0x80); // 4 // Used by VT_COLOR_HALF_SHIFT_DIM (Michael's Retro look)
+	SETFRAMECOLOR(DARK_MAGENTA,0x80,0x00,0x80); // 5
+	SETFRAMECOLOR(DARK_CYAN,   0x00,0x80,0x80); // 6
+	SETFRAMECOLOR(LIGHT_GRAY,  0xC0,0xC0,0xC0); // 7 // GR: COLOR=10 Used by VT_COLOR_HALF_SHIFT_DIM (Michael's Retro look)
+	SETFRAMECOLOR(MONEY_GREEN, 0xC0,0xDC,0xC0); // 8 // not used
+	SETFRAMECOLOR(SKY_BLUE,    0xA6,0xCA,0xF0); // 9 // not used
 
 	// SET FRAME BUFFER TABLE ENTRIES TO CUSTOM COLORS
-	SETFRAMECOLOR(DEEP_RED,  0xD0,0x00,0x30);
-	SETFRAMECOLOR(LIGHT_BLUE,0x60,0xA0,0xFF);
-	SETFRAMECOLOR(BROWN,     0x80,0x50,0x00);
-	SETFRAMECOLOR(ORANGE,    0xFF,0x80,0x00);
-	SETFRAMECOLOR(PINK,      0xFF,0x90,0x80);
-	SETFRAMECOLOR(AQUA,      0x40,0xFF,0x90);
+#if COLORS_TWEAKED
+	SETFRAMECOLOR(DARK_RED,    0x9D,0x09,0x66); // 1 // Linards Tweaked
+	SETFRAMECOLOR(DARK_GREEN,  0x00,0x76,0x1A); // 2 // Linards Tweaked
+	SETFRAMECOLOR(DARK_BLUE,   0x2A,0x2A,0xE5); // 4 // Linards Tweaked - Used by VT_COLOR_HALF_SHIFT_DIM (Michael's Retro look)
 
-	SETFRAMECOLOR(HGR_BLACK,  0x00,0x00,0x00);	// For tv emulation g_nAppMode
-	SETFRAMECOLOR(HGR_WHITE,  0xFF,0xFF,0xFE);
-	SETFRAMECOLOR(HGR_BLUE,   0x00,0x80,0xFF);
-	SETFRAMECOLOR(HGR_RED,    0xF0,0x50,0x00);
-	SETFRAMECOLOR(HGR_GREEN,  0x20,0xC0,0x00);
-	SETFRAMECOLOR(HGR_MAGENTA,0xA0,0x00,0xFF);
+	SETFRAMECOLOR(DEEP_RED,  0x9D,0x09,0x66); // 0xD0,0x00,0x30 -> Linards Tweaked 0x9D,0x09,0x66
+	SETFRAMECOLOR(LIGHT_BLUE,0xAA,0xAA,0xFF); // 0x60,0xA0,0xFF -> Linards Tweaked 0xAA,0xAA,0xFF
+	SETFRAMECOLOR(BROWN,     0x55,0x55,0x00); // 0x80,0x50,0x00 -> Linards Tweaked 0x55,0x55,0x00
+	SETFRAMECOLOR(ORANGE,    0xF2,0x5E,0x00); // 0xFF,0x80,0x00 -> Linards Tweaked 0xF2,0x5E,0x00
+	SETFRAMECOLOR(PINK,      0xFF,0x89,0xE5); // 0xFF,0x90,0x80 -> Linards Tweaked 0xFF,0x89,0xE5
+	SETFRAMECOLOR(AQUA,      0x62,0xF6,0x99); // 0x40,0xFF,0x90 -> Linards Tweaked 0x62,0xF6,0x99
+
+	SETFRAMECOLOR(HGR_BLACK,  0x00,0x00,0x00); // For TV emulation HGR Video Mode
+	SETFRAMECOLOR(HGR_WHITE,  0xFF,0xFF,0xFE); // BUG: PALETTE COLLAPSE!  NOT white!? Win32 collapses the palette if you have duplicate colors!
+	SETFRAMECOLOR(HGR_BLUE,   0x0D,0xA1,0xFF); // 0x00,0x80,0xFF -> Linards Tweaked 0x0D,0xA1,0xFF
+	SETFRAMECOLOR(HGR_RED,    0xF2,0x5E,0x00); // 0xF0,0x50,0x00 -> Linards Tweaked 0xF2,0x5E,0x00 
+	SETFRAMECOLOR(HGR_GREEN,  0x38,0xCB,0x00); // 0x20,0xC0,0x00 -> Linards Tweaked 0x38,0xCB,0x00
+	SETFRAMECOLOR(HGR_MAGENTA,0xC7,0x34,0xFF); // 0xA0,0x00,0xFF -> Linards Tweaked 0xC7,0x34,0xFF
 	SETFRAMECOLOR(HGR_GREY1,  0x80,0x80,0x80);
 	SETFRAMECOLOR(HGR_GREY2,  0x80,0x80,0x80);
-	SETFRAMECOLOR(HGR_YELLOW, 0xD0,0xB0,0x10);
-	SETFRAMECOLOR(HGR_AQUA,   0x20,0xB0,0xB0);
-	SETFRAMECOLOR(HGR_PURPLE, 0x60,0x50,0xE0);
-	SETFRAMECOLOR(HGR_PINK,   0xD0,0x40,0xA0);
+	SETFRAMECOLOR(HGR_YELLOW, 0x9E,0x9E,0x00); // 0xD0,0xB0,0x10 -> 0x9E,0x9E,0x00
+	SETFRAMECOLOR(HGR_AQUA,   0x00,0xCD,0x4A); // 0x20,0xB0,0xB0 -> 0x00,0xCD,0x4A
+	SETFRAMECOLOR(HGR_PURPLE, 0x61,0x61,0xFF); // 0x60,0x50,0xE0 -> 0x61,0x61,0xFF
+	SETFRAMECOLOR(HGR_PINK,   0xFF,0x32,0xB5); // 0xD0,0x40,0xA0 -> 0xFF,0x32,0xB5
+#else
+	SETFRAMECOLOR(DEEP_RED,  0xD0,0x00,0x30); // 0xD0,0x00,0x30
+	SETFRAMECOLOR(LIGHT_BLUE,0x60,0xA0,0xFF); // 0x60,0xA0,0xFF
+	SETFRAMECOLOR(BROWN,     0x80,0x50,0x00); // 0x80,0x50,0x00
+	SETFRAMECOLOR(ORANGE,    0xFF,0x80,0x00); // 0xFF,0x80,0x00
+	SETFRAMECOLOR(PINK,      0xFF,0x90,0x80); // 0xFF,0x90,0x80
+	SETFRAMECOLOR(AQUA,      0x40,0xFF,0x90); // 0x40,0xFF,0x90
+
+	SETFRAMECOLOR(HGR_BLACK,  0x00,0x00,0x00); // For TV emulation HGR Video Mode
+	SETFRAMECOLOR(HGR_WHITE,  0xFF,0xFF,0xFE); // BUG: PALETTE COLLAPSE!  NOT white!? Win32 collapses the palette if you have duplicate colors!
+	SETFRAMECOLOR(HGR_BLUE,   0x00,0x80,0xFF); // 0x00,0x80,0xFF
+	SETFRAMECOLOR(HGR_RED,    0xF0,0x50,0x00); // 0xF0,0x50,0x00
+	SETFRAMECOLOR(HGR_GREEN,  0x20,0xC0,0x00); // 0x20,0xC0,0x00
+	SETFRAMECOLOR(HGR_MAGENTA,0xA0,0x00,0xFF); // 0xA0,0x00,0xFF
+	SETFRAMECOLOR(HGR_GREY1,  0x80,0x80,0x80);
+	SETFRAMECOLOR(HGR_GREY2,  0x80,0x80,0x80);
+	SETFRAMECOLOR(HGR_YELLOW, 0xD0,0xB0,0x10); // 0xD0,0xB0,0x10
+	SETFRAMECOLOR(HGR_AQUA,   0x20,0xB0,0xB0); // 0x20,0xB0,0xB0
+	SETFRAMECOLOR(HGR_PURPLE, 0x60,0x50,0xE0); // 0x60,0x50,0xE0
+	SETFRAMECOLOR(HGR_PINK,   0xD0,0x40,0xA0); // 0xD0,0x40,0xA0
+#endif
 
 	SETFRAMECOLOR( MONOCHROME_CUSTOM
 		, GetRValue(monochrome)
 		, GetGValue(monochrome)
-		, GetBValue(monochrome) );
+		, GetBValue(monochrome)
+	);
 
-	SETFRAMECOLOR( MONOCHROME_AMBER, 0xFF,0x80,0x00);
-	SETFRAMECOLOR( MONOCHROME_GREEN, 0x00,0xC0,0x00);
-	SETFRAMECOLOR( MONOCHROME_WHITE, 0xFF,0xFF,0xFF);
+	SETFRAMECOLOR( MONOCHROME_CUSTOM_50
+		, ((GetRValue(monochrome)/2) & 0xFF)
+		, ((GetGValue(monochrome)/2) & 0xFF)
+		, ((GetBValue(monochrome)/2) & 0xFF)
+	);
+
+	// SEE: V_CreateLookup_MonoText
+	SETFRAMECOLOR( MONOCHROME_AMBER   , 0xFF,0x80,0x01); // Used for Monochrome Hi-Res graphics not text!
+	SETFRAMECOLOR( MONOCHROME_GREEN   , 0x00,0xC0,0x01); // Used for Monochrome Hi-Res graphics not text!
+	// BUG PALETTE COLLAPSE: WTF?? Soon as we set 0xFF,0xFF,0xFF we lose text colors?!?!
+	// Windows is collapsing the palette!!!
+	//SETFRAMECOLOR( MONOCHROME_WHITE   , 0xFE,0xFE,0xFE); // Used for Monochrome Hi-Res graphics not text!
+
+#if COLORS_TWEAKED
+	SETFRAMECOLOR(CREAM,       0xFF,0xFB,0xF0); // F6
+	SETFRAMECOLOR(MEDIUM_GRAY, 0xA0,0xA0,0xA4); // F7
+	SETFRAMECOLOR(DARK_GRAY,   0x80,0x80,0x80); // F8
+	SETFRAMECOLOR(RED,         0xFF,0x00,0x00); // F9
+	SETFRAMECOLOR(GREEN,       0x38,0xCB,0x00); // FA Linards Tweaked
+	SETFRAMECOLOR(YELLOW,      0xD5,0xD5,0x1A); // FB Linards Tweaked
+	SETFRAMECOLOR(BLUE,        0x0D,0xA1,0xFF); // FC Linards Tweaked
+	SETFRAMECOLOR(MAGENTA,     0xC7,0x34,0xFF); // FD Linards Tweaked
+	SETFRAMECOLOR(CYAN,        0x00,0xFF,0xFF); // FE
+	SETFRAMECOLOR(WHITE,       0xFF,0xFF,0xFF); // FF
+#else
+	SETFRAMECOLOR(CREAM,       0xFF,0xFB,0xF0); // F6
+	SETFRAMECOLOR(MEDIUM_GRAY, 0xA0,0xA0,0xA4); // F7
+	SETFRAMECOLOR(DARK_GRAY,   0x80,0x80,0x80); // F8
+	SETFRAMECOLOR(RED,         0xFF,0x00,0x00); // F9
+	SETFRAMECOLOR(GREEN,       0x00,0xFF,0x00); // FA
+	SETFRAMECOLOR(YELLOW,      0xFF,0xFF,0x00); // FB
+	SETFRAMECOLOR(BLUE,        0x00,0x00,0xFF); // FC
+	SETFRAMECOLOR(MAGENTA,     0xFF,0x00,0xFF); // FD
+	SETFRAMECOLOR(CYAN,        0x00,0xFF,0xFF); // FE
+	SETFRAMECOLOR(WHITE,       0xFF,0xFF,0xFF); // FF
+#endif
 
 	// IF WE ARE IN A PALETTIZED VIDEO MODE, CREATE AN IDENTITY PALETTE
 	HWND window = GetDesktopWindow();
 	HDC  dc     = GetDC(window);
+
+	// int GetDeviceCaps( HDC, nIndex );
 	int  colors = GetDeviceCaps(dc,SIZEPALETTE); // 16/24/32bpp = 0
 	int  system = GetDeviceCaps(dc,NUMCOLORS);   // 16/24/32bpp = -1
 
@@ -397,7 +663,8 @@ void CreateIdentityPalette ()
 	}
 #endif
 
-	if ((GetDeviceCaps(dc,RASTERCAPS) & RC_PALETTE) && (colors <= 256))
+	int bRasterPalette = (GetDeviceCaps(dc,RASTERCAPS) & RC_PALETTE);
+	if (bRasterPalette && (colors <= 256))
 	{
 		// GET THE PALETTE ENTRIES OF THE LOGO
 		RGBQUAD aLogoPalette[256];
@@ -410,11 +677,13 @@ void CreateIdentityPalette ()
 		}
 
 		// CREATE A PALETTE ENTRY ARRAY
-		LOGPALETTE *paldata = (LOGPALETTE *)VirtualAlloc(NULL,
-															sizeof(LOGPALETTE)
-															+256*sizeof(PALETTEENTRY),
-															MEM_COMMIT,
-															PAGE_READWRITE);
+		LOGPALETTE *paldata = (LOGPALETTE *)VirtualAlloc(
+			NULL,
+			sizeof(LOGPALETTE) + 256*sizeof(PALETTEENTRY),
+			MEM_COMMIT,
+			PAGE_READWRITE
+		);
+
 		paldata->palVersion    = 0x300;
 		paldata->palNumEntries = colors;
 		GetSystemPaletteEntries(dc,0,colors,paldata->palPalEntry);
@@ -479,40 +748,55 @@ void CreateIdentityPalette ()
 		g_hPalette = CreatePalette(paldata);
 		VirtualFree(paldata,0,MEM_RELEASE);
 	}
-	else	// OTHERWISE, FILL THE FRAME BUFFER TABLE WITH THE STANDARD WINDOWS COLORS
-	{
-		SETFRAMECOLOR(BLACK,       0x00,0x00,0x00);
-		SETFRAMECOLOR(DARK_RED,    0x80,0x00,0x00);
-		SETFRAMECOLOR(DARK_GREEN,  0x00,0x80,0x00);
-		SETFRAMECOLOR(DARK_YELLOW, 0x80,0x80,0x00);
-		SETFRAMECOLOR(DARK_BLUE,   0x00,0x00,0x80);
-		SETFRAMECOLOR(DARK_MAGENTA,0x80,0x00,0x80);
-		SETFRAMECOLOR(DARK_CYAN,   0x00,0x80,0x80);
-		SETFRAMECOLOR(LIGHT_GRAY,  0xC0,0xC0,0xC0);
-		SETFRAMECOLOR(MONEY_GREEN, 0xC0,0xDC,0xC0);
-		
-		SETFRAMECOLOR(SKY_BLUE,    0xA6,0xCA,0xF0);
-		SETFRAMECOLOR(CREAM,       0xFF,0xFB,0xF0);
-		SETFRAMECOLOR(MEDIUM_GRAY, 0xA0,0xA0,0xA4);
-		SETFRAMECOLOR(DARK_GRAY,   0x80,0x80,0x80);
-		SETFRAMECOLOR(RED,         0xFF,0x00,0x00);
-		SETFRAMECOLOR(GREEN,       0x00,0xFF,0x00);
-		SETFRAMECOLOR(YELLOW,      0xFF,0xFF,0x00);
-		SETFRAMECOLOR(BLUE,        0x00,0x00,0xFF);
-		SETFRAMECOLOR(MAGENTA,     0xFF,0x00,0xFF);
-		SETFRAMECOLOR(CYAN,        0x00,0xFF,0xFF);
-		SETFRAMECOLOR(WHITE,       0xFF,0xFF,0xFF);
-
-		g_hPalette = (HPALETTE)0;
-	}
 
 	ReleaseDC(window,dc);
 }
 
 //===========================================================================
-void CreateDIBSections () 
+void V_CreateLookup_MonoText (HDC hDstDC)
 {
+	static HBITMAP hCharBitmap[4];
+	HDC     hSrcDC  = CreateCompatibleDC(hDstDC);
 
+	hCharBitmap[0] = LoadBitmap(g_hInstance,TEXT("CHARSET40"));
+	hCharBitmap[1] = LoadBitmap(g_hInstance,TEXT("CHARSET82"));
+	hCharBitmap[2] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));  // FIXME: Pravets 8M probably has the same charset as Pravets 8C
+	hCharBitmap[3] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));
+
+	HBRUSH hBrush;
+	switch (g_eVideoType)
+	{
+//		case VT_MONO_AUTHENTIC: hBrush = CreateCustomBrush(RGB(0x00,0xC0,0x00)); break; 
+		case VT_MONO_AMBER: hBrush = CreateSolidBrush(RGB(0xFF,0x80,0x00)); break;
+		case VT_MONO_GREEN: hBrush = CreateSolidBrush(RGB(0x00,0xC0,0x00)); break;
+		case VT_MONO_WHITE: hBrush = CreateSolidBrush(RGB(0xFF,0xFF,0xFF)); break;
+		default           : hBrush = CreateSolidBrush(monochrome); break;
+
+//		case VT_MONO_AMBER : hBrush = V_CreateCustomBrush(RGB(0xFF,0x80,0x00)); break; // Should (must?) match MONOCHROME_AMBER !
+//		case VT_MONO_GREEN : hBrush = V_CreateCustomBrush(RGB(0x00,0xC0,0x00)); break; // SHould (must?) match MONOCHROME_GREEN !
+//		case VT_MONO_WHITE : hBrush = V_CreateCustomBrush(RGB(0xFF,0xFF,0xFF)); break; // BUG: PALETTE COLLAPSE: Must NOT match MONOCHROME_WHITE !
+//		case VT_MONO_CUSTOM: hBrush = V_CreateCustomBrush(monochrome); break;
+//		default            : hBrush = V_CreateCustomBrush(monochrome); break;
+	}
+
+	SelectObject(hSrcDC,hCharBitmap[g_nCharsetType]);
+	SelectObject(hDstDC,hBrush);
+
+	// TODO: Update with APPLE_FONT_Y_ values
+	BitBlt(    hDstDC,SRCOFFS_40COL ,0,256,512,hSrcDC,0,  0,MERGECOPY);
+	BitBlt(    hDstDC,SRCOFFS_IIPLUS,0,256,256,hSrcDC,0,512,MERGECOPY);
+	StretchBlt(hDstDC,SRCOFFS_80COL ,0,128,512,hSrcDC,0,  0,256,512,MERGECOPY);
+	SelectObject(hDstDC,GetStockObject(NULL_BRUSH));
+
+	DeleteObject(hBrush);
+	DeleteDC(hSrcDC);
+	DeleteObject(hCharBitmap);
+}
+
+
+//===========================================================================
+void V_CreateDIBSections () 
+{
 	CopyMemory(g_pSourceHeader->bmiColors,g_pFramebufferinfo->bmiColors,256*sizeof(RGBQUAD));
   
 	// CREATE THE DEVICE CONTEXT
@@ -524,62 +808,95 @@ void CreateDIBSections ()
 	}
 	g_hDeviceDC = CreateCompatibleDC(dc);
 
-  // CREATE THE FRAME BUFFER DIB SECTION
-  if (g_hDeviceBitmap)
-    DeleteObject(g_hDeviceBitmap);
-  g_hDeviceBitmap = CreateDIBSection(dc,g_pFramebufferinfo,DIB_RGB_COLORS,
-                                  (LPVOID *)&g_pFramebufferbits,0,0);
-  SelectObject(g_hDeviceDC,g_hDeviceBitmap);
+	// CREATE THE FRAME BUFFER DIB SECTION
+	if (g_hDeviceBitmap)
+		DeleteObject(g_hDeviceBitmap);
+		g_hDeviceBitmap = CreateDIBSection(
+			dc,
+			g_pFramebufferinfo,
+			DIB_RGB_COLORS,
+			(LPVOID *)&g_pFramebufferbits,0,0
+		);
+	SelectObject(g_hDeviceDC,g_hDeviceBitmap);
 
-  // CREATE THE SOURCE IMAGE DIB SECTION
-  HDC sourcedc = CreateCompatibleDC(dc);
-  ReleaseDC(window,dc);
-  if (g_hSourceBitmap)
-    DeleteObject(g_hSourceBitmap);
-  g_hSourceBitmap = CreateDIBSection(
-	sourcedc,g_pSourceHeader,DIB_RGB_COLORS,
-    (LPVOID *)&g_pSourcePixels,0,0);
-  SelectObject(sourcedc,g_hSourceBitmap);
+	// CREATE THE SOURCE IMAGE DIB SECTION
+	HDC sourcedc = CreateCompatibleDC(dc);
+	ReleaseDC(window,dc);
+	if (g_hSourceBitmap)
+		DeleteObject(g_hSourceBitmap);
+
+	g_hSourceBitmap = CreateDIBSection(
+		sourcedc,
+		g_pSourceHeader,
+		DIB_RGB_COLORS,
+		(LPVOID *)&g_pSourcePixels,0,0
+	);
+	SelectObject(sourcedc,g_hSourceBitmap);
 
 	// CREATE THE OFFSET TABLE FOR EACH SCAN LINE IN THE SOURCE IMAGE
 	for (int y = 0; y < MAX_SOURCE_Y; y++)
 		g_aSourceStartofLine[ y ] = g_pSourcePixels + SRCOFFS_TOTAL*((MAX_SOURCE_Y-1) - y);
 
 	// DRAW THE SOURCE IMAGE INTO THE SOURCE BIT BUFFER
-	ZeroMemory(g_pSourcePixels,SRCOFFS_TOTAL*512);
+	ZeroMemory(g_pSourcePixels,SRCOFFS_TOTAL*512); // 32 bytes/pixel * 16 colors = 512 bytes/row
 
-	if((g_eVideoType != VT_MONO_CUSTOM) &&
-		(g_eVideoType != VT_MONO_AMBER ) &&
-		(g_eVideoType != VT_MONO_GREEN ) &&
-		(g_eVideoType != VT_MONO_WHITE ))
-//		(g_eVideoType != VT_MONO_AUTHENTIC))
+	// First monochrome mode is seperate from others
+	if ((g_eVideoType >= VT_COLOR_STANDARD)
+	&&  (g_eVideoType <  VT_MONO_AMBER))
 	{
-		DrawTextSource(sourcedc);
-		DrawLoResSource();
-		if (g_eVideoType == VT_COLOR_HALF_SHIFT_DIM)
-			DrawHiResSourceHalfShiftDim();
+		V_CreateLookup_Text(sourcedc);
+		V_CreateLookup_Lores();
+
+		if ( g_eVideoType == VT_COLOR_TVEMU )
+			V_CreateLookup_Hires();
 		else
-			DrawHiResSource();
-		DrawDHiResSource();
+#if _DEBUG
+		if ((g_eVideoType == VT_ORG_COLOR_STANDARD) || (g_eVideoType == VT_ORG_COLOR_TEXT_OPTIMIZED))
+			V_CreateLookup_Hires();
+		else
+		if (g_eVideoType == VT_COLOR_HALF_SHIFT_DIM)
+			V_CreateLookup_HiresHalfShiftDim();
+		else
+		if (g_eVideoType == VT_COLOR_COLUMN_VISUALIZER)
+			V_CreateLookup_ColumnVisualizer();
+		else
+#endif
+			V_CreateLookup_HiResHalfPixel_Authentic();
+		V_CreateLookup_DoubleHires();
 	}
 	else
 	{
-		DrawMonoTextSource(sourcedc);
-		DrawMonoLoResSource();
-		DrawMonoHiResSource();
-		DrawMonoDHiResSource();
+		V_CreateLookup_MonoText(sourcedc);
+		V_CreateLookup_MonoLoRes();
+
+		switch (g_eVideoType)
+		{
+			case VT_MONO_AMBER             : /* intentional fall-thru */
+			case VT_MONO_GREEN             : /* intentional fall-thru */
+			case VT_MONO_WHITE             : /* intentional fall-thru */                    
+			case VT_MONO_HALFPIXEL_REAL    : V_CreateLookup_MonoHiResHalfPixel_Real()    ; break;
+#if _DEBUG
+			case VT_MONO_CUSTOM            : V_CreateLookup_MonoHiRes()                          ; break;
+			case VT_MONO_HALFPIXEL_COLORIZE: V_CreateLookup_MonoHiResHalfPixel_Colorize(); break;
+			case VT_MONO_HALFPIXEL_75      : V_CreateLookup_MonoHiResHalfPixel_75()      ; break;
+			case VT_MONO_HALFPIXEL_95      : V_CreateLookup_MonoHiResHalfPixel_95()      ; break;
+			case VT_MONO_HALFPIXEL_EMBOSS  : V_CreateLookup_MonoHiResHalfPixel_Emboss()  ; break;
+			case VT_MONO_HALFPIXEL_FAKE    : V_CreateLookup_MonoHiResHalfPixel_Fake()    ; break;
+			case VT_MONO_COLORIZE          : V_CreateLookup_MonoHiRes_Colorize()         ; break;
+#endif
+			default: V_CreateLookup_MonoHiRes(); break;
+		}
+		V_CreateLookup_MonoDoubleHiRes();
 	}
 	DeleteDC(sourcedc);
 }
 
 //===========================================================================
-void DrawDHiResSource () {
-  BYTE colorval[16] = {BLACK,   DARK_BLUE, DARK_GREEN,BLUE,
-                       BROWN,   LIGHT_GRAY,GREEN,     AQUA,
-                       DEEP_RED,MAGENTA,   DARK_GRAY, LIGHT_BLUE,
-                       ORANGE,  PINK,      YELLOW,    WHITE};
+void V_CreateLookup_DoubleHires ()
+{
 #define OFFSET  3
 #define SIZE    10
+
   for (int column = 0; column < 256; column++) {
     int coloffs = SIZE * column;
     for (unsigned byteval = 0; byteval < 256; byteval++) {
@@ -605,12 +922,7 @@ void DrawDHiResSource () {
 
 	  if (g_eVideoType == VT_COLOR_TEXT_OPTIMIZED)
 	  {
-	    /***          
-	    activate for fringe reduction on white hgr text
-	    drawback: loss of color mix patterns in hgr g_nAppMode.
-	    select g_eVideoType by index
-	    ***/
-
+	    // Activate for fringe reduction on white HGR text - drawback: loss of color mix patterns in HGR Video Mode.
 		for (pixel = 0; pixel < 13; pixel++)
 		{
 		  if ((pattern & (0xF << pixel)) == (unsigned)(0xF << pixel))
@@ -622,8 +934,8 @@ void DrawDHiResSource () {
 
       int y = byteval << 1;
       for (int x = 0; x < SIZE; x++) {
-        SETSOURCEPIXEL(SRCOFFS_DHIRES+coloffs+x,y  ,colorval[color[x]]);
-        SETSOURCEPIXEL(SRCOFFS_DHIRES+coloffs+x,y+1,colorval[color[x]]);
+        SETSOURCEPIXEL(SRCOFFS_DHIRES+coloffs+x,y  ,DoubleHiresPalIndex[ color[x] ]);
+        SETSOURCEPIXEL(SRCOFFS_DHIRES+coloffs+x,y+1,DoubleHiresPalIndex[ color[x] ]);
       }
     }
   }
@@ -631,41 +943,8 @@ void DrawDHiResSource () {
 #undef OFFSET
 }
 
-
-	enum ColorMapping
-	{
-		  CM_Magenta
-		, CM_Blue
-		, CM_Green
-		, CM_Orange
-		, CM_Black
-		, CM_White
-		, NUM_COLOR_MAPPING
-	};
-
-	const BYTE aColorIndex[ NUM_COLOR_MAPPING ] =
-	{
-		  HGR_MAGENTA
-		, HGR_BLUE
-		, HGR_GREEN
-		, HGR_RED
-		, HGR_BLACK
-		, HGR_WHITE
-	};
-
-	const BYTE aColorDimmedIndex[ NUM_COLOR_MAPPING ] =
-	{
-		DARK_MAGENTA, // <- HGR_MAGENTA
-		DARK_BLUE   , // <- HGR_BLUE
-		DARK_GREEN  , // <- HGR_GREEN
-		DEEP_RED    , // <- HGR_RED
-		HGR_BLACK   , // no change
-		LIGHT_GRAY    // HGR_WHITE
-	};
-
-
 //===========================================================================
-void DrawHiResSourceHalfShiftDim ()
+void V_CreateLookup_HiresHalfShiftDim ()
 {
 	//  BYTE colorval[6] = {MAGENTA,BLUE,GREEN,ORANGE,BLACK,WHITE};
 	// BYTE colorval[6] = {HGR_MAGENTA,HGR_BLUE,HGR_GREEN,HGR_RED,HGR_BLACK,HGR_WHITE};
@@ -742,10 +1021,10 @@ void DrawHiResSourceHalfShiftDim ()
 					switch (color)
 					{
 						case CM_Magenta:
-							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  , HGR_MAGENTA  ); // aColorIndex
-							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  , DARK_MAGENTA ); // aColorDimmedIndex
-							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1, HGR_MAGENTA  ); // aColorIndex
-							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1, DARK_MAGENTA ); // aColorDimmedIndex
+							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  , HGR_MAGENTA  ); // HiresToPalIndex
+							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  , DARK_MAGENTA ); // HiresDimmedIndex
+							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1, HGR_MAGENTA  ); // HiresToPalIndex
+							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1, DARK_MAGENTA ); // HiresDimmedIndex
 							break;
 						case CM_Blue   :
 							SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  , HGR_BLUE  );
@@ -836,11 +1115,11 @@ void DrawHiResSourceHalfShiftDim ()
 
 
 //===========================================================================
-void DrawHiResSource ()
+void V_CreateLookup_Hires ()
 {
 	int iMonochrome = GetMonochromeIndex();
 
-	//  BYTE colorval[6] = {MAGENTA,BLUE,GREEN,ORANGE,BLACK,WHITE};
+	// BYTE colorval[6] = {MAGENTA,BLUE,GREEN,ORANGE,BLACK,WHITE};
 	// BYTE colorval[6] = {HGR_MAGENTA,HGR_BLUE,HGR_GREEN,HGR_RED,HGR_BLACK,HGR_WHITE};
 	for (int iColumn = 0; iColumn < 16; iColumn++)
 	{
@@ -883,32 +1162,33 @@ void DrawHiResSource ()
 					}
 					else if (aPixels[iPixel-1] && aPixels[iPixel+1])
 					{
-						/***          
-						activate for fringe reduction on white hgr text - 
-						drawback: loss of color mix patterns in hgr g_nAppMode.
-						select g_eVideoType by index exclusion
-						***/
-						if ((g_eVideoType == VT_COLOR_STANDARD) || (g_eVideoType == VT_COLOR_TVEMU) || !(aPixels[iPixel-2] && aPixels[iPixel+2]))
-							color = ((odd ^ !(iPixel&1)) << 1) | hibit;	// // No white HGR text optimization
+						// Activate fringe reduction on white HGR text - drawback: loss of color mix patterns in HGR video mode.
+						// VT_COLOR_STANDARD = Fill in colors in between white pixels
+						// VT_COLOR_TVEMU    = Fill in colors in between white pixels  (Post Processing will mix/merge colors)
+						// VT_COLOR_TEXT_OPTIMIZED --> !(aPixels[iPixel-2] && aPixels[iPixel+2]) = Don't fill in colors in between white
+#if _DEBUG
+						if ((g_eVideoType == VT_ORG_COLOR_STANDARD) || (g_eVideoType == VT_COLOR_TVEMU) || !(aPixels[iPixel-2] && aPixels[iPixel+2]) )
+#else
+						if ((g_eVideoType == VT_COLOR_TVEMU) || !(aPixels[iPixel-2] && aPixels[iPixel+2]) )
+#endif
+							color = ((odd ^ !(iPixel&1)) << 1) | hibit;	// No white HGR text optimization
 					}
 
-					//if (g_eVideoType == VT_MONO_AUTHENTIC)
-					//{
+					//if (g_eVideoType == VT_MONO_AUTHENTIC) {
 					//	int nMonoColor = (color != CM_Black) ? iMonochrome : BLACK;
 					//	SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  , nMonoColor); // buggy
 					//	SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  , nMonoColor); // buggy
 					//	SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,BLACK); // BL
 					//	SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,BLACK); // BR
-					//}
-					//else
+					//} else
 					{
 						// Colors - Top/Bottom Left/Right
 						// cTL cTR
 						// cBL cBR
-						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,aColorIndex[color]); // TL
-						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,aColorIndex[color]); // TR
-						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,aColorIndex[color]); // BL
-						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,aColorIndex[color]); // BR
+						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,HiresToPalIndex[color]); // cTL
+						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,HiresToPalIndex[color]); // cTR
+						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,HiresToPalIndex[color]); // cBL
+						SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,HiresToPalIndex[color]); // cBR
 					}
 					x += 2;
 				}
@@ -919,37 +1199,17 @@ void DrawHiResSource ()
 
 
 //===========================================================================
-void DrawLoResSource () {
-  BYTE colorval[16] = {BLACK,     DEEP_RED, DARK_BLUE, MAGENTA,
-                       DARK_GREEN,DARK_GRAY,BLUE,      LIGHT_BLUE,
-                       BROWN,     ORANGE,   LIGHT_GRAY,PINK,
-                       GREEN,     YELLOW,   AQUA,      WHITE};
-  for (int color = 0; color < 16; color++)
-    for (int x = 0; x < 16; x++)
-      for (int y = 0; y < 16; y++)
-        SETSOURCEPIXEL(SRCOFFS_LORES+x,(color << 4)+y,colorval[color]);
-}
-
-
-//===========================================================================
-int GetMonochromeIndex()
+void V_CreateLookup_Lores ()
 {
-	int iMonochrome;
-	
-	switch (g_eVideoType)
-	{
-		case VT_MONO_AMBER: iMonochrome = MONOCHROME_AMBER ; break;
-		case VT_MONO_GREEN: iMonochrome = MONOCHROME_GREEN ; break;
-		case VT_MONO_WHITE: iMonochrome = MONOCHROME_WHITE ; break;
-		default           : iMonochrome = MONOCHROME_CUSTOM; break;
-	}
-
-	return iMonochrome;
+	for (int color = 0; color < 16; color++)
+		for (int x = 0; x < 16; x++)
+			for (int y = 0; y < 16; y++)
+				SETSOURCEPIXEL(SRCOFFS_LORES+x,(color << 4)+y,LoresResColors[color]);
 }
 
 
 //===========================================================================
-void DrawMonoDHiResSource ()
+void V_CreateLookup_MonoDoubleHiRes ()
 {
 	int iMonochrome = GetMonochromeIndex();
 	
@@ -982,29 +1242,22 @@ void DrawMonoDHiResSource ()
 }
 
 //===========================================================================
-void DrawMonoHiResSource ()
+void V_CreateLookup_MonoHiRes ()
 {
 	int iMonochrome = GetMonochromeIndex();
 	
+#if 1
 	for (int column = 0; column < 512; column += 16)
 	{
-		for (int y = 0; y < 512; y += 2)
+		for (int y = 0; y < 512; y += 2) // optimization: Byte=0..FF, Row=Byte*2
 		{
-			unsigned val = (y >> 1);
-			for (int x = 0; x < 16; x += 2)
+			unsigned val = (y >> 1); // iByte = (y / 2)
+			for (int x = 0; x < 16; x += 2) // 8 pixels
 			{
 				BYTE colorval = (val & 1) ? iMonochrome : BLACK;
 				val >>= 1;
 				SETSOURCEPIXEL(SRCOFFS_HIRES+column+x  ,y  ,colorval);
 				SETSOURCEPIXEL(SRCOFFS_HIRES+column+x+1,y  ,colorval);
-#if 0
-				if (g_eVideoType == VT_MONO_AUTHENTIC)
-				{
-					SETSOURCEPIXEL(SRCOFFS_HIRES+column+x  ,y+1,BLACK);
-					SETSOURCEPIXEL(SRCOFFS_HIRES+column+x+1,y+1,BLACK);
-				}
-				else
-#endif
 				{
 					SETSOURCEPIXEL(SRCOFFS_HIRES+column+x  ,y+1,colorval);
 					SETSOURCEPIXEL(SRCOFFS_HIRES+column+x+1,y+1,colorval);
@@ -1012,10 +1265,1024 @@ void DrawMonoHiResSource ()
 			}
 		}
 	}
+#else
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+#if 0 // Initial version
+					// Gumball Logo looks better with this, as we have solid whites, but the test pattern: 22 92 14 8C 08 08 08 is off
+					if (aPixels[iPixel])
+					{
+						if (aPixels[iPixel-1] || aPixels[iPixel+1])
+						{
+							color = CM_White;
+						}
+						else
+							color = ((odd ^ (iPixel&1)) << 1) | hibit;
+					}
+					else if (aPixels[iPixel-1] && aPixels[iPixel+1])
+						if (!(aPixels[iPixel-2] && aPixels[iPixel+2]))
+							color = ((odd ^ !(iPixel&1)) << 1) | hibit;
+#endif
+#if 1 // 50% luminance: Gumball Logo looks "blocky", but silicon salad menu looks very good, and test pattern passes.
+					if (aPixels[iPixel])
+					{
+							color = ((odd ^ (iPixel&1)) << 1) | hibit;
+					}
+#endif
+#if 0
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+						if (aPixels[iPixel-1])
+						{
+							if (adj)
+								color = CM_White;
+							else
+//								if (iPixel > 2)
+								if (!hibit)
+									color = CM_White; // NUM_COLOR_MAPPING
+						}
+					}
+#endif
+#if 0 // 95% luminance - the left leading edge has a "pseudo" drop shadow.  Gumball logo looks bright, with the 80's retro leading edge.
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+						if (aPixels[iPixel-1])
+						{
+							// color = NUM_COLOR_MAPPING; // "emboss" look
+							if(aPixels[iPixel+1])
+								color = CM_White;
+							else
+								color = CM_Magenta;
+						}
+					}
+#endif
+					switch(color)
+					{
+						case CM_Magenta: color1 = iMonochrome  ; color2 = iMonochrome+1; break; 
+						case CM_Blue   : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Green  : color1 = iMonochrome  ; color2 = iMonochrome+1; break;
+						case CM_Orange : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Black  : color1 = BLACK        ; color2 = BLACK        ; break;
+						case CM_White  : color1 = iMonochrome  ; color2 = iMonochrome  ; break;
+						case NUM_COLOR_MAPPING: color1 = color2 = iMonochrome+1; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+#endif
 }
 
+// This matches half-pixel exactly
 //===========================================================================
-void DrawMonoLoResSource () {
+void V_CreateLookup_MonoHiResHalfPixel_75 ()
+{
+	int iMonochrome = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+// 50% luminance: Gumball Logo looks "blocky", but silicon salad menu looks very good, and test pattern passes.
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+					}
+					switch(color)
+					{
+						case CM_Magenta: color1 = iMonochrome  ; color2 = iMonochrome+1; break; 
+						case CM_Blue   : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Green  : color1 = iMonochrome  ; color2 = iMonochrome+1; break;
+						case CM_Orange : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Black  : color1 = BLACK        ; color2 = BLACK        ; break;
+						case CM_White  : color1 = iMonochrome  ; color2 = iMonochrome  ; break;
+						case NUM_COLOR_MAPPING: color1 = color2 = iMonochrome+1; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiResHalfPixel_95 ()
+{
+	int iMonochrome = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+// 95% luminance - the left leading edge has a "pseudo" drop shadow.  Gumball logo looks bright, with the 80's retro leading edge.
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+						if (aPixels[iPixel-1])
+						{
+							if(aPixels[iPixel+1])
+								color = CM_White;
+							else
+								color = CM_Magenta;
+						}
+					}
+
+					switch(color)
+					{
+						case CM_Magenta: color1 = iMonochrome  ; color2 = iMonochrome+1; break; 
+						case CM_Blue   : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Green  : color1 = iMonochrome  ; color2 = iMonochrome+1; break;
+						case CM_Orange : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Black  : color1 = BLACK        ; color2 = BLACK        ; break;
+						case CM_White  : color1 = iMonochrome  ; color2 = iMonochrome  ; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiResHalfPixel_Emboss ()
+{
+	int iMonochrome = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+// Emboss
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+						if (aPixels[iPixel-1])
+							color = NUM_COLOR_MAPPING;
+					}
+
+					switch(color)
+					{
+						case CM_Magenta: color1 = iMonochrome  ; color2 = iMonochrome+1; break; 
+						case CM_Blue   : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Green  : color1 = iMonochrome  ; color2 = iMonochrome+1; break;
+						case CM_Orange : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Black  : color1 = BLACK        ; color2 = BLACK        ; break;
+						case CM_White  : color1 = iMonochrome  ; color2 = iMonochrome  ; break;
+						case NUM_COLOR_MAPPING: color1 = color2 = iMonochrome+1; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR buggy
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiResHalfPixel_Fake ()
+{
+	int iMonochrome = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+#if 0
+					// Gumball Logo looks better with this, as we have solid whites, but the test pattern: 22 92 14 8C 08 08 08 is off
+					if (aPixels[iPixel])
+					{
+						if (aPixels[iPixel-1] || aPixels[iPixel+1])
+						if (aPixels[iPixel-1])
+						{
+							color = CM_White;
+						}
+						else
+							color = ((odd ^ (iPixel&1)) << 1) | hibit;
+					}
+					else if (aPixels[iPixel-1] && aPixels[iPixel+1])
+						if (!(aPixels[iPixel-2] && aPixels[iPixel+2]))
+							color = ((odd ^ !(iPixel&1)) << 1) | hibit;
+#endif
+#if 0 // 100% luminance emboss
+					if (aPixels[iPixel])
+					{
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+						if (aPixels[iPixel-1])
+							color = CM_White;
+					}
+#endif
+#if 1
+					if (aPixels[iPixel])
+					{
+						if (aPixels[iPixel-1]) // prev pixel on
+						{
+							color = CM_White;
+							if (!aPixels[iPixel+1]) // nextpixel off
+								color = CM_Magenta;
+						}
+						else
+							if( hibit )
+								color = CM_Blue;
+							else
+								if (aPixels[iPixel+1])
+									color = CM_Blue;
+								else	
+									color = CM_Magenta;
+					}
+#endif
+					switch(color)
+					{
+						case CM_Magenta: color1 = iMonochrome  ; color2 = iMonochrome+1; break; 
+						case CM_Blue   : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Green  : color1 = iMonochrome  ; color2 = iMonochrome+1; break;
+						case CM_Orange : color1 = iMonochrome+1; color2 = iMonochrome  ; break;
+						case CM_Black  : color1 = BLACK        ; color2 = BLACK        ; break;
+						case CM_White  : color1 = iMonochrome  ; color2 = iMonochrome  ; break;
+						case NUM_COLOR_MAPPING: color1 = color2 = iMonochrome; break; // 100% luminance emboss
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_HiResHalfPixel_Authentic () // Colors are solid (100% coverage)
+{
+	// 2-bits from previous byte, 2-bits from next byte = 2^4 = 16 total permutations
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int offsetx = iColumn << 5; // every column is 32 bytes wide -- 7 apple pixels = 14 pixels + 2 pad + 14 pixels + 2 pad
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11]; // c2 c1 b7 b6 b5 b4 b3 b2 b1 b0 c8 c4
+
+/*
+aPixel[i]
+ A 9|8 7 6 5 4 3 2|1 0
+ Z W|b b b b b b b|X Y
+----+-------------+----
+prev|  existing   |next
+bits| hi-res byte |bits
+
+Legend:
+ XYZW = iColumn in binary
+ b = Bytes in binary
+*/
+			// aPixel[] = 48bbbbbbbb12, where b = iByte in binary, # is bit-n of column
+			aPixels[ 0] = iColumn & 4; // previous byte, 2nd last pixel
+			aPixels[ 1] = iColumn & 8; // previous byte, last pixel
+			aPixels[ 9] = iColumn & 1; // next byte, first pixel
+			aPixels[10] = iColumn & 2; // next byte, second pixel
+
+			// Convert raw pixel Byte value to binary and stuff into bit array of pixels on off
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = (iByte >> 7) & 1; // ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+/* Test cases
+ 81 blue
+   2000:D5 AA D5 AA
+ 82 orange
+   2800:AA D5 AA D5
+ FF white bleed "thru"
+   3000:7F 80 7F 80
+   3800:FF 80 FF 80
+   2028:80 7F 80 7F
+   2828:80 FF 80 FF
+ Edge Case for Half Luminance !
+   2000:C4 00  // Green  HalfLumBlue
+   2400:C4 80  // Green  Green
+ Edge Case for Color Bleed !
+   2000:40 00
+   2400:40 80
+*/
+
+			// Fixup missing pixels that normally have been scan-line shifted -- Apple "half-pixel" -- but cross 14-pixel boundaries.
+			if( hibit )
+			{
+				if ( aPixels[1] ) // preceeding pixel on?
+#if 0 // Optimization: Doesn't seem to matter if we ignore the 2 pixels of the next byte
+					for (iPixel = 0; iPixel < 9; iPixel++) // NOTE: You MUST start with the preceding 2 pixels !!!
+						if (aPixels[iPixel]) // pixel on
+#endif
+						{
+							if (aPixels[2] || aPixels[0]) // White if pixel from previous byte and first pixel of this byte is on
+							{
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_WHITE );
+							} else {   // Optimization:   odd = (iPixel & 1); if (!odd) case is same as if(odd) !!! // Reference: Gumball - Gumball Machine
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_RED ); // left half of orange pixels 
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_RED );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_BLUE ); // right half of blue pixels 4, 11, 18, ...
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_BLUE );
+							}
+						}
+#if HALF_PIXEL_SOLID
+// Test Patterns 
+// 81 blue
+//   2000:D5 AA D5 AA -> 2001:AA D5  should not have black gap, should be blue
+// 82 orange
+//   2800:AA D5 AA D5
+// Game: Elite -- Loading Logo 
+//   2444:BB F7 -> 2000:BB F7    // Should not have orange in-between gap -- Elite "Firebird" Logo
+//              -> 2400:00 BB F7 // Should not have blue in-between gap )
+//   21D0:C0 00    -> HalfLumBlue
+//   25D0:C0 D0 88 -> Blue black orange black orange
+//   29D0:C0 90 88 -> Blue black orange
+// Game: Ultima 4 -- Ultima 4 Logo - bottom half of screen has a "mini-game" / demo -- far right has tree and blue border
+//   2176:2A AB green black_gap white blue_border // Should have black gap between green and white
+				else if ( aPixels[0] ) // prev prev pixel on
+				{
+// Game: Gumball
+//   218E:AA 97    => 2000: A9 87          orange_white            // Should have no gap between orange and white
+//   229A:AB A9 87 -> 2000: 00 A9 87 white orange black blue_white // Should have no gap between blue and white
+//   2001:BB F7                            white blue white  (Gumball Intermission)
+// Torture Half-Pixel HGR Tests:  This is a real bitch to solve -- we really need to check:
+//     if (hibit_prev_byte && !aPixels[iPixel-3] && aPixels[iPixel-2] && !aPixels[iPixel] && hibit_this_byte) then set first half-pixel of this byte to either blue or orange
+//   2000:A9 87 halfblack blue black black orange black orange black
+//   2400:BB F7 halfblack white white black white white white halfblack
+//  or
+//   2000:A0 83 orange should "bleed" thru
+//   2400:B0 83 should have black gap
+
+					if ( aPixels[2] )
+#if HALF_PIXEL_BLEED // No Half-Pixel Bleed
+						if ( aPixels[3] ) {
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , DARK_BLUE ); // Gumball: 229A: AB A9 87
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, DARK_BLUE );
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , BROWN ); // half luminance red Elite: 2444: BB F7
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, BROWN ); // half luminance red Gumball: 218E: AA 97
+						} else {
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_BLUE ); // 2000:D5 AA D5
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_BLUE );
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_RED ); // 2000: AA D5
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_RED );
+						}
+#else
+						if ((g_eVideoType == VT_COLOR_STANDARD) || ( !aPixels[3] ))
+						{ // "Text optimized" IF this pixel on, and adjacent right pixel off, then colorize first half-pixel of this byte
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_BLUE ); // 2000:D5 AA D5
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_BLUE );
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_RED ); // 2000: AA D5
+							SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_RED );
+						}
+#endif // HALF_PIXEL_BLEED
+				}
+#endif // HALF_PIXEL_SOLID
+			}
+			x += hibit;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1; // Adjust start of 7 last pixels to be 16-byte aligned!
+				int odd = (x >= 14);
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color = CM_Black;
+					if (aPixels[iPixel]) // pixel on
+					{
+						color = CM_White; 
+						if (aPixels[iPixel-1] || aPixels[iPixel+1]) // adjacent pixels are always white
+							color = CM_White; 
+						else
+							color = ((odd ^ (iPixel&1)) << 1) | hibit; // map raw color to our hi-res colors
+					}
+#if HALF_PIXEL_SOLID
+					else if (aPixels[iPixel-1] && aPixels[iPixel+1]) // IF prev_pixel && next_pixel THEN
+					{
+						// Activate fringe reduction on white HGR text - drawback: loss of color mix patterns in HGR video mode.
+						if (
+							(g_eVideoType == VT_COLOR_STANDARD) // Fill in colors in between white pixels
+						||	(g_eVideoType == VT_COLOR_TVEMU)    // Fill in colors in between white pixels (Post Processing will mix/merge colors)
+						|| !(aPixels[iPixel-2] && aPixels[iPixel+2]) ) // VT_COLOR_TEXT_OPTIMIZED -> Don't fill in colors in between white
+						{
+							// Test Pattern: Ultima 4 Logo - Castle
+							// 3AC8: 36 5B 6D 36
+							color = ((odd ^ !(iPixel&1)) << 1) | hibit;	// No white HGR text optimization
+						}
+					}
+#endif
+					// Colors - Top/Bottom Left/Right
+					// cTL cTR
+					// cBL cBR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj  ,y  ,HiresToPalIndex[color]); // cTL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj+1,y  ,HiresToPalIndex[color]); // cTR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj  ,y+1,HiresToPalIndex[color]); // cBL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj+1,y+1,HiresToPalIndex[color]); // cBR
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_HiResHalfPixel_Authentic_50Coverage () // Colors are Non Solid (50% coverage) -- looks better for "color" text
+{
+	// 2-bits from previous byte, 2-bits from next byte = 2^4 = 16 total permutations
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int offsetx = iColumn << 5; // every column is 32 bytes wide -- 7 apple pixels = 14 pixels + 2 pad + 14 pixels + 2 pad
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11]; // c2 c1 b7 b6 b5 b4 b3 b2 b1 b0 c8 c4
+
+/*
+aPixel[i]
+ A 9|8 7 6 5 4 3 2|1 0
+ Z W|b b b b b b b|X Y
+----+-------------+----
+prev|  existing   |next
+bits| hi-res byte |bits
+
+Legend:
+ XYZW = iColumn in binary
+ b = Bytes in binary
+*/
+			// aPixel[] = 48bbbbbbbb12, where b = iByte in binary, # is bit-n of column
+			aPixels[ 0] = iColumn & 4; // previous byte, 2nd last pixel
+			aPixels[ 1] = iColumn & 8; // previous byte, last pixel
+			aPixels[ 9] = iColumn & 1; // next byte, first pixel
+			aPixels[10] = iColumn & 2; // next byte, second pixel
+
+			// Convert raw pixel Byte value to binary and stuff into bit array of pixels on off
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = (iByte >> 7) & 1; // ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+/* Test cases
+ 81 blue
+   2000:D5 AA D5 AA
+ 82 orange
+   2800:AA D5 AA D5
+ FF white bleed "thru"
+   3000:7F 80 7F 80
+   3800:FF 80 FF 80
+   2028:80 7F 80 7F
+   2828:80 FF 80 FF
+ Edge Case???
+   2000:C4 00
+   2400:c4 80
+*/
+
+			// Fixup missing pixels that normally have been scan-line shifted -- Apple "half-pixel" -- but cross 14-pixel boundaries.
+			if( hibit )
+			{
+				if ( aPixels[1] ) // preceeding pixel on?
+#if 0 // Optimization: Doesn't seem to matter if we ignore the 2 pixels of the next byte
+					for (iPixel = 0; iPixel < 9; iPixel++) // NOTE: You MUST start with the preceding 2 pixels !!!
+						if (aPixels[iPixel]) // pixel on
+#endif
+						{
+							if (aPixels[2] || aPixels[0]) // White if pixel from previous byte and first pixel of this byte is on
+							{
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_WHITE );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_WHITE );
+							} else {   // Optimization:   odd = (iPixel & 1); if (!odd) case is same as if(odd) !!! // Reference: Gumball - Gumball Machine
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y  , HGR_RED ); // left half of orange pixels 
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+0 ,y+1, HGR_RED );
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y  , HGR_BLUE ); // right half of blue pixels 4, 11, 18, ...
+								SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+16,y+1, HGR_BLUE );
+							}
+						}
+			}
+			x += hibit;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1; // Adjust start of 7 last pixels to be 16-byte aligned!
+				int odd = (x >= 14);
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color = CM_Black;
+					if (aPixels[iPixel]) // pixel on
+					{
+						color = CM_White; 
+						if (aPixels[iPixel-1] || aPixels[iPixel+1]) // adjacent pixels are always white
+							color = CM_White; 
+						else
+							color = ((odd ^ (iPixel&1)) << 1) | hibit; // map raw color to our hi-res colors
+					}
+
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj  ,y  ,HiresToPalIndex[color]); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj+1,y  ,HiresToPalIndex[color]); // TR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj  ,y+1,HiresToPalIndex[color]); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offsetx+x+adj+1,y+1,HiresToPalIndex[color]); // BR
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+void V_CreateLookup_ColumnVisualizer () // Psychedelic mode!
+{
+	int iMonochrome = GetMonochromeIndex();
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5; // nByteOffset = iColumn * 32, not *16, since we are storing 2 pixels per column
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++) {
+				aPixels[iPixel] = ((iByte & nBitMask) != 0); // ((iByte & nBitMask) != 0) ---> (iByte >> (iPixel-2)) & 1
+				nBitMask <<= 1;
+			}
+			int hibit = ((iByte & 0x80) != 0); // ((iByte & 0x80) != 0) ---> (iByte >> 7) & 1;
+			int x     = 0;
+			int y     = iByte << 1; // 2 scan lines per byte -- allows for "mixing" adjacent scan lines to new color
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color = CM_Black;
+					if( aPixels[iPixel] )
+						if (iColumn & 1)
+							color = CM_Magenta;
+						else
+						if (iColumn & 2)
+							color = CM_Green;
+						else
+						if (iColumn & 4)
+							color = CM_Blue;
+						else
+						if (iColumn & 8)
+							color = CM_Orange;
+						else
+							color = CM_White;
+
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,HiresToPalIndex[color]); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,HiresToPalIndex[color]); // TR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,HiresToPalIndex[color]); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,HiresToPalIndex[color]); // BR
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiResHalfPixel_Real ()
+{
+	int iMono = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int offset = iColumn << 5; // every column is 32 bytes wide
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11]; // c2 c1 b7 b6 b5 b4 b3 b2 b1 b0 c8 c4
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = (iByte >> 7) & 1; // ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			// Fixup missing pixels that normally have been scan-line shifted -- Apple "half-pixel" -- but cross 14-pixel boundaries.
+			if( hibit )
+			{
+				/* Test Cases
+					// Games
+						Archon Logo
+						Gumball (at Machine)
+					// Applesoft
+						HGR:HCOLOR=5:HPLOT 0,0 TO 279,0
+
+					// Blue
+					// Orange
+						CALL-151
+						C050 C052 C057
+						2000:D0 80 00
+						2800:80 D0 00
+				*/
+				if ( aPixels[1] ) // preceeding pixel on?
+				{
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x   ,y  ,iMono); // first 7 HGR_BLUE
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x   ,y+1,iMono); // first 7
+
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+16,y  ,iMono); // second 7 HGR_RED
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+16,y+1,iMono); // second 7
+				}
+			}
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1; // Adjust start of 7 last pixels to be 16-byte aligned!
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color = aPixels[iPixel] ? iMono : HGR_BLACK;
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+adj  +hibit,y  ,color); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+adj+1+hibit,y  ,color); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+adj  +hibit,y+1,color); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+offset+x+adj+1+hibit,y+1,color); // BR
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiResHalfPixel_Colorize ()
+{
+	int iMono = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+					int color2 = BLACK;
+
+					if (aPixels[iPixel])
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+
+					switch (color)
+					{
+						case CM_Magenta: color1 = HGR_MAGENTA; color2 = BLACK   ; break; 
+						case CM_Blue   : color1 = BLACK      ; color2 = HGR_BLUE; break; // hibit=1
+						case CM_Green  : color1 = HGR_GREEN  ; color2 = BLACK   ; break;
+						case CM_Orange : color1 = BLACK      ; color2 = HGR_RED ; break; // hibit=1
+						case CM_Black  : color1 = BLACK      ; color2 = BLACK   ; break;
+						case CM_White  : color1 = iMono      ; color2 = iMono   ; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color2); // TR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color2); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoHiRes_Colorize ()
+{
+	int iMono = GetMonochromeIndex();
+	
+	for (int iColumn = 0; iColumn < 16; iColumn++)
+	{
+		int coloffs = iColumn << 5;
+
+		for (unsigned iByte = 0; iByte < 256; iByte++)
+		{
+			int aPixels[11];
+
+			aPixels[ 0] = iColumn & 4;
+			aPixels[ 1] = iColumn & 8;
+			aPixels[ 9] = iColumn & 1;
+			aPixels[10] = iColumn & 2;
+
+			int nBitMask = 1;
+			int iPixel;
+			for (iPixel  = 2; iPixel < 9; iPixel++)
+			{
+				aPixels[iPixel] = ((iByte & nBitMask) != 0);
+				nBitMask <<= 1;
+			}
+
+			int hibit = ((iByte & 0x80) != 0);
+			int x     = 0;
+			int y     = iByte << 1;
+
+			while (x < 28)
+			{
+				int adj = (x >= 14) << 1;
+				int odd = (x >= 14);
+
+				for (iPixel = 2; iPixel < 9; iPixel++)
+				{
+					int color  = CM_Black;
+					int color1 = BLACK;
+
+					if (aPixels[iPixel])
+						color = ((odd ^ (iPixel&1)) << 1) | hibit;
+
+					switch (color)
+					{
+						case CM_Magenta: color1 = HGR_MAGENTA; break;
+						case CM_Blue   : color1 = HGR_BLUE   ; break;
+						case CM_Green  : color1 = HGR_GREEN  ; break;
+						case CM_Orange : color1 = HGR_RED    ; break;
+						case CM_Black  : color1 = BLACK      ; break;
+						case CM_White  : color1 = iMono      ; break;
+						default: break;
+					}
+
+					// Colors - Top/Bottom Left/Right
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y  ,color1); // TL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y  ,color1); // TR
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj  ,y+1,color1); // BL
+					SETSOURCEPIXEL(SRCOFFS_HIRES+coloffs+x+adj+1,y+1,color1); // BR
+
+					x += 2;
+				}
+			}
+		}
+	}
+}
+
+
+//===========================================================================
+void V_CreateLookup_MonoLoRes () {
 	int iMonochrome = GetMonochromeIndex();
 
 	for (int color = 0; color < 16; color++)
@@ -1054,7 +2321,7 @@ struct BRUSHBMP
     BYTE bBits[64];
 };
 
-HBRUSH CreateCustomBrush(COLORREF nColor)
+HBRUSH V_CreateCustomBrush(COLORREF nColor)
 {
 	BRUSHBMP brbmp;
 	BYTE *pBytes;
@@ -1074,7 +2341,8 @@ HBRUSH CreateCustomBrush(COLORREF nColor)
 	int HatchStyle = 0;
 	DWORD dwBits[1][2] = 
 	{
-		{0xff00ff00,0xff00ff00}
+//		{0xff00ff00,0xff00ff00} // every other scan line
+		{0xFFFFFFFF,0xFFFFFFFF}
 	};
 
 	memset (&brbmp, 0, sizeof (brbmp));
@@ -1105,41 +2373,7 @@ HBRUSH CreateCustomBrush(COLORREF nColor)
 
 
 //===========================================================================
-void DrawMonoTextSource (HDC hDstDC)
-{
-	static HBITMAP hCharBitmap[4];
-	HDC     hSrcDC  = CreateCompatibleDC(hDstDC);
-
-	hCharBitmap[0] = LoadBitmap(g_hInstance,TEXT("CHARSET40"));
-	hCharBitmap[1] = LoadBitmap(g_hInstance,TEXT("CHARSET82"));
-	hCharBitmap[2] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));  // FIXME: Pravets 8M probably has the same charset as Pravets 8C
-	hCharBitmap[3] = LoadBitmap(g_hInstance,TEXT("CHARSET8C"));
-
-	HBRUSH hBrush;
-	switch (g_eVideoType)
-	{
-		case VT_MONO_AMBER: hBrush = CreateSolidBrush(RGB(0xFF,0x80,0x00)); break;
-		case VT_MONO_GREEN: hBrush = CreateSolidBrush(RGB(0x00,0xC0,0x00)); break;
-		case VT_MONO_WHITE: hBrush = CreateSolidBrush(RGB(0xFF,0xFF,0xFF)); break;
-//		case VT_MONO_AUTHENTIC: hBrush = CreateCustomBrush(RGB(0x00,0xC0,0x00)); break; 
-		default           : hBrush = CreateSolidBrush(monochrome); break;
-	}
-
-	SelectObject(hSrcDC,hCharBitmap[g_nCharsetType]);
-	SelectObject(hDstDC,hBrush);
-
-	// TODO: Update with APPLE_FONT_Y_ values
-	BitBlt(hDstDC,SRCOFFS_40COL,0,256,512,hSrcDC,0,0,MERGECOPY);
-	BitBlt(hDstDC,SRCOFFS_IIPLUS,0,256,256,hSrcDC,0,512,MERGECOPY);
-	StretchBlt(hDstDC,SRCOFFS_80COL,0,128,512,hSrcDC,0,0,256,512,MERGECOPY);
-	SelectObject(hDstDC,GetStockObject(NULL_BRUSH));
-	DeleteObject(hBrush);
-	DeleteDC(hSrcDC);
-	DeleteObject(hCharBitmap);
-}
-
-//===========================================================================
-void DrawTextSource (HDC dc)
+void V_CreateLookup_Text (HDC dc)
 {
 	HDC     memdc  = CreateCompatibleDC(dc);
 	static HBITMAP hCharBitmap[4];
@@ -1310,39 +2544,58 @@ bool UpdateDHiResCell (int x, int y, int xpixel, int ypixel, int offset)
 	return bDirty;
 }
 
+/*
+
+Color Reference Tests:
+
+2000:D5 AA D5 AA D5 AA //  blue blue  blue
+2400:AA D5 2A 55 55 2A //+ red  green magenta
+//                     //= grey aqua  purple
+
+2C00:AA D5 AA D5 2A 55 //  red    red     green
+3000:2A 55 55 2A 55 2A //+ green  magenta magenta
+//                     //= yellow pink    grey
+
+*/
 
 //===========================================================================
-BYTE MixColors(BYTE c1, BYTE c2) {	// For tv emulation g_nAppMode
-#define COMBINATION(c1,c2,ref1,ref2) (((c1)==(ref1)&&(c2)==(ref2)) || ((c1)==(ref2)&&(c2)==(ref1)))
+BYTE MixColors(BYTE c1, BYTE c2)
+{	
+	// For tv emulation HGR Video Mode
+	#define COMBINATION(c1,c2,ref1,ref2) (((c1)==(ref1)&&(c2)==(ref2)) || ((c1)==(ref2)&&(c2)==(ref1)))
 
-  if (c1 == c2)
-	  return c1;
-  if (COMBINATION(c1,c2,HGR_BLUE,HGR_RED))
-	  return HGR_GREY1;
-  else if (COMBINATION(c1,c2,HGR_GREEN,HGR_MAGENTA))
-	  return HGR_GREY2;
-  else if (COMBINATION(c1,c2,HGR_RED,HGR_GREEN))
-	  return HGR_YELLOW;
-  else if (COMBINATION(c1,c2,HGR_BLUE,HGR_GREEN))
-	  return HGR_AQUA;
-  else if (COMBINATION(c1,c2,HGR_BLUE,HGR_MAGENTA))
-	  return HGR_PURPLE;
-  else if (COMBINATION(c1,c2,HGR_RED,HGR_MAGENTA))
-	  return HGR_PINK;
-  else
-	  return MONOCHROME_CUSTOM; // visible failure indicator
+	if (c1 == c2)
+		return c1;
+	if (COMBINATION(c1,c2,HGR_BLUE,HGR_RED))
+		return HGR_GREY1;
+	else if (COMBINATION(c1,c2,HGR_GREEN,HGR_MAGENTA))
+		return HGR_GREY2;
+	else if (COMBINATION(c1,c2,HGR_RED,HGR_GREEN))
+		return HGR_YELLOW;
+	else if (COMBINATION(c1,c2,HGR_BLUE,HGR_GREEN))
+		return HGR_AQUA;
+	else if (COMBINATION(c1,c2,HGR_BLUE,HGR_MAGENTA))
+		return HGR_PURPLE;
+	else if (COMBINATION(c1,c2,HGR_RED,HGR_MAGENTA))
+		return HGR_PINK;
+	else
+		return MONOCHROME_CUSTOM; // visible failure indicator
 
 #undef COMBINATION
 }
 
 
 //===========================================================================
-void CreateColorMixMap() {	// For tv emulation g_nAppMode
-#define FROM_NEIGHBOUR 0x00
+void CreateColorMixMap()
+{	
+	// For tv emulation HGR Video Mode
+	#define FROM_NEIGHBOUR 0x00
 
   int t,m,b;
   BYTE cTop, cMid, cBot;
   WORD mixTop, mixBot;
+
+#define MIX_THRESHOLD 0x12 // bottom 2 HGR colors
 
   for (t=0; t<6; t++)
     for (m=0; m<6; m++)
@@ -1350,15 +2603,15 @@ void CreateColorMixMap() {	// For tv emulation g_nAppMode
         cTop = t | 0x10;
 		cMid = m | 0x10;
 		cBot = b | 0x10;
-        if (cMid < HGR_BLUE) {
+        if (cMid < MIX_THRESHOLD) {
 		  mixTop = mixBot = cMid;
 		} else {
-			if (cTop < HGR_BLUE) {
+			if (cTop < MIX_THRESHOLD) {
 		      mixTop = FROM_NEIGHBOUR;
 			} else { 
 			  mixTop = MixColors(cMid,cTop);
 			}
-			if (cBot < HGR_BLUE)  {
+			if (cBot < MIX_THRESHOLD)  {
 			  mixBot = FROM_NEIGHBOUR;
 			} else { 
 			  mixBot = MixColors(cMid,cBot);
@@ -1377,7 +2630,9 @@ void CreateColorMixMap() {	// For tv emulation g_nAppMode
 }
 
 //===========================================================================
-void __stdcall MixColorsVertical(int matx, int maty) {	// For tv emulation g_nAppMode
+void __stdcall MixColorsVertical(int matx, int maty)
+{
+	// For tv emulation HGR Video Mode
 
   WORD twoHalfPixel;
   int bot1idx, bot2idx;
@@ -1416,10 +2671,12 @@ void __stdcall MixColorsVertical(int matx, int maty) {	// For tv emulation g_nAp
 
 
 //===========================================================================
-void __stdcall CopyMixedSource (int x, int y, int sourcex, int sourcey) {	// For tv emulation g_nAppMode
+void __stdcall CopyMixedSource (int x, int y, int sourcex, int sourcey)
+{
+	// For tv emulation HGR Video Mode
 
   LPBYTE currsourceptr = g_aSourceStartofLine[sourcey]+sourcex;
-  LPBYTE currdestptr   = frameoffsettable[y<<1] + (x<<1);
+  LPBYTE currdestptr   = g_aFrameBufferOffset[y<<1] + (x<<1);
   LPBYTE currptr;
 
   int matx = x;
@@ -1444,11 +2701,11 @@ void __stdcall CopyMixedSource (int x, int y, int sourcex, int sourcey) {	// For
 	// transfer up to 6 mixed (half-)pixels of current column to framebuffer
     currptr = currdestptr+bufxoffset;
 	if (hgrlinesabove)
-		currptr += framebufferpitch << 1;
+		currptr += g_nFrameBufferPitch << 1;
 
     for (i = istart;
 	     i <= iend; 
-	     currptr -= framebufferpitch, i++) {
+	     currptr -= g_nFrameBufferPitch, i++) {
          *currptr = *(currptr+1) = colormixbuffer[i];
 	}
   }
@@ -1460,32 +2717,46 @@ bool UpdateHiResCell (int x, int y, int xpixel, int ypixel, int offset)
 {
 	bool bDirty  = false;
 	int  yoffset = 0;
-  while (yoffset < 0x2000) {
-    BYTE byteval1 = (x >  0) ? *(g_pHiresBank0+offset+yoffset-1) : 0;
-    BYTE byteval2 = *(g_pHiresBank0+offset+yoffset);
-    BYTE byteval3 = (x < 39) ? *(g_pHiresBank0+offset+yoffset+1) : 0;
-    if ((byteval2 != *(vidlastmem+offset+yoffset+0x2000)) ||
-        ((x >  0) && ((byteval1 & 0x60) != (*(vidlastmem+offset+yoffset+0x1FFF) & 0x60))) ||
-        ((x < 39) && ((byteval3 & 0x03) != (*(vidlastmem+offset+yoffset+0x2001) & 0x03))) ||
-        g_VideoForceFullRedraw) {
+	while (yoffset < 0x2000)
+	{
+#if 0 // TRACE_VIDEO
+		static char sText[ 256 ];
+		sprintf(sText, "x: %3d   y: %3d  xpix: %3d  ypix: %3d   offset: %04X   \n"
+			, x, y, xpixel, ypixel, offset, yoffset
+		);
+		OutputDebugString("sText");
+#endif
+
+		BYTE byteval1 = (x >  0) ? *(g_pHiresBank0+offset+yoffset-1) : 0;
+		BYTE byteval2 =            *(g_pHiresBank0+offset+yoffset  );
+		BYTE byteval3 = (x < 39) ? *(g_pHiresBank0+offset+yoffset+1) : 0;
+		if ((byteval2 != *(vidlastmem+offset+yoffset+0x2000)) ||
+			((x >  0) && ((byteval1 & 0x60) != (*(vidlastmem+offset+yoffset+0x1FFF) & 0x60))) ||
+			((x < 39) && ((byteval3 & 0x03) != (*(vidlastmem+offset+yoffset+0x2001) & 0x03))) ||
+			g_VideoForceFullRedraw)
+		{
 #define COLOFFS  (((byteval1 & 0x60) << 2) | \
-                  ((byteval3 & 0x03) << 5))
-		if (g_eVideoType == VT_COLOR_TVEMU)
-		{
-  			CopyMixedSource(xpixel >> 1, (ypixel+(yoffset >> 9)) >> 1,
-							SRCOFFS_HIRES+COLOFFS+((x & 1) << 4),(((int)byteval2) << 1));
-		}
-		else
-		{
-			CopySource(xpixel,ypixel+(yoffset >> 9),
-					   14,2,
-					   SRCOFFS_HIRES+COLOFFS+((x & 1) << 4),(((int)byteval2) << 1));
-		}
+                   ((byteval3 & 0x03) << 5))
+			if (g_eVideoType == VT_COLOR_TVEMU)
+			{
+				CopyMixedSource(
+					xpixel >> 1, (ypixel+(yoffset >> 9)) >> 1,
+					SRCOFFS_HIRES+COLOFFS+((x & 1) << 4), (((int)byteval2) << 1)
+				);
+			}
+			else
+			{
+				CopySource(
+					xpixel,ypixel+(yoffset >> 9),
+					14,2, // 2x upscale: 280x192 -> 560x384
+					SRCOFFS_HIRES+COLOFFS+((x & 1) << 4), (((int)byteval2) << 1)
+				);
+			}
 #undef COLOFFS
-      bDirty = true;
-    }
-    yoffset += 0x400;
-  }
+		  bDirty = true;
+		}
+		yoffset += 0x400;
+	}
 
 	return bDirty;
 }
@@ -1606,7 +2877,7 @@ void VideoBenchmark () {
   // GOING ON, CHANGING HALF OF THE BYTES IN THE VIDEO BUFFER EACH FRAME TO
   // SIMULATE THE ACTIVITY OF AN AVERAGE GAME
   DWORD totaltextfps = 0;
-  vidmode            = VF_TEXT;
+  g_bVideoMode            = VF_TEXT;
   FillMemory(mem+0x400,0x400,0x14);
   VideoRedrawScreen();
   DWORD milliseconds = GetTickCount();
@@ -1628,7 +2899,7 @@ void VideoBenchmark () {
   // GOING ON, CHANGING HALF OF THE BYTES IN THE VIDEO BUFFER EACH FRAME TO
   // SIMULATE THE ACTIVITY OF AN AVERAGE GAME
   DWORD totalhiresfps = 0;
-  vidmode             = VF_HIRES;
+  g_bVideoMode             = VF_HIRES;
   FillMemory(mem+0x2000,0x2000,0x14);
   VideoRedrawScreen();
   milliseconds = GetTickCount();
@@ -1725,7 +2996,6 @@ void VideoBenchmark () {
         cycles -= executedcycles;
         DiskUpdatePosition(executedcycles);
         JoyUpdatePosition();
-        VideoUpdateVbl(0);
 	  }
     }
     if (cycle & 1)
@@ -1759,11 +3029,11 @@ void VideoBenchmark () {
 }
             
 //===========================================================================
-BYTE __stdcall VideoCheckMode (WORD, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
+BYTE VideoCheckMode (WORD, WORD address, BYTE, BYTE, ULONG uExecutedCycles)
 {
   address &= 0xFF;
   if (address == 0x7F)
-    return MemReadFloatingBus(SW_DHIRES != 0, nCyclesLeft);
+    return MemReadFloatingBus(SW_DHIRES != 0, uExecutedCycles);
   else {
     BOOL result = 0;
     switch (address) {
@@ -1790,71 +3060,83 @@ void VideoCheckPage (BOOL force) {
 }
 
 //===========================================================================
-BYTE __stdcall VideoCheckVbl (WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
+
+/*
+	// Drol expects = 80
+	68DE A5 02    LDX #02
+	68E0 AD 50 C0 LDA TXTCLR
+	68E3 C9 80    CMP #80
+	68E5 D0 F7    BNE $68DE
+
+	6957 A5 02    LDX #02
+	6959 AD 50 C0 LDA TXTCLR
+	695C C9 80    CMP #80
+	695E D0 F7    BNE $68DE
+
+	69D3 A5 02    LDX #02
+	69D5 AD 50 C0 LDA TXTCLR
+	69D8 C9 80    CMP #80
+	69DA D0 F7    BNE $68DE
+
+	// Karateka expects < 80
+	07DE AD 19 C0 LDA RDVBLBAR
+	07E1 30 FB    BMI $7DE
+
+	77A1 AD 19 C0 LDA RDVBLBAR
+	77A4 30 FB    BMI $7DE
+
+	// Gumball expects non-zero low-nibble on VBL
+	BBB5 A5 60    LDA $60
+	BBB7 4D 50 C0 EOR TXTCLR
+	BBBA 85 60    STA $60
+	BBBC 29 0F    AND #$0F
+	BBBE F0 F5    BEQ $BBB5
+	BBC0 C9 0F    CMP #$0F
+	BBC2 F0 F1    BEQ $BBB5
+
+	// Diversi-Dial (DD4.DSK or DIAL.DSK)
+	F822          LDA RDVBLBAR
+	F825          EOR #$3C
+	              BMI $F82A
+	              RTS
+	F82A          LDA $F825+1
+	              EOR #$80
+	              STA $F825+1
+	              BMI $F86A
+				  ...
+	F86A          RTS
+
+*/
+
+BYTE VideoCheckVbl (WORD, WORD, BYTE, BYTE, ULONG uExecutedCycles)
 {
-	/*
-		// Drol expects = 80
-		68DE A5 02    LDX #02
-		68E0 AD 50 C0 LDA TXTCLR
-		68E3 C9 80    CMP #80
-		68E5 D0 F7    BNE $68DE
+	bool bVblBar = false;
+	VideoGetScannerAddress(&bVblBar, uExecutedCycles);
 
-		6957 A5 02    LDX #02
-		6959 AD 50 C0 LDA TXTCLR
-		695C C9 80    CMP #80
-		695E D0 F7    BNE $68DE
-
-		69D3 A5 02    LDX #02
-		69D5 AD 50 C0 LDA TXTCLR
-		69D8 C9 80    CMP #80
-		69DA D0 F7    BNE $68DE
-
-		// Karateka expects < 80
-		07DE AD 19 C0 LDA RDVBLBAR
-		07E1 30 FB    BMI $7DE
-
-		77A1 AD 19 C0 LDA RDVBLBAR
-		77A4 30 FB    BMI $7DE
-
-		// Gumball expects non-zero low-nibble on VBL
-		BBB5 A5 60    LDA $60
-		BBB7 4D 50 C0 EOR TXTCLR
-		BBBA 85 60    STA $60
-		BBBC 29 0F    AND #$0F
-		BBBE F0 F5    BEQ $BBB5
-		BBC0 C9 0F    CMP #$0F
-		BBC2 F0 F1    BEQ $BBB5
-
-//		return MemReturnRandomData(dwVBlCounter <= nVBlStop_NTSC);
-	if (dwVBlCounter <= nVBlStop_NTSC)
-		return (BYTE)(dwVBlCounter & 0x7F); // 0x00;
-	else
-		return 0x80 | ((BYTE)(dwVBlCounter & 1));
-	*/
-
-	bool bVblBar;
-	VideoGetScannerAddress(&bVblBar, nCyclesLeft);
-    BYTE r = KeybGetKeycode();
-    return (r & ~0x80) | ((bVblBar) ? 0x80 : 0);
+	BYTE r = KeybGetKeycode();
+	return (r & ~0x80) | ((bVblBar) ? 0x80 : 0);
  }
 
 //===========================================================================
-void VideoChooseColor () {
-  CHOOSECOLOR cc;
-  ZeroMemory(&cc,sizeof(CHOOSECOLOR));
-  cc.lStructSize     = sizeof(CHOOSECOLOR);
-  cc.hwndOwner       = g_hFrameWindow;
-  cc.rgbResult       = monochrome;
-  cc.lpCustColors    = customcolors;
-  cc.Flags           = CC_RGBINIT | CC_SOLIDCOLOR;
-  if (ChooseColor(&cc)) {
-    monochrome = cc.rgbResult;
-    VideoReinitialize();
-    if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
-      VideoRedrawScreen();
-
-	Config_Save_Video();
-  }
+void VideoChooseColor ()
+{
+	CHOOSECOLOR cc;
+	ZeroMemory(&cc,sizeof(CHOOSECOLOR));
+	cc.lStructSize     = sizeof(CHOOSECOLOR);
+	cc.hwndOwner       = g_hFrameWindow;
+	cc.rgbResult       = monochrome;
+	cc.lpCustColors    = customcolors + 1;
+	cc.Flags           = CC_RGBINIT | CC_SOLIDCOLOR;
+	if (ChooseColor(&cc))
+	{
+		monochrome = cc.rgbResult;
+		VideoReinitialize();
+		if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
+		{
+			VideoRedrawScreen();
+		}
+		Config_Save_Video();
+	}
 }
 
 //===========================================================================
@@ -1937,13 +3219,14 @@ void VideoDisplayLogo ()
 	SetBkMode(hFrameDC,TRANSPARENT);
 
 	//#define VERSION_TXT "Version "
-
 	// Daily WTF candidate -- malloc every _frame_ ?!?!
 	//	char* szVersion = new char[strlen(VERSION_TXT) + strlen(VERSIONSTRING) + 1];
 	//	strcpy(&szVersion[0], VERSION_TXT);
 	//	strcpy(&szVersion[strlen(VERSION_TXT)], VERSIONSTRING);
 	//	szVersion[strlen(szVersion)] = 0x00;
-	char szVersion[ 32 ];
+	
+	char szVersion[ 64 ] = "";
+
 	sprintf( szVersion, "Version %s", VERSIONSTRING );
 
 #define  DRAWVERSION(x,y,c)     \
@@ -1954,15 +3237,21 @@ void VideoDisplayLogo ()
 		strlen(szVersion));
 
 	if (GetDeviceCaps(hFrameDC,PLANES) * GetDeviceCaps(hFrameDC,BITSPIXEL) <= 4) {
-	DRAWVERSION( 2, 2,RGB(0x00,0x00,0x00));
-	DRAWVERSION( 1, 1,RGB(0x00,0x00,0x00));
-	DRAWVERSION( 0, 0,RGB(0xFF,0x00,0xFF));
+		DRAWVERSION( 2, 2,RGB(0x00,0x00,0x00));
+		DRAWVERSION( 1, 1,RGB(0x00,0x00,0x00));
+		DRAWVERSION( 0, 0,RGB(0xFF,0x00,0xFF));
+	} else {
+		DRAWVERSION( 1, 1,PALETTERGB(0x30,0x30,0x70));
+		DRAWVERSION(-1,-1,PALETTERGB(0xC0,0x70,0xE0));
+		DRAWVERSION( 0, 0,PALETTERGB(0x70,0x30,0xE0));
 	}
-	else {
-	DRAWVERSION( 1, 1,PALETTERGB(0x30,0x30,0x70));
-	DRAWVERSION(-1,-1,PALETTERGB(0xC0,0x70,0xE0));
-	DRAWVERSION( 0, 0,PALETTERGB(0x70,0x30,0xE0));
-	}
+
+#if _DEBUG
+	sprintf( szVersion, "DEBUG" );
+	DRAWVERSION( 2, -358,RGB(0x00,0x00,0x00));
+	DRAWVERSION( 1, -357,RGB(0x00,0x00,0x00));
+	DRAWVERSION( 0, -356,RGB(0xFF,0x00,0xFF));
+#endif
 
 	// Daily WTF candidate -- malloc every _frame_ ?!?!
 	//	delete [] szVersion;
@@ -1978,62 +3267,6 @@ BOOL VideoHasRefreshed () {
   BOOL result = hasrefreshed;
   hasrefreshed = 0;
   return result;
-}
-
-//===========================================================================
-void VideoInitialize () {
-
-  // CREATE A BUFFER FOR AN IMAGE OF THE LAST DRAWN MEMORY
-  vidlastmem = (LPBYTE)VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE);
-  ZeroMemory(vidlastmem,0x10000);
-
-  // LOAD THE LOGO
-  g_hLogoBitmap = (HBITMAP)LoadImage(g_hInstance, MAKEINTRESOURCE(IDB_APPLEWIN), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
-
-  // CREATE A BITMAPINFO STRUCTURE FOR THE FRAME BUFFER
-  g_pFramebufferinfo = (LPBITMAPINFO)VirtualAlloc(NULL,
-                                               sizeof(BITMAPINFOHEADER)
-                                                 +256*sizeof(RGBQUAD),
-                                               MEM_COMMIT,
-                                               PAGE_READWRITE);
-  ZeroMemory(g_pFramebufferinfo,sizeof(BITMAPINFOHEADER)+256*sizeof(RGBQUAD));
-  g_pFramebufferinfo->bmiHeader.biSize     = sizeof(BITMAPINFOHEADER);
-  g_pFramebufferinfo->bmiHeader.biWidth    = FRAMEBUFFER_W;
-  g_pFramebufferinfo->bmiHeader.biHeight   = FRAMEBUFFER_H;
-  g_pFramebufferinfo->bmiHeader.biPlanes   = 1;
-  g_pFramebufferinfo->bmiHeader.biBitCount = 8;
-  g_pFramebufferinfo->bmiHeader.biClrUsed  = 256;
-
-  // CREATE A BITMAPINFO STRUCTURE FOR THE SOURCE IMAGE
-  g_pSourceHeader = (LPBITMAPINFO)VirtualAlloc(NULL,
-                                          sizeof(BITMAPINFOHEADER)
-                                            +256*sizeof(RGBQUAD),
-                                          MEM_COMMIT,
-                                          PAGE_READWRITE);
-  ZeroMemory(g_pSourceHeader,sizeof(BITMAPINFOHEADER));
-  g_pSourceHeader->bmiHeader.biSize     = sizeof(BITMAPINFOHEADER);
-  g_pSourceHeader->bmiHeader.biWidth    = SRCOFFS_TOTAL;
-  g_pSourceHeader->bmiHeader.biHeight   = 512;
-  g_pSourceHeader->bmiHeader.biPlanes   = 1;
-  g_pSourceHeader->bmiHeader.biBitCount = 8;
-  g_pSourceHeader->bmiHeader.biClrUsed  = 256;
-
-  // CREATE AN IDENTITY PALETTE AND FILL IN THE CORRESPONDING COLORS IN
-  // THE BITMAPINFO STRUCTURE
-  CreateIdentityPalette();
-
-  // PREFILL THE 16 CUSTOM COLORS AND MAKE SURE TO INCLUDE THE CURRENT MONOCHROME COLOR
-  for (int index = DARK_RED; index <= NUM_COLOR_PALETTE; index++)
-    customcolors[index-DARK_RED] = RGB(g_pFramebufferinfo->bmiColors[index].rgbRed,
-                                       g_pFramebufferinfo->bmiColors[index].rgbGreen,
-                                       g_pFramebufferinfo->bmiColors[index].rgbBlue);
-
-  // CREATE THE FRAME BUFFER DIB SECTION AND DEVICE CONTEXT,
-  // CREATE THE SOURCE IMAGE DIB SECTION AND DRAW INTO THE SOURCE BIT BUFFER
-  CreateDIBSections();
-
-  // RESET THE VIDEO MODE SWITCHES AND THE CHARACTER SET OFFSET
-  VideoResetState();
 }
 
 //===========================================================================
@@ -2088,9 +3321,10 @@ void VideoRealizePalette(HDC dc)
 }
 
 //===========================================================================
-void VideoRedrawScreen () {
-  g_VideoForceFullRedraw = 1;
-  VideoRefreshScreen();
+VideoUpdateFuncPtr_t VideoRedrawScreen ()
+{
+	g_VideoForceFullRedraw = 1;
+	return VideoRefreshScreen();
 }
 
 //===========================================================================
@@ -2109,10 +3343,11 @@ void _Video_SetupBanks( bool bBank2 )
 }
 
 //===========================================================================
-void VideoRefreshScreen () {
-  // CHECK EACH CELL FOR CHANGED BYTES.  REDRAW PIXELS FOR THE CHANGED BYTES
-  // IN THE FRAME BUFFER.  MARK CELLS IN WHICH REDRAWING HAS TAKEN PLACE AS
-  // DIRTY.
+VideoUpdateFuncPtr_t VideoRefreshScreen ()
+{
+	// CHECK EACH CELL FOR CHANGED BYTES.  REDRAW PIXELS FOR THE CHANGED BYTES
+	// IN THE FRAME BUFFER.  MARK CELLS IN WHICH REDRAWING HAS TAKEN PLACE AS
+	// DIRTY.
 	_Video_Dirty();
 	_Video_SetupBanks( g_bVideoDisplayPage2 );
 
@@ -2131,7 +3366,8 @@ void VideoRefreshScreen () {
 	bool bMixed = (SW_MIXED) ? true : false;
 	_Video_RedrawScreen( pfUpdate, bMixed );
 
-  g_VideoForceFullRedraw = 0;
+	g_VideoForceFullRedraw = 0;
+	return pfUpdate;
 }
 
 //===========================================================================
@@ -2190,7 +3426,7 @@ void _Video_RedrawScreen( VideoUpdateFuncPtr_t pfUpdate, bool bMixed )
 
 		for( int y = 1; y < FRAMEBUFFER_H; y += 2 )
 		{	
-			unsigned char *pSrc = pSrc = frameoffsettable[y];
+			unsigned char *pSrc = g_aFrameBufferOffset[y];
 			for( int x = 0; x < FRAMEBUFFER_W; x++ )
 			{
 				*pSrc++ = 0;
@@ -2198,7 +3434,7 @@ void _Video_RedrawScreen( VideoUpdateFuncPtr_t pfUpdate, bool bMixed )
 		}
 	}
 
-#if 0
+#if 1
 	// New simpified code:
 	// . Oliver Schmidt gets a flickering mouse cursor with this code
 	if (hFrameDC && anydirty)
@@ -2300,88 +3536,91 @@ void _Video_RedrawScreen( VideoUpdateFuncPtr_t pfUpdate, bool bMixed )
   GdiFlush();
 #endif
 
-  FrameReleaseVideoDC();
-  SetLastDrawnImage();
+	FrameReleaseVideoDC();
+	SetLastDrawnImage();
 }
 
 //===========================================================================
-void VideoReinitialize () {
-  CreateIdentityPalette();
-  CreateDIBSections();
-}
-
-//===========================================================================
-void VideoResetState () {
-  g_nAltCharSetOffset     = 0;
-  g_bVideoDisplayPage2 = 0;
-  vidmode      = VF_TEXT;
-  g_VideoForceFullRedraw   = 1;
-}
-
-//===========================================================================
-BYTE __stdcall VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG nCyclesLeft)
+void VideoReinitialize ()
 {
-  address &= 0xFF;
-  DWORD oldpage2 = SW_PAGE2;
-  int   oldvalue = g_nAltCharSetOffset+(int)(vidmode & ~(VF_MASK2 | VF_PAGE2));
-  switch (address) {
-    case 0x00: vidmode &= ~VF_MASK2;   break;
-    case 0x01: vidmode |=  VF_MASK2;   break;
-    case 0x0C: if (!IS_APPLE2) vidmode &= ~VF_80COL;   break;
-    case 0x0D: if (!IS_APPLE2) vidmode |=  VF_80COL;   break;
-    case 0x0E: if (!IS_APPLE2) g_nAltCharSetOffset = 0;           break;	// Alternate char set off
-    case 0x0F: if (!IS_APPLE2) g_nAltCharSetOffset = 256;         break;	// Alternate char set on
-    case 0x50: vidmode &= ~VF_TEXT;    break;
-    case 0x51: vidmode |=  VF_TEXT;    break;
-    case 0x52: vidmode &= ~VF_MIXED;   break;
-    case 0x53: vidmode |=  VF_MIXED;   break;
-    case 0x54: vidmode &= ~VF_PAGE2;   break;
-    case 0x55: vidmode |=  VF_PAGE2;   break;
-    case 0x56: vidmode &= ~VF_HIRES;   break;
-    case 0x57: vidmode |=  VF_HIRES;   break;
-    case 0x5E: if (!IS_APPLE2) vidmode |=  VF_DHIRES;  break;
-    case 0x5F: if (!IS_APPLE2) vidmode &= ~VF_DHIRES;  break;
-  }
-  if (SW_MASK2)
-    vidmode &= ~VF_PAGE2;
-  if (oldvalue != g_nAltCharSetOffset+(int)(vidmode & ~(VF_MASK2 | VF_PAGE2))) {
-    graphicsmode = !SW_TEXT;
-    g_VideoForceFullRedraw   = 1;
-  }
-  if (g_bFullSpeed && oldpage2 && !SW_PAGE2) {
-    static DWORD lasttime = 0;
-    DWORD currtime = GetTickCount();
-    if (currtime-lasttime >= 20)
-      lasttime = currtime;
-    else
-      oldpage2 = SW_PAGE2;
-  }
-  if (oldpage2 != SW_PAGE2) {
-    static DWORD lastrefresh = 0;
-    if ((g_bVideoDisplayPage2 && !SW_PAGE2) || (!behind)) {
-      g_bVideoDisplayPage2 = (SW_PAGE2 != 0);
-      if (!g_VideoForceFullRedraw) {
-        VideoRefreshScreen();
-        hasrefreshed = 1;
-        lastrefresh  = emulmsec;
-      }
-    }
-    else if ((!SW_PAGE2) && (!g_VideoForceFullRedraw) && (emulmsec-lastrefresh >= 20)) {
-      g_bVideoDisplayPage2 = 0;
-      VideoRefreshScreen();
-      hasrefreshed = 1;
-      lastrefresh  = emulmsec;
-    }
-    lastpageflip = emulmsec;
-  }
-  return MemReadFloatingBus(nCyclesLeft);
+	V_CreateIdentityPalette();
+	V_CreateDIBSections();
 }
 
-//===========================================================================
 
-void VideoUpdateVbl (DWORD dwCyclesThisFrame)
+//===========================================================================
+void VideoResetState ()
 {
-	dwVBlCounter = (DWORD) ((double)dwCyclesThisFrame / (double)uCyclesPerLine);
+	g_nAltCharSetOffset    = 0;
+	g_bVideoDisplayPage2   = 0;
+	g_bVideoMode           = VF_TEXT;
+	g_VideoForceFullRedraw = 1;
+
+#if 0 // Debug HGR2 without having to exec 6502 code
+	g_bVideoDisplayPage2   = 1;
+	g_bVideoMode           = VF_TEXT | VF_HIRES;
+#endif
+
+}
+
+
+//===========================================================================
+BYTE VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG uExecutedCycles)
+{
+	address &= 0xFF;
+	DWORD oldpage2 = SW_PAGE2;
+	int   oldvalue = g_nAltCharSetOffset+(int)(g_bVideoMode & ~(VF_MASK2 | VF_PAGE2));
+	switch (address) {
+		case 0x00: g_bVideoMode &= ~VF_MASK2;   break;
+		case 0x01: g_bVideoMode |=  VF_MASK2;   break;
+		case 0x0C: if (!IS_APPLE2) g_bVideoMode &= ~VF_80COL;   break;
+		case 0x0D: if (!IS_APPLE2) g_bVideoMode |=  VF_80COL;   break;
+		case 0x0E: if (!IS_APPLE2) g_nAltCharSetOffset = 0;           break;	// Alternate char set off
+		case 0x0F: if (!IS_APPLE2) g_nAltCharSetOffset = 256;         break;	// Alternate char set on
+		case 0x50: g_bVideoMode &= ~VF_TEXT;    break;
+		case 0x51: g_bVideoMode |=  VF_TEXT;    break;
+		case 0x52: g_bVideoMode &= ~VF_MIXED;   break;
+		case 0x53: g_bVideoMode |=  VF_MIXED;   break;
+		case 0x54: g_bVideoMode &= ~VF_PAGE2;   break;
+		case 0x55: g_bVideoMode |=  VF_PAGE2;   break;
+		case 0x56: g_bVideoMode &= ~VF_HIRES;   break;
+		case 0x57: g_bVideoMode |=  VF_HIRES;   break;
+		case 0x5E: if (!IS_APPLE2) g_bVideoMode |=  VF_DHIRES;  break;
+		case 0x5F: if (!IS_APPLE2) g_bVideoMode &= ~VF_DHIRES;  break;
+	}
+	if (SW_MASK2)
+		g_bVideoMode &= ~VF_PAGE2;
+	if (oldvalue != g_nAltCharSetOffset+(int)(g_bVideoMode & ~(VF_MASK2 | VF_PAGE2))) {
+		g_bGraphicsMode = !SW_TEXT;
+		g_VideoForceFullRedraw   = 1;
+	}
+	if (g_bFullSpeed && oldpage2 && !SW_PAGE2) {
+		static DWORD lasttime = 0;
+		DWORD currtime = GetTickCount();
+		if (currtime-lasttime >= 20)
+			lasttime = currtime;
+		else
+			oldpage2 = SW_PAGE2;
+	}
+	if (oldpage2 != SW_PAGE2) {
+		static DWORD lastrefresh = 0;
+		if ((g_bVideoDisplayPage2 && !SW_PAGE2) || (!behind)) {
+			g_bVideoDisplayPage2 = (SW_PAGE2 != 0);
+			if (!g_VideoForceFullRedraw) {
+				VideoRefreshScreen();
+				hasrefreshed = 1;
+				lastrefresh  = emulmsec;
+			}
+		}
+		else if ((!SW_PAGE2) && (!g_VideoForceFullRedraw) && (emulmsec-lastrefresh >= 20)) {
+		  g_bVideoDisplayPage2 = 0;
+		  VideoRefreshScreen();
+		  hasrefreshed = 1;
+		  lastrefresh  = emulmsec;
+		}
+		lastpageflip = emulmsec;
+	}
+	return MemReadFloatingBus(uExecutedCycles);
 }
 
 //===========================================================================
@@ -2419,7 +3658,7 @@ bool VideoGetSW80COL()
 DWORD VideoGetSnapshot(SS_IO_Video* pSS)
 {
 	pSS->bAltCharSet = !(g_nAltCharSetOffset == 0);
-	pSS->dwVidMode = vidmode;
+	pSS->dwVidMode = g_bVideoMode;
 	return 0;
 }
 
@@ -2428,11 +3667,11 @@ DWORD VideoGetSnapshot(SS_IO_Video* pSS)
 DWORD VideoSetSnapshot(SS_IO_Video* pSS)
 {
 	g_nAltCharSetOffset = !pSS->bAltCharSet ? 0 : 256;
-	vidmode = pSS->dwVidMode;
+	g_bVideoMode = pSS->dwVidMode;
 
 	//
 
-	graphicsmode = !SW_TEXT;
+	g_bGraphicsMode = !SW_TEXT;
     g_bVideoDisplayPage2 = (SW_PAGE2 != 0);
 
 	return 0;
@@ -2447,7 +3686,7 @@ WORD VideoGetScannerAddress(bool* pbVblBar_OUT, const DWORD uExecutedCycles)
 {
     // get video scanner position
     //
-    int nCycles = CpuGetCyclesThisFrame(uExecutedCycles);
+    int nCycles = CpuGetCyclesThisVideoFrame(uExecutedCycles);
 
     // machine state switches
     //
@@ -2560,7 +3799,7 @@ bool VideoGetVbl(const DWORD uExecutedCycles)
 {
     // get video scanner position
     //
-    int nCycles = CpuGetCyclesThisFrame(uExecutedCycles);
+    int nCycles = CpuGetCyclesThisVideoFrame(uExecutedCycles);
 
     // calculate video parameters according to display standard
     //
@@ -2589,6 +3828,8 @@ bool VideoGetVbl(const DWORD uExecutedCycles)
 	}
 }
 
+//===========================================================================
+
 #define SCREENSHOT_BMP 1
 #define SCREENSHOT_TGA 0
 	
@@ -2596,7 +3837,7 @@ bool VideoGetVbl(const DWORD uExecutedCycles)
 static int  g_nLastScreenShot = 0;
 const  int nMaxScreenShot = 999999999;
 
-static int g_iScreenshotType;
+static int   g_iScreenshotType;
 static char *g_pLastDiskImageName = NULL;
 
 //const  int nMaxScreenShot = 2;
@@ -2612,6 +3853,7 @@ void Video_ResetScreenshotCounter( char *pImageName )
 void Util_MakeScreenShotFileName( char *pFinalFileName_ )
 {
 	char sPrefixScreenShotFileName[ 256 ] = "AppleWin_ScreenShot";
+	// TODO: g_sScreenshotDir
 	char *pPrefixFileName = g_pLastDiskImageName ? g_pLastDiskImageName : sPrefixScreenShotFileName;
 #if SCREENSHOT_BMP
 	sprintf( pFinalFileName_, "%s_%09d.bmp", pPrefixFileName, g_nLastScreenShot );
