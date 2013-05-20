@@ -917,6 +917,18 @@
 					>
 				</File>
 				<File
+					RelativePath=".\source\CallOnce.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Echo.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\Echo.h"
+					>
+				</File>
+				<File
 					RelativePath=".\source\Joystick.cpp"
 					>
 				</File>
@@ -946,18 +958,6 @@
 				</File>
 				<File
 					RelativePath=".\source\Memory.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Echo.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Echo.h"
-					>
-				</File>
-				<File
-					RelativePath=".\source\Frame.cpp"
 					>
 				</File>
 				<File
@@ -1038,6 +1038,18 @@
 				</File>
 				<File
 					RelativePath=".\source\SoundCore.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SoundDevice.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SoundDeviceFactory.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\SoundDeviceFactory.h"
 					>
 				</File>
 				<File
@@ -1146,7 +1158,7 @@
 				</File>
 				<File
 					RelativePath=".\source\DiskImage.cpp"
-				>
+					>
 				</File>
 				<File
 					RelativePath=".\source\DiskImage.h"
@@ -1188,7 +1200,7 @@
 					RelativePath=".\source\Video.h"
 					>
 				</File>
-		</Filter>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Docs"

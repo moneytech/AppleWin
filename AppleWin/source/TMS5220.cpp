@@ -38,6 +38,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "stdafx.h"
 #include "tms5220.h"
+#include "CallOnce.h"
+#include "SoundDeviceFactory.h"
 
 #define CORLETT_VER2	// Corlett's 2nd version
 
@@ -96,6 +98,20 @@ USHORT CTMS5220::tms5220_k9table    [0x08]={
 
 USHORT CTMS5220::tms5220_k10table   [0x08]={
 0xCD00,0xDF00,0xF100,0x0400,0x1600,0x2000,0x3B00,0x4D00};
+
+//-----------------------------------------------------------------------------
+
+static CCallOnce g_CallOnce(CTMS5220::RegisterCreateFunc);
+
+CSoundDevice* CTMS5220::Create(void)
+{
+	return new CTMS5220;
+}
+
+void CTMS5220::RegisterCreateFunc(void)
+{
+	CSoundDeviceFactory::Instance().Register(eSndDev_TMS5220, Create);
+}
 
 //-----------------------------------------------------------------------------
 

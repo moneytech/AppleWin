@@ -32,15 +32,19 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "stdafx.h"
 #include "Echo.h"
+#include "SoundDeviceFactory.h"
 
 CEcho::CEcho(const int nSampleRate) :
 	m_uSlot(0),
 	m_nPlaybackRate(nSampleRate),
 	m_nAudioCounter(nSampleRate)
 {
+	m_pTMS5220 = dynamic_cast<CTMS5220*>( CSoundDeviceFactory::Instance().Create(eSndDev_TMS5220) );
+	_ASSERT(m_pTMS5220);
+
 	m_pBuffer = new short[nSampleRate];
 
-	m_TMS5220.tms5220_init();
+	m_pTMS5220->tms5220_init();
 	Reset();
 }
 
@@ -52,7 +56,7 @@ CEcho::~CEcho(void)
 void CEcho::Reset(void)
 {
 	m_nAudioCounter = m_nPlaybackRate;
-	m_TMS5220.tms5220_reset();
+	m_pTMS5220->tms5220_reset();
 }
 
 void CEcho::Initialize(LPBYTE pCxRomPeripheral, UINT uSlot)
@@ -74,7 +78,7 @@ short* CEcho::AudioRequest(const UINT uNumSamples)
 	UINT uNumTMSSamples = 0;
 	for (UINT i=0; i<uNumSamples; i++)
 	{
-		m_nAudioCounter -= 8000;	//m_TMS5220.tms5220_mixingrate;
+		m_nAudioCounter -= 8000;	//m_pTMS5220->tms5220_mixingrate;
 
 		if(m_nAudioCounter < 0)
 		{
@@ -88,20 +92,20 @@ short* CEcho::AudioRequest(const UINT uNumSamples)
 
 	for (UINT i=0; i<uNumSamples; i++)
 	{
-		if(m_TMS5220.tms5220_outputbuffer_ptr >= m_TMS5220.tms5220_outputbuffer_max)
+		if(m_pTMS5220->tms5220_outputbuffer_ptr >= m_pTMS5220->tms5220_outputbuffer_max)
 		{
-			m_TMS5220.tms5220_outputbuffer_ptr -= m_TMS5220.tms5220_outputbuffer_max;
-			m_TMS5220.tms5220_request();
+			m_pTMS5220->tms5220_outputbuffer_ptr -= m_pTMS5220->tms5220_outputbuffer_max;
+			m_pTMS5220->tms5220_request();
 		}
 
-		m_pBuffer[i] = m_TMS5220.tms5220_outputbuffer[ m_TMS5220.tms5220_outputbuffer_ptr ];
+		m_pBuffer[i] = m_pTMS5220->tms5220_outputbuffer[ m_pTMS5220->tms5220_outputbuffer_ptr ];
 
-		m_nAudioCounter -= m_TMS5220.tms5220_mixingrate;
+		m_nAudioCounter -= m_pTMS5220->tms5220_mixingrate;
 
 		if(m_nAudioCounter < 0)
 		{
 			m_nAudioCounter += m_nPlaybackRate;
-			m_TMS5220.tms5220_outputbuffer_ptr++;
+			m_pTMS5220->tms5220_outputbuffer_ptr++;
 		}
 	}
 
@@ -120,7 +124,7 @@ BYTE __stdcall CEcho::IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULON
 //	sprintf(szDbg, "R : $%04X (PC=$%04X, Caller=$%04X)\n", uAddr, PC, uCallerAddr);
 //	OutputDebugString(szDbg);
 
-	return pEcho->m_TMS5220.GetStatus();
+	return pEcho->m_pTMS5220->GetStatus();
 }
 
 BYTE __stdcall CEcho::IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft)
@@ -132,7 +136,7 @@ BYTE __stdcall CEcho::IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULO
 //	sprintf(szDbg, "W : $%04X (PC=$%04X) Data=$%02X\n", uAddr, PC, uValue);
 //	OutputDebugString(szDbg);
 
-	pEcho->m_TMS5220.tms5220_write(uValue);
+	pEcho->m_pTMS5220->tms5220_write(uValue);
 
 	return 0;
 }

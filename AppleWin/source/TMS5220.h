@@ -1,22 +1,19 @@
 #pragma once
 
+#include "SoundDevice.h"
+
 #define TMS5220_OUTPUTBUFFER_SIZE 200
 
-class CTMS5220
+class CTMS5220 : public CSoundDevice
 {
 public:
-	CTMS5220()
-	{
-		tms5220_outputbuffer_max = TMS5220_OUTPUTBUFFER_SIZE;
-
-		/* Speak External mode: 1=on 0=off */
-		tms5220_speakext = 0;
-
-		//
-
-		tms5220_bits = 0;
-		tms5220_buffer = 0;
-	}
+	CTMS5220() :
+		tms5220_outputbuffer_max(TMS5220_OUTPUTBUFFER_SIZE),
+		tms5220_speakext(0),	/* Speak External mode: 1=on 0=off */
+		tms5220_bits(0),
+		tms5220_buffer(0),
+		tms5220_ranptr(0)
+	{}
 	virtual ~CTMS5220() {}
 
 	BYTE GetStatus(void) { return m_Status.Data; }
@@ -26,6 +23,9 @@ public:
 	void tms5220_write(int b);
 	void tms5220_reset(void);
 	void tms5220_init(void);
+
+	static CSoundDevice* Create(void);
+	static void RegisterCreateFunc(void);
 
 private:
 	void tms5220_outframe(void);

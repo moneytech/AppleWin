@@ -803,7 +803,7 @@ static void MB_Update()
 			AY8910Update(nChip, &ppAYVoiceBuffer[nChip*NUM_VOICES_PER_AY8910], nNumSamples);
 
 #ifdef ECHO_MIX_WITH_MB
-		pEchoBuffer = sg_Echo.AudioRequest(nNumSamples);
+		pEchoBuffer = g_pEcho->AudioRequest(nNumSamples);
 #endif
 	}
 

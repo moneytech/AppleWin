@@ -84,7 +84,7 @@ bool		g_bDisableDirectSoundMockingboard = false;
 
 CSuperSerialCard	sg_SSC;
 CMouseInterface		sg_Mouse;
-CEcho				sg_Echo(SPKR_SAMPLE_RATE);
+CEcho*				g_pEcho = NULL;
 
 // TODO: CLEANUP! Move to peripherals.cpp!!!
 #ifdef SUPPORT_CPM
@@ -954,6 +954,7 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 	ImageInitialize();
 	DiskInitialize();
 	CreateColorMixMap();	// For tv emulation mode
+	g_pEcho = new CEcho(SPKR_SAMPLE_RATE);
 
 	int nError = 0;	// TODO: Show error MsgBox if we get a DiskInsert error
 	if(szImageName_drive1)
@@ -1039,6 +1040,8 @@ int APIENTRY WinMain (HINSTANCE passinstance, HINSTANCE, LPSTR lpCmdLine, int)
 
 	if (g_hCustomRomF8 != INVALID_HANDLE_VALUE)
 		CloseHandle(g_hCustomRomF8);
+
+	delete g_pEcho;
 
 	return 0;
 }

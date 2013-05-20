@@ -1164,7 +1164,7 @@ void MemInitialize()
 	}
 	else if (g_Slot4 = CT_Echo)
 	{
-		sg_Echo.Initialize(pCxRomPeripheral, 4);
+		g_pEcho->Initialize(pCxRomPeripheral, 4);
 	}
 
 #ifdef SUPPORT_CPM

@@ -3,7 +3,7 @@
 #include "Common.h"
 #include "TMS5220.h"
 
-extern class CEcho sg_Echo;
+extern class CEcho* g_pEcho;	// tmp
 
 class CEcho
 {
@@ -24,7 +24,7 @@ private:
 private:
 	UINT m_uSlot;
 	int m_nPlaybackRate;
-	CTMS5220 m_TMS5220;
+	CTMS5220* m_pTMS5220;
 	int m_nAudioCounter;
 	short* m_pBuffer;
 };
