@@ -919,6 +919,10 @@ LRESULT CALLBACK FrameWndProc (
       break;
 
 		case WM_CHAR:
+			KeybUpdateCtrlShiftStatus();
+			if (g_bCtrlKey && (wparam == 0xA)) // NB. VK_RETURN = 0x0D !
+				ScreenWindowResize(true);
+			else
 			if ((g_nAppMode == MODE_RUNNING) || (g_nAppMode == MODE_LOGO) ||
 				((g_nAppMode == MODE_STEPPING) && (wparam != TEXT('\x1B'))))
 			{
