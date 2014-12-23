@@ -45,3 +45,4 @@
 #endif
 
 #define USE_SPEECH_API
+#define WS_VIDEO

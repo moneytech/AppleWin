@@ -28,6 +28,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "..\Frame.h"
 #include "..\Registry.h"
 #include "..\SaveState.h"
+#ifdef WS_VIDEO
+#include "..\wsVideo.h"
+#endif
 #include "IPropertySheet.h"
 #include "PropertySheetHelper.h"
 
@@ -302,6 +305,10 @@ void CPropertySheetHelper::PostMsgAfterClose(HWND hWnd, PAGETYPE page)
 		ApplyNewConfig();
 
 		uAfterClose = WM_USER_RESTART;
+
+#ifdef WS_VIDEO
+		wsVideoInitModel(m_ConfigNew.m_Apple2Type);
+#endif
 	}
 
 	if (uAfterClose)

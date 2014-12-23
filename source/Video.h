@@ -4,6 +4,16 @@
 
 	// NOTE: KEEP IN SYNC: VideoType_e g_aVideoChoices g_apVideoModeDesc
 	// NOTE: Used/Serialized by: g_eVideoType
+#ifdef WS_VIDEO
+	enum VideoType_e
+	{
+		  VT_COLOR_TV
+		, VT_COLOR_MONITOR
+		, VT_MONO_TV
+		, VT_MONO_MONITOR
+		, NUM_VIDEO_MODES
+	};
+#else
 	enum VideoType_e
 	{
 		  VT_MONO_HALFPIXEL_REAL // uses custom monochrome
@@ -15,6 +25,7 @@
 		, VT_MONO_WHITE // now half pixel
 		, NUM_VIDEO_MODES
 	};
+#endif
 
 	extern TCHAR g_aVideoChoices[];
 	extern char *g_apVideoModeDesc[ NUM_VIDEO_MODES ];

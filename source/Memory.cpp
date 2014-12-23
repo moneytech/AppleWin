@@ -45,6 +45,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Speaker.h"
 #include "Tape.h"
 #include "Video.h"
+#ifdef WS_VIDEO
+#include "wsVideo.h"
+#endif
 
 #include "z80emu.h"
 #include "Z80VICE\z80.h"
@@ -1477,14 +1480,22 @@ void MemResetPaging()
 
 BYTE MemReadFloatingBus(const ULONG uExecutedCycles)
 {
+#ifdef WS_VIDEO
+	return wsVideoByte(uExecutedCycles);
+#else
 	return*(LPBYTE)(mem + VideoGetScannerAddress(NULL, uExecutedCycles));
+#endif
 }
 
 //===========================================================================
 
 BYTE MemReadFloatingBus(const BYTE highbit, const ULONG uExecutedCycles)
 {
+#ifdef WS_VIDEO
+	BYTE r = wsVideoByte(uExecutedCycles);
+#else
 	BYTE r = *(LPBYTE)(mem + VideoGetScannerAddress(NULL, uExecutedCycles));
+#endif
 	return (r & ~0x80) | ((highbit) ? 0x80 : 0);
 }
 

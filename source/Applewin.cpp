@@ -51,6 +51,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Speech.h"
 #endif
 #include "Video.h"
+#ifdef WS_VIDEO
+#include "wsVideo.h"
+#endif
 
 #include "Configuration\About.h"
 #include "Configuration\PropertySheet.h"
@@ -208,6 +211,14 @@ void ContinueExecution(void)
 		SetPriorityAboveNormal();
 	}
 
+#ifdef WS_VIDEO
+	// TC-NTSC: Is wsVideoNewDirtyRect used?
+	wsVideoNewDirtyRect.ulx = FRAMEBUFFER_W;
+	wsVideoNewDirtyRect.uly = FRAMEBUFFER_H;
+	wsVideoNewDirtyRect.lrx = 0;
+	wsVideoNewDirtyRect.lry = 0;
+#endif
+
 	//
 
 	int nCyclesToExecute = (int) fExecutionPeriodClks + g_nCpuCyclesFeedback;
@@ -226,12 +237,29 @@ void ContinueExecution(void)
 
 	//
 
+#ifdef WS_VIDEO
+	// TC-NTSC: Is wsVideoNewDirtyRect used?
+	if (wsVideoNewDirtyRect.lrx > wsVideoNewDirtyRect.ulx)
+	  {
+	    if (wsVideoNewDirtyRect.ulx < wsVideoAllDirtyRect.ulx) wsVideoAllDirtyRect.ulx = wsVideoNewDirtyRect.ulx;
+	    if (wsVideoNewDirtyRect.uly < wsVideoAllDirtyRect.uly) wsVideoAllDirtyRect.uly = wsVideoNewDirtyRect.uly;
+	    if (wsVideoNewDirtyRect.lrx > wsVideoAllDirtyRect.lrx) wsVideoAllDirtyRect.lrx = wsVideoNewDirtyRect.lrx;
+	    if (wsVideoNewDirtyRect.lry > wsVideoAllDirtyRect.lry) wsVideoAllDirtyRect.lry = wsVideoNewDirtyRect.lry;
+	  }
+
+	if(g_dwCyclesThisFrame >= dwClksPerFrame)
+	{
+		g_dwCyclesThisFrame -= dwClksPerFrame;
+		wsVideoRefresh();
+	}
+#else
 	if (g_dwCyclesThisFrame >= dwClksPerFrame)
 	{
 		g_dwCyclesThisFrame -= dwClksPerFrame;
 		VideoEndOfVideoFrame();
 		MB_EndOfVideoFrame();
 	}
+#endif // ifndef WS_VIDEO
 
 	if (!g_bFullSpeed)
 	{
@@ -409,6 +437,10 @@ void LoadConfiguration(void)
 	}
 
 	//
+
+#ifdef WS_VIDEO
+	wsVideoInitModel(g_Apple2Type);
+#endif
 
 	if (!REGLOAD(TEXT(REGVALUE_JOYSTICK0_EMU_TYPE), &joytype[JN_JOYSTICK0]))
 		LoadConfigOldJoystick(JN_JOYSTICK0);

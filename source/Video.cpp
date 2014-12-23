@@ -35,6 +35,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Memory.h"
 #include "Registry.h"
 #include "Video.h"
+#ifdef WS_VIDEO
+#include "wsVideo.h"
+#endif
 
 #include "..\resource\resource.h"
 #include "Configuration\PropertySheet.h"
@@ -283,7 +286,11 @@ static LPBYTE    vidlastmem       = NULL;
 
 static UINT      g_uVideoMode     = VF_TEXT;
 
-	DWORD     g_eVideoType     = VT_COLOR_TVEMU;
+#ifdef WS_VIDEO
+	DWORD     g_eVideoType        = VT_COLOR_TV;
+#else
+	DWORD     g_eVideoType        = VT_COLOR_TVEMU;
+#endif
 	DWORD     g_uHalfScanLines = 1; // drop 50% scan lines for a more authentic look
 
 
@@ -295,6 +302,14 @@ static bool bVideoScannerNTSC = true;  // NTSC video scanning (or PAL)
 //-------------------------------------
 
 	// NOTE: KEEP IN SYNC: VideoType_e g_aVideoChoices g_apVideoModeDesc
+#ifdef WS_VIDEO
+	TCHAR g_aVideoChoices[] =
+		TEXT("NTSC Color (Television)\0")
+		TEXT("NTSC Color (Monitor)\0")
+		TEXT("Monochrome (Television)\0")
+		TEXT("Monochrome (Monitor)\0")
+		;
+#else
 	TCHAR g_aVideoChoices[] =
 		TEXT("Monochrome (Custom Luminance)\0")
 		TEXT("Color (Standard)\0")
@@ -304,10 +319,20 @@ static bool bVideoScannerNTSC = true;  // NTSC video scanning (or PAL)
 		TEXT("Monochrome (Green)\0")
 		TEXT("Monochrome (White)\0")
 		;
+#endif
 
 	// AppleWin 1.19.4 VT_COLOR_AUTHENTIC -> VT_COLOR_HALFPIXEL -> VT_COLOR_STANDARD "Color Half-Pixel Authentic
 	// NOTE: KEEP IN SYNC: VideoType_e g_aVideoChoices g_apVideoModeDesc
 	// The window title will be set to this.
+#ifdef WS_VIDEO
+	char *g_apVideoModeDesc[ NUM_VIDEO_MODES ] =
+	{
+		 "Color TV"
+		,"Color Monitor"
+		,"Black & White TV"
+		,"Monochrome Monitor"
+	};
+#else
 	char *g_apVideoModeDesc[ NUM_VIDEO_MODES ] =
 	{
 		  "Monochrome (Custom)"
@@ -318,6 +343,7 @@ static bool bVideoScannerNTSC = true;  // NTSC video scanning (or PAL)
 		, "Green"
 		, "White"
 	};
+#endif
 
 // Prototypes (Private) _____________________________________________
 
@@ -349,6 +375,10 @@ static bool bVideoScannerNTSC = true;  // NTSC video scanning (or PAL)
 	void V_CreateIdentityPalette ();
 	void V_CreateDIBSections ();
 	HBRUSH V_CreateCustomBrush (COLORREF nColor);
+
+#ifdef WS_VIDEO
+struct wsVideoDirtyRect wsVideoAllDirtyRect;
+#endif
 
 /** Our BitBlit() / VRAM_Copy()
 	@param dx Dst X
@@ -445,6 +475,40 @@ void CreateFrameOffsetTable (LPBYTE addr, LONG pitch)
 }
 
 //===========================================================================
+#ifdef WS_VIDEO
+void wsVideoCreateDIBSection();
+void VideoInitialize ()
+{
+	// CREATE A BUFFER FOR AN IMAGE OF THE LAST DRAWN MEMORY
+	vidlastmem = (LPBYTE)VirtualAlloc(NULL,0x10000,MEM_COMMIT,PAGE_READWRITE);
+	ZeroMemory(vidlastmem,0x10000);
+
+	// LOAD THE LOGO
+	g_hLogoBitmap = (HBITMAP)LoadImage(g_hInstance, MAKEINTRESOURCE(IDB_APPLEWIN), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+
+
+	// CREATE A BITMAPINFO STRUCTURE FOR THE FRAME BUFFER
+	g_pFramebufferinfo = (LPBITMAPINFO)VirtualAlloc(
+		NULL,
+		sizeof(BITMAPINFOHEADER),
+		MEM_COMMIT,
+		PAGE_READWRITE);
+
+	ZeroMemory(g_pFramebufferinfo,sizeof(BITMAPINFOHEADER));
+	g_pFramebufferinfo->bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+	g_pFramebufferinfo->bmiHeader.biWidth       = FRAMEBUFFER_W;
+	g_pFramebufferinfo->bmiHeader.biHeight      = FRAMEBUFFER_H;
+	g_pFramebufferinfo->bmiHeader.biPlanes      = 1;
+	g_pFramebufferinfo->bmiHeader.biBitCount    = 32;
+	g_pFramebufferinfo->bmiHeader.biCompression = BI_RGB;
+	g_pFramebufferinfo->bmiHeader.biClrUsed     = 0;
+	
+	wsVideoCreateDIBSection();
+
+	// RESET THE VIDEO MODE SWITCHES AND THE CHARACTER SET OFFSET
+	VideoResetState();
+}
+#else
 void VideoInitialize ()
 {
 	// CREATE A BUFFER FOR AN IMAGE OF THE LAST DRAWN MEMORY
@@ -504,12 +568,13 @@ void VideoInitialize ()
 	// RESET THE VIDEO MODE SWITCHES AND THE CHARACTER SET OFFSET
 	VideoResetState();
 }
+#endif
 
 //===========================================================================
 int GetMonochromeIndex()
 {
-	int iMonochrome;
-	
+	int iMonochrome = 0;
+#ifndef WS_VIDEO
 	switch (g_eVideoType)
 	{
 		case VT_MONO_AMBER : iMonochrome = MONOCHROME_AMBER ; break;
@@ -517,7 +582,7 @@ int GetMonochromeIndex()
 		case VT_MONO_WHITE : iMonochrome = HGR_WHITE        ; break;
 		default            : iMonochrome = MONOCHROME_CUSTOM; break; // caller will use MONOCHROME_CUSTOM MONOCHROME_CUSTOM_50 !
 	}
-
+#endif
 	return iMonochrome;
 }
 
@@ -734,6 +799,41 @@ void V_CreateIdentityPalette ()
 }
 
 //===========================================================================
+
+#ifdef WS_VIDEO
+void wsVideoCreateDIBSection () 
+{
+	// CREATE THE DEVICE CONTEXT
+	HWND window  = GetDesktopWindow();
+	HDC dc       = GetDC(window);
+	if (g_hDeviceDC)
+	{
+		DeleteDC(g_hDeviceDC);
+	}
+	g_hDeviceDC = CreateCompatibleDC(dc);
+
+	// CREATE THE FRAME BUFFER DIB SECTION
+	if (g_hDeviceBitmap)
+		DeleteObject(g_hDeviceBitmap);
+		g_hDeviceBitmap = CreateDIBSection(
+			dc,
+			g_pFramebufferinfo,
+			DIB_RGB_COLORS,
+			(LPVOID *)&g_pFramebufferbits,0,0
+		);
+	SelectObject(g_hDeviceDC,g_hDeviceBitmap);
+
+	// CREATE THE OFFSET TABLE FOR EACH SCAN LINE IN THE FRAME BUFFER
+	for (int y = 0; y < 384; y++)
+		wsLines[y] = g_pFramebufferbits + 4 * FRAMEBUFFER_W * ((FRAMEBUFFER_H - 1) - y - 18) + 80;
+
+	// DRAW THE SOURCE IMAGE INTO THE SOURCE BIT BUFFER
+	ZeroMemory(g_pFramebufferbits, FRAMEBUFFER_W*FRAMEBUFFER_H*4);
+
+	wsVideoInit();
+}
+#endif
+
 void V_CreateDIBSections () 
 {
 	CopyMemory(g_pSourceHeader->bmiColors,g_pFramebufferinfo->bmiColors,256*sizeof(RGBQUAD));
@@ -779,6 +879,7 @@ void V_CreateDIBSections ()
 	// DRAW THE SOURCE IMAGE INTO THE SOURCE BIT BUFFER
 	ZeroMemory(g_pSourcePixels,SRCOFFS_TOTAL*512); // 32 bytes/pixel * 16 colors = 512 bytes/row
 
+#ifndef WS_VIDEO
 	// First monochrome mode is seperate from others
 	if ((g_eVideoType >= VT_COLOR_STANDARD)	&& (g_eVideoType <  VT_MONO_AMBER))
 	{
@@ -810,10 +911,13 @@ void V_CreateDIBSections ()
 		}
 		V_CreateLookup_MonoDoubleHiRes();
 	}
+#endif // ifndef WS_VIDEO
 	DeleteDC(sourcedc);
 }
 
 //===========================================================================
+
+#ifndef WS_VIDEO
 void V_CreateLookup_DoubleHires ()
 {
 #define OFFSET  3
@@ -864,8 +968,11 @@ void V_CreateLookup_DoubleHires ()
 #undef SIZE
 #undef OFFSET
 }
+#endif
 
 //===========================================================================
+
+#ifndef WS_VIDEO
 void V_CreateLookup_Hires ()
 {
 	int iMonochrome = GetMonochromeIndex();
@@ -943,7 +1050,7 @@ void V_CreateLookup_Hires ()
 		}
 	}
 }
-
+#endif
 
 //===========================================================================
 void V_CreateLookup_Lores ()
@@ -1014,6 +1121,8 @@ void V_CreateLookup_MonoHiRes ()
 }
 
 //===========================================================================
+
+#ifndef WS_VIDEO
 void V_CreateLookup_HiResHalfPixel_Authentic () // Colors are solid (100% coverage)
 {
 	// 2-bits from previous byte, 2-bits from next byte = 2^4 = 16 total permutations
@@ -1194,8 +1303,11 @@ Legend:
 		}
 	}
 }
+#endif
 
 //===========================================================================
+
+#ifndef WS_VIDEO
 void V_CreateLookup_HiresHalfShiftDim ()
 {
 	// BYTE colorval[6] = {HGR_MAGENTA,HGR_BLUE,HGR_GREEN,HGR_RED,HGR_BLACK,HGR_WHITE};
@@ -1351,6 +1463,7 @@ void V_CreateLookup_HiresHalfShiftDim ()
 		}
 	}
 }
+#endif
 
 //===========================================================================
 void V_CreateLookup_MonoHiResHalfPixel_Real ()
@@ -1552,6 +1665,9 @@ static void V_CreateLookup_Text(HDC hDstDC)
 static void V_CreateLookup_MonoText(HDC hDstDC)
 {
 	HBRUSH hBrush;
+#ifdef WS_VIDEO
+	hBrush = CreateSolidBrush(monochrome);
+#else
 	switch (g_eVideoType)
 	{
 		case VT_MONO_AMBER: hBrush = CreateSolidBrush(RGB(0xFF,0x80,0x00)); break;
@@ -1559,6 +1675,7 @@ static void V_CreateLookup_MonoText(HDC hDstDC)
 		case VT_MONO_WHITE: hBrush = CreateSolidBrush(RGB(0xFF,0xFF,0xFF)); break;
 		default           : hBrush = CreateSolidBrush(monochrome); break;
 	}
+#endif
 
 	SelectObject(hDstDC, hBrush);
 
@@ -1955,6 +2072,7 @@ bool UpdateHiResCell (int x, int y, int xpixel, int ypixel, int offset)
 		{
 #define COLOFFS  (((byteval1 & 0x60) << 2) | \
                    ((byteval3 & 0x03) << 5))
+#ifndef WS_VIDEO
 			if (g_eVideoType == VT_COLOR_TVEMU)
 			{
 				CopyMixedSource(
@@ -1963,6 +2081,7 @@ bool UpdateHiResCell (int x, int y, int xpixel, int ypixel, int offset)
 				);
 			}
 			else
+#endif
 			{
 				CopySource(
 					xpixel,ypixel+(yoffset >> 9),
@@ -2079,6 +2198,7 @@ BOOL VideoApparentlyDirty ()
 
 //===========================================================================
 void VideoBenchmark () {
+
   Sleep(500);
 
   // PREPARE TWO DIFFERENT FRAME BUFFERS, EACH OF WHICH HAVE HALF OF THE
@@ -2096,9 +2216,16 @@ void VideoBenchmark () {
   // GOING ON, CHANGING HALF OF THE BYTES IN THE VIDEO BUFFER EACH FRAME TO
   // SIMULATE THE ACTIVITY OF AN AVERAGE GAME
   DWORD totaltextfps = 0;
+#ifdef WS_VIDEO
+  wsVideoUpdate = wsUpdateVideoText;
+  FillMemory(mem+0x400,0x400,0x14);
+  wsVideoUpdate(17030);
+  wsVideoRefresh();
+#else
   g_uVideoMode            = VF_TEXT;
   FillMemory(mem+0x400,0x400,0x14);
   VideoRedrawScreen();
+#endif
   DWORD milliseconds = GetTickCount();
   while (GetTickCount() == milliseconds) ;
   milliseconds = GetTickCount();
@@ -2108,8 +2235,13 @@ void VideoBenchmark () {
       FillMemory(mem+0x400,0x400,0x14);
     else
       CopyMemory(mem+0x400,mem+((cycle & 2) ? 0x4000 : 0x6000),0x400);
+#ifdef WS_VIDEO
+	wsVideoUpdate(17030);
+	wsVideoRefresh();
+#else
     VideoRefreshScreen();
-    if (cycle++ >= 3)
+#endif
+	if (cycle++ >= 3)
       cycle = 0;
     totaltextfps++;
   } while (GetTickCount() - milliseconds < 1000);
@@ -2118,9 +2250,16 @@ void VideoBenchmark () {
   // GOING ON, CHANGING HALF OF THE BYTES IN THE VIDEO BUFFER EACH FRAME TO
   // SIMULATE THE ACTIVITY OF AN AVERAGE GAME
   DWORD totalhiresfps = 0;
+#ifdef WS_VIDEO
+  wsVideoUpdate = wsUpdateVideoHires;
+  FillMemory(mem+0x2000,0x2000,0x14);
+  wsVideoUpdate(17030);
+  wsVideoRefresh();
+#else
   g_uVideoMode             = VF_HIRES;
   FillMemory(mem+0x2000,0x2000,0x14);
   VideoRedrawScreen();
+#endif
   milliseconds = GetTickCount();
   while (GetTickCount() == milliseconds) ;
   milliseconds = GetTickCount();
@@ -2130,7 +2269,12 @@ void VideoBenchmark () {
       FillMemory(mem+0x2000,0x2000,0x14);
     else
       CopyMemory(mem+0x2000,mem+((cycle & 2) ? 0x4000 : 0x6000),0x2000);
+#ifdef WS_VIDEO
+    wsVideoUpdate(17030);
+    wsVideoRefresh();
+#else
     VideoRefreshScreen();
+#endif
     if (cycle++ >= 3)
       cycle = 0;
     totalhiresfps++;
@@ -2202,13 +2346,27 @@ void VideoBenchmark () {
   // THE SAME TIME
   DWORD realisticfps = 0;
   FillMemory(mem+0x2000,0x2000,0xAA);
+#ifdef WS_VIDEO
+  wsVideoUpdate(17030);
+  wsVideoRefresh();
+#else
   VideoRedrawScreen();
+#endif
   milliseconds = GetTickCount();
   while (GetTickCount() == milliseconds) ;
   milliseconds = GetTickCount();
   cycle = 0;
   do {
-    if (realisticfps < 10) {
+#ifdef WS_VIDEO
+      int cycles = 17030;
+      while (cycles > 0) {
+        DWORD executedcycles = CpuExecute(103);
+        cycles -= executedcycles;
+        DiskUpdatePosition(executedcycles);
+        JoyUpdateButtonLatch(executedcycles);
+	  }
+#else
+	  if (realisticfps < 10) {
       int cycles = 100000;
       while (cycles > 0) {
         DWORD executedcycles = CpuExecute(103);
@@ -2217,11 +2375,16 @@ void VideoBenchmark () {
         JoyUpdateButtonLatch(executedcycles);
 	  }
     }
+#endif
     if (cycle & 1)
       FillMemory(mem+0x2000,0x2000,0xAA);
     else
       CopyMemory(mem+0x2000,mem+((cycle & 2) ? 0x4000 : 0x6000),0x2000);
+#ifdef WS_VIDEO
+    wsVideoRefresh();
+#else
     VideoRefreshScreen();
+#endif
     if (cycle++ >= 3)
       cycle = 0;
     realisticfps++;
@@ -2318,7 +2481,11 @@ BYTE VideoCheckMode (WORD, WORD address, BYTE, BYTE, ULONG uExecutedCycles)
 
 BYTE VideoCheckVbl (WORD, WORD, BYTE, BYTE, ULONG uExecutedCycles)
 {
+#ifdef WS_VIDEO
+        int bVblBar = wsVideoIsVbl();
+#else
 	bool bVblBar = VideoGetVbl(uExecutedCycles);
+#endif
 
 	BYTE r = KeybGetKeycode();
 	return (r & ~0x80) | (bVblBar ? 0x80 : 0);
@@ -2446,7 +2613,11 @@ void VideoDisplayLogo ()
 	SetBkMode(hFrameDC,TRANSPARENT);
 
 	char szVersion[ 64 ] = "";
+#ifdef WS_VIDEO
+	strcpy(szVersion, "Version WS-NTSC 05");
+#else
 	sprintf( szVersion, "Version %s", VERSIONSTRING );
+#endif
 
 #define  DRAWVERSION(x,y,c)                 \
 	SetTextColor(hFrameDC,c);               \
@@ -2616,6 +2787,38 @@ VideoUpdateFuncPtr_t VideoRefreshScreen ()
 	return pfUpdate;
 }
 
+#ifdef WS_VIDEO
+void wsVideoRefresh ()
+{
+  // if (wsVideoAllDirtyRect.lrx <= wsVideoAllDirtyRect.ulx) return;
+
+  LPBYTE pDstFrameBufferBits = 0;
+  LONG   pitch = 0;
+  HDC    hFrameDC = FrameGetVideoDC(&pDstFrameBufferBits,&pitch);
+
+  if (hFrameDC)
+    {
+#if 0
+      BitBlt(hFrameDC,
+	     wsVideoAllDirtyRect.ulx,
+	     wsVideoAllDirtyRect.uly,
+	     wsVideoAllDirtyRect.lrx - wsVideoAllDirtyRect.ulx,
+	     wsVideoAllDirtyRect.lry - wsVideoAllDirtyRect.uly,
+	     g_hDeviceDC,
+	     wsVideoAllDirtyRect.ulx,
+	     wsVideoAllDirtyRect.uly,
+	     SRCCOPY);
+#else
+//    StretchBlt(hFrameDC,0,0,VIEWPORTCX,VIEWPORTCY,g_hDeviceDC,0,0,FRAMEBUFFER_W,FRAMEBUFFER_H,SRCCOPY);
+	int nViewportCX, nViewportCY;
+	GetViewportCXCY(nViewportCX, nViewportCY);
+	StretchBlt(hFrameDC,0,0,nViewportCX,nViewportCY,g_hDeviceDC,0,0,FRAMEBUFFER_W,FRAMEBUFFER_H,SRCCOPY);
+#endif
+      GdiFlush();
+    }
+}
+#endif
+
 //===========================================================================
 void _Video_RedrawScreen( VideoUpdateFuncPtr_t pfUpdate, bool bMixed )
 {
@@ -2774,6 +2977,9 @@ void _Video_RedrawScreen( VideoUpdateFuncPtr_t pfUpdate, bool bMixed )
 //===========================================================================
 void VideoReinitialize ()
 {
+#ifdef WS_VIDEO
+	return;
+#endif
 	V_CreateIdentityPalette();
 	V_CreateDIBSections();
 }
@@ -2801,6 +3007,16 @@ BYTE VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG uExecutedCycles)
 	{
 		case 0x00: g_uVideoMode &= ~VF_80STORE;   break;
 		case 0x01: g_uVideoMode |=  VF_80STORE;   break;
+#ifdef WS_VIDEO
+		case 0x0C: if (!IS_APPLE2) { g_uVideoMode &= ~VF_80COL; wsVideoText = wsUpdateVideoText; } break;
+		case 0x0D: if (!IS_APPLE2) { g_uVideoMode |=  VF_80COL; wsVideoText = wsUpdateVideoDblText; } break;
+		case 0x0E: if (!IS_APPLE2) { g_nAltCharSetOffset = 0;   wsVideoCharSet = 0; } break; // Alternate char set off
+		case 0x0F: if (!IS_APPLE2) { g_nAltCharSetOffset = 256; wsVideoCharSet = 1; } break; // Alternate char set on
+        case 0x50: g_uVideoMode &= ~VF_TEXT; break;
+		case 0x51: g_uVideoMode |=  VF_TEXT; break;
+        case 0x52: g_uVideoMode &= ~VF_MIXED; wsVideoMixed = 0; break;
+        case 0x53: g_uVideoMode |=  VF_MIXED; wsVideoMixed = 1; break;
+#else
 		case 0x0C: if (!IS_APPLE2) g_uVideoMode &= ~VF_80COL;   break;
 		case 0x0D: if (!IS_APPLE2) g_uVideoMode |=  VF_80COL;   break;
 		case 0x0E: if (!IS_APPLE2) g_nAltCharSetOffset = 0;           break;	// Alternate char set off
@@ -2809,6 +3025,7 @@ BYTE VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG uExecutedCycles)
 		case 0x51: g_uVideoMode |=  VF_TEXT;    break;
 		case 0x52: g_uVideoMode &= ~VF_MIXED;   break;
 		case 0x53: g_uVideoMode |=  VF_MIXED;   break;
+#endif
 		case 0x54: g_uVideoMode &= ~VF_PAGE2;   break;
 		case 0x55: g_uVideoMode |=  VF_PAGE2;   break;
 		case 0x56: g_uVideoMode &= ~VF_HIRES;   break;
@@ -2816,6 +3033,42 @@ BYTE VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG uExecutedCycles)
 		case 0x5E: if (!IS_APPLE2) g_uVideoMode |=  VF_DHIRES;  break;
 		case 0x5F: if (!IS_APPLE2) g_uVideoMode &= ~VF_DHIRES;  break;
 	}
+
+#ifdef WS_VIDEO
+	wsTextPage = 1;
+	wsHiresPage = 1;
+	if (g_uVideoMode & VF_PAGE2) {
+		if (0 == (g_uVideoMode & VF_80STORE)) {
+			wsTextPage = 2;
+			wsHiresPage = 2;
+		}
+	}
+
+	if (g_uVideoMode & VF_TEXT) {
+		if (g_uVideoMode & VF_80COL)
+			wsVideoUpdate = wsUpdateVideoDblText;
+		else
+			wsVideoUpdate = wsUpdateVideoText;
+	}
+	else if (g_uVideoMode & VF_HIRES) {
+		if (g_uVideoMode & VF_DHIRES)
+			if (g_uVideoMode & VF_80COL)
+				wsVideoUpdate = wsUpdateVideoDblHires;
+			else
+				wsVideoUpdate = wsUpdateVideoHires0;
+	    else
+	      wsVideoUpdate = wsUpdateVideoHires;
+	}
+	else {
+	    if (g_uVideoMode & VF_DHIRES)
+			if (g_uVideoMode & VF_80COL)
+				wsVideoUpdate = wsUpdateVideoDblLores;
+			else
+				wsVideoUpdate = wsUpdateVideo7MLores;
+	    else
+	      wsVideoUpdate = wsUpdateVideoLores;
+	}
+#endif
 
 	if (SW_80STORE)
 		g_uVideoMode &= ~VF_PAGE2;
@@ -2835,7 +3088,9 @@ BYTE VideoSetMode (WORD, WORD address, BYTE write, BYTE, ULONG uExecutedCycles)
 
 		if (!g_bVideoUpdatedThisFrame)
 		{
+#ifndef WS_VIDEO
 			VideoRefreshScreen();
+#endif
 			g_bVideoUpdatedThisFrame = true;
 		}
 	}
@@ -3160,6 +3415,9 @@ bool Util_TestScreenShotFileName( const char *pFileName )
 //===========================================================================
 void Video_TakeScreenShot( int iScreenShotType )
 {
+#ifdef WS_VIDEO
+	return;
+#endif
 	char sScreenShotFileName[ MAX_PATH ];
 
 	g_iScreenshotType = iScreenShotType;
@@ -3379,8 +3637,15 @@ void Config_Load_Video()
 	REGLOAD(TEXT(REGVALUE_VIDEO_HALF_SCAN_LINES),&g_uHalfScanLines);
 	REGLOAD(TEXT(REGVALUE_VIDEO_MONO_COLOR     ),&monochrome);
 
+#ifdef WS_VIDEO
+	if (g_eVideoType >= NUM_VIDEO_MODES)
+		g_eVideoType = VT_COLOR_MONITOR;
+
+	wsVideoStyle(g_eVideoType, g_uHalfScanLines);
+#else
 	if (g_eVideoType >= NUM_VIDEO_MODES)
 		g_eVideoType = VT_COLOR_STANDARD; // Old default: VT_COLOR_TVEMU
+#endif
 }
 
 void Config_Save_Video()

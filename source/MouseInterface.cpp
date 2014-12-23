@@ -634,6 +634,7 @@ namespace DIMouse
 
 #else // NO_DIRECT_X
 
+#ifndef WS_VIDEO
 		HRESULT hr;
 		BOOL    bExclusive;
 		BOOL    bForeground;
@@ -737,8 +738,12 @@ namespace DIMouse
 		if (g_TimerIDEvent == 0)
 			return E_FAIL;
 
-		return S_OK;
 
+#else
+		return 1;	// WS_VIDEO
+#endif
+
+		return S_OK;
 #endif // NO_DIRECT_X
 	}
 

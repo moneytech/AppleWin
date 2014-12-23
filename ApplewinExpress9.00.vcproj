@@ -839,6 +839,14 @@
 				Name="Video"
 				>
 				<File
+					RelativePath=".\source\cs.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\cs.h"
+					>
+				</File>
+				<File
 					RelativePath=".\source\Frame.cpp"
 					>
 				</File>
@@ -852,6 +860,14 @@
 				</File>
 				<File
 					RelativePath=".\source\Video.h"
+					>
+				</File>
+				<File
+					RelativePath=".\source\wsvideo.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\source\wsvideo.h"
 					>
 				</File>
 			</Filter>

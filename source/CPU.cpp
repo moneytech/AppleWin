@@ -96,6 +96,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Speech.h"
 #endif
 #include "Video.h"
+#ifdef WS_VIDEO
+#include "wsVideo.h"
+#endif
 
 #include "z80emu.h"
 #include "Z80VICE\z80.h"

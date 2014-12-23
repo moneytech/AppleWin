@@ -10,6 +10,11 @@
 	#define  VIEWPORTX   5
 	#define  VIEWPORTY   5
 
+#ifdef WS_VIDEO
+	// TC-NTSC: NB. Need to match defines in wsVideo.cpp!
+	#define  FRAMEBUFFER_W  600
+	#define  FRAMEBUFFER_H  420
+#else
 	// 560 = Double Hi-Res
 	// 384 = Doule Scan Line
 	#define  FRAMEBUFFER_W  560
@@ -19,6 +24,7 @@
 	extern	LPDIRECTDRAW        g_pDD;
 	extern	LPDIRECTDRAWSURFACE g_pDDPrimarySurface;
 	extern	IDirectDrawPalette* g_pDDPal;
+#endif
 
 // Win32
 	extern HWND       g_hFrameWindow;

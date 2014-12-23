@@ -50,6 +50,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Speech.h"
 #endif
 #include "Video.h"
+#ifdef WS_VIDEO
+#include "wsVideo.h"
+#endif
 
 #include "..\resource\resource.h"
 #include "Configuration\PropertySheet.h"
@@ -140,11 +143,12 @@ static int     viewportx       = VIEWPORTX;	// Default to Normal (non-FullScreen
 static int     viewporty       = VIEWPORTY;	// Default to Normal (non-FullScreen) mode
 int g_nCharsetType = 0;
 
+#ifndef WS_VIDEO
 // Direct Draw -- For Full Screen
 		LPDIRECTDRAW        g_pDD = (LPDIRECTDRAW)0;
 		LPDIRECTDRAWSURFACE g_pDDPrimarySurface    = (LPDIRECTDRAWSURFACE)0;
 		IDirectDrawPalette* g_pDDPal = (IDirectDrawPalette*)0;
-
+#endif
 
 static bool g_bShowingCursor = true;
 static bool g_bLastCursorInAppleViewport = false;
@@ -562,9 +566,14 @@ static void DrawFrameWindow ()
 		VideoDisplayLogo();
 	else if (g_nAppMode == MODE_DEBUG)
 		DebugDisplay(1);
+#ifdef WS_VIDEO
+	else
+		wsVideoRefresh();
+#else
 	else
 		// Win7: In fullscreen mode with 1 redraw, the the screen doesn't get redraw.
 		VideoRedrawScreen(g_bIsFullScreen ? 2 : 1);	// TC: 22/06/2014: Why 2 redraws in full-screen mode (32-bit only)? (8-bit doesn't need this nor does Win8, just Win7 or older OS's)
+#endif
 
 	// DD Full-Screen Palette: BUGFIX: needs to come _after_ all drawing...
 	if (g_bPaintingWindow)
@@ -1139,6 +1148,7 @@ LRESULT CALLBACK FrameWndProc (
 // ^#F9 Toggle 50% Scan Lines
 // @F9 -Can't use Alt-F9 as Alt is Open-Apple = Joystick Button #1
 
+#ifndef WS_VIDEO
 			if ( g_bCtrlKey && !g_bShiftKey ) //CTRL+F9
 			{
 				g_nCharsetType++; // Cycle through available charsets (Ctrl + F9)
@@ -1148,9 +1158,13 @@ LRESULT CALLBACK FrameWndProc (
 				}
 			}
 			else	// Cycle through available video modes
+#endif
 			if ( g_bCtrlKey && g_bShiftKey ) // ALT+F9
 			{
 				g_uHalfScanLines = !g_uHalfScanLines;
+#ifdef WS_VIDEO
+				wsVideoStyle(g_eVideoType, g_uHalfScanLines);
+#endif
 			}
 			else
 			if ( !g_bShiftKey )	// Drop Down Combo Box is in correct order
@@ -1169,16 +1183,21 @@ LRESULT CALLBACK FrameWndProc (
 			// TODO: Clean up code:FrameRefreshStatus(DRAW_TITLE) DrawStatusArea((HDC)0,DRAW_TITLE)
 			DrawStatusArea( (HDC)0, DRAW_TITLE );
 
+#ifdef WS_VIDEO
+			wsVideoStyle(g_eVideoType, g_uHalfScanLines);
+#else
 			VideoReinitialize();
 			if ((g_nAppMode != MODE_LOGO) || ((g_nAppMode == MODE_DEBUG) && (g_bDebuggerViewingAppleOutput)))
 			{
 				VideoRedrawScreen();
 				g_bDebuggerViewingAppleOutput = true;
 			}
+#endif
 
 			Config_Save_Video();
 		}
-
+#ifndef WS_VIDEO
+		// TC-NTSC: Why is F11/F12 excluded?
 		else if ((wparam == VK_F11) && (GetKeyState(VK_CONTROL) >= 0))	// Save state (F11)
 		{
 			SoundCore_SetFade(FADE_OUT);
@@ -1197,6 +1216,7 @@ LRESULT CALLBACK FrameWndProc (
 			}
 			SoundCore_SetFade(FADE_IN);
 		}
+#endif
 		else if (wparam == VK_CAPITAL)
 		{
 			KeybToggleCapsLock();
@@ -1221,8 +1241,10 @@ LRESULT CALLBACK FrameWndProc (
 					break;
 			}
 			DrawStatusArea((HDC)0,DRAW_TITLE);
+#ifndef WS_VIDEO
 			if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
 				VideoRedrawScreen();
+#endif
 		}
 		else if ((wparam == VK_SCROLL) && sg_PropertySheet.GetScrollLockToggle())
 		{
@@ -1244,6 +1266,7 @@ LRESULT CALLBACK FrameWndProc (
 			DebuggerProcessKey(wparam); // Debugger already active, re-direct key to debugger
 		}
 
+#ifndef WS_VIDEO
 		if (wparam == VK_F10)
 		{
 			if ((g_Apple2Type == A2TYPE_PRAVETS8A) && (GetKeyState(VK_CONTROL) >= 0))
@@ -1256,6 +1279,7 @@ LRESULT CALLBACK FrameWndProc (
 				return 0;	// TC: Why return early?
 			}
 		}
+#endif
 		break;
 
 	case WM_KEYUP:
@@ -1803,7 +1827,9 @@ static void ProcessButtonClick(int button, bool bFromButtonUI /*=false*/)
 			}
 		}
       DrawStatusArea((HDC)0,DRAW_TITLE);
+#ifndef WS_VIDEO
       VideoRedrawScreen();
+#endif
       break;
 
     case BTN_DRIVE1:
@@ -1818,8 +1844,13 @@ static void ProcessButtonClick(int button, bool bFromButtonUI /*=false*/)
       break;
 
     case BTN_FULLSCR:
+#ifdef WS_VIDEO
+		// TC-NTSC: Original code uses BTN_FULLSCR to toggle 1x / 2x sizes, but Full-Screen not supported
+		ScreenWindowResize(true);
+#else
 		KeybUpdateCtrlShiftStatus();
 		ScreenWindowResize(g_bCtrlKey);
+#endif
       break;
 
     case BTN_DEBUG:
@@ -2053,6 +2084,7 @@ void SetFullScreenMode ()
 
 #else // NO_DIRECT_X
 
+#ifndef WS_VIDEO
 	g_bIsFullScreen = true;
 	buttonover = -1;
 	buttonx    = FSBUTTONX;
@@ -2080,6 +2112,7 @@ void SetFullScreenMode ()
 	//	if( !g_bIsFullScreen )
 
 	InvalidateRect(g_hFrameWindow,NULL,1);
+#endif // WS_VIDEO
 
 #endif // NO_DIRECT_X
 }
@@ -2088,6 +2121,7 @@ void SetFullScreenMode ()
 void SetNormalMode ()
 {
 	g_bIsFullScreen = false;
+#ifndef WS_VIDEO
 	buttonover = -1;
 	buttonx    = BUTTONX;
 	buttony    = BUTTONY;
@@ -2120,6 +2154,7 @@ void SetNormalMode ()
 
 	g_pDD->Release();
 	g_pDD = (LPDIRECTDRAW)0;
+#endif // WS_VIDEO
 }
 
 //===========================================================================
@@ -2361,6 +2396,7 @@ HDC FrameGetVideoDC (LPBYTE *pAddr_, LONG *pPitch_)
 	// ASSERT( pPitch_ );
 	if (g_bIsFullScreen && g_bAppActive && !g_bPaintingWindow)
 	{
+#ifndef WS_VIDEO
 		RECT rect = {	FSVIEWPORTX,
 						FSVIEWPORTY,
 						FSVIEWPORTX+g_nViewportCX,
@@ -2381,6 +2417,7 @@ HDC FrameGetVideoDC (LPBYTE *pAddr_, LONG *pPitch_)
 		}
 		*pAddr_  = (LPBYTE)surfacedesc.lpSurface + (g_nViewportCY-1) * surfacedesc.lPitch;
 		*pPitch_ = -surfacedesc.lPitch;
+#endif
 		return (HDC)0;
 	}
 	else
@@ -2430,6 +2467,7 @@ void FrameReleaseDC () {
 //===========================================================================
 void FrameReleaseVideoDC ()
 {
+#ifndef WS_VIDEO
 	if (g_bIsFullScreen && g_bAppActive && !g_bPaintingWindow)
 	{
 		// THIS IS CORRECT ACCORDING TO THE DIRECTDRAW DOCS
@@ -2444,6 +2482,7 @@ void FrameReleaseVideoDC ()
 		// BUT THIS SEEMS TO BE WORKING
 		g_pDDPrimarySurface->Unlock(NULL);
 	}
+#endif
 }
 
 //===========================================================================

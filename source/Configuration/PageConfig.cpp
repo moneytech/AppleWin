@@ -28,6 +28,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "..\Registry.h"
 #include "..\SerialComms.h"
 #include "..\Video.h"
+#ifdef WS_VIDEO
+#include "..\wsVideo.h"
+#endif
 #include "..\resource\resource.h"
 #include "PageConfig.h"
 #include "PropertySheetHelper.h"
@@ -234,12 +237,19 @@ void CPageConfig::DlgOK(HWND hWnd)
 	if (g_eVideoType != newvidtype)
 	{
 		g_eVideoType = newvidtype;
+
+#ifndef WS_VIDEO
 		VideoReinitialize();
 		if ((g_nAppMode != MODE_LOGO) && (g_nAppMode != MODE_DEBUG))
 		{
 			VideoRedrawScreen();
 		}
+#endif
 	}
+
+#ifdef WS_VIDEO
+	wsVideoStyle(g_eVideoType, g_uHalfScanLines);
+#endif
 
 	REGSAVE(TEXT(REGVALUE_CONFIRM_REBOOT), g_bConfirmReboot);
 

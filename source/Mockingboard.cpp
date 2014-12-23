@@ -1107,6 +1107,7 @@ static bool MB_DSInit()
 	if(!g_bDSAvailable)
 		return false;
 
+#ifndef WS_VIDEO
 	HRESULT hr = DSGetSoundBuffer(&MockingboardVoice, DSBCAPS_CTRLVOLUME, g_dwDSBufferSize, SAMPLE_RATE, 2);
 	LogFileOutput("MB_DSInit: DSGetSoundBuffer(), hr=0x%08X\n", hr);
 	if(FAILED(hr))
@@ -1261,6 +1262,9 @@ static bool MB_DSInit()
 	LogFileOutput("MB_DSInit: SetThreadPriority(), bRes=%d\n", bRes2 ? 1 : 0);
 
 	return true;
+#else
+	return false; // WS_VIDEO
+#endif
 
 #endif // NO_DIRECT_X
 }
