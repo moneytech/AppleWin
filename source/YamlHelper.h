@@ -48,7 +48,7 @@ private:
 	void GetNextEvent(bool bInMap = false);
 	int ParseMap(MapYaml& mapYaml);
 	std::string GetMapValue(MapYaml& mapYaml, const std::string key, bool& bFound);
-	void LoadMemory(MapYaml& mapYaml, const LPBYTE pMemBase, const size_t kAddrSpaceSize);
+	UINT LoadMemory(MapYaml& mapYaml, const LPBYTE pMemBase, const size_t kAddrSpaceSize);
 	bool GetSubMap(MapYaml** mapYaml, const std::string key);
 	void GetMapRemainder(std::string& mapName, MapYaml& mapYaml);
 
@@ -97,7 +97,10 @@ public:
 	bool LoadBool(const std::string key);
 	std::string LoadString_NoThrow(const std::string& key, bool& bFound);
 	std::string LoadString(const std::string& key);
+	float LoadFloat(const std::string key);
+	double LoadDouble(const std::string key);
 	void LoadMemory(const LPBYTE pMemBase, const size_t size);
+	void LoadMemory(std::vector<BYTE>& memory, const size_t size);
 
 	bool GetSubMap(const std::string key)
 	{
@@ -209,10 +212,14 @@ public:
 	void SaveHexUint8(const char* key, UINT value);
 	void SaveHexUint12(const char* key, UINT value);
 	void SaveHexUint16(const char* key, UINT value);
+	void SaveHexUint24(const char* key, UINT value);
 	void SaveHexUint32(const char* key, UINT value);
 	void SaveHexUint64(const char* key, UINT64 value);
 	void SaveBool(const char* key, bool value);
-	void SaveString(const char* key,  const char* value);
+	void SaveString(const char* key, const char* value);
+	void SaveString(const char* key, const std::string & value);
+	void SaveFloat(const char* key, float value);
+	void SaveDouble(const char* key, double value);
 	void SaveMemory(const LPBYTE pMemBase, const UINT uMemSize);
 
 	class Label

@@ -39,23 +39,24 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 
-#include "AppleWin.h"
+#include "Applewin.h"
 #include "CPU.h"
 #include "Memory.h"
 #include "YamlHelper.h"
 
-#include "Configuration\PropertySheet.h"
+#include "Configuration/PropertySheet.h"
 
 #define BUTTONTIME	5000	// This is the latch (debounce) time in usecs for the joystick buttons
 
-enum {DEVICE_NONE=0, DEVICE_JOYSTICK, DEVICE_KEYBOARD, DEVICE_MOUSE};
+enum {DEVICE_NONE=0, DEVICE_JOYSTICK, DEVICE_KEYBOARD, DEVICE_MOUSE, DEVICE_JOYSTICK_THUMBSTICK2};
 
 // Indexed by joytype[n]
-static const DWORD joyinfo[5] =	{	DEVICE_NONE,
+static const DWORD joyinfo[6] =	{	DEVICE_NONE,
 									DEVICE_JOYSTICK,
 									DEVICE_KEYBOARD,	// Cursors (prev: Numpad-Standard)
 									DEVICE_KEYBOARD,	// Numpad (prev: Numpad-Centering)
-									DEVICE_MOUSE };
+									DEVICE_MOUSE,
+									DEVICE_JOYSTICK_THUMBSTICK2 };
 
 // Key pad [1..9]; Key pad 0,Key pad '.'; Left ALT,Right ALT
 enum JOYKEY {	JK_DOWNLEFT=0,
@@ -110,6 +111,15 @@ static UINT g_bJoyportEnabled = 0;	// Set to use Joyport to drive the 3 button i
 static UINT g_uJoyportActiveStick = 0;
 static UINT g_uJoyportReadMode = JOYPORT_LEFTRIGHT;
 
+static bool g_bHookAltKeys = true;
+
+//===========================================================================
+
+void JoySetHookAltKeys(bool hook)
+{
+	g_bHookAltKeys = hook;
+}
+
 //===========================================================================
 void CheckJoystick0()
 {
@@ -149,7 +159,24 @@ void CheckJoystick1()
   {
     lastcheck = currtime;
     JOYINFO info;
-    if (joyGetPos(JOYSTICKID2,&info) == JOYERR_NOERROR)
+    MMRESULT result = 0;
+    if (joyinfo[joytype[1]] == DEVICE_JOYSTICK_THUMBSTICK2)
+    {
+      // Use results of joystick 1 thumbstick 2 and button 2 for joystick 1 and button 1
+      JOYINFOEX infoEx;
+      infoEx.dwSize = sizeof(infoEx);
+      infoEx.dwFlags = JOY_RETURNBUTTONS | JOY_RETURNZ | JOY_RETURNR;
+      result = joyGetPosEx(JOYSTICKID1, &infoEx);
+      if (result == JOYERR_NOERROR)
+      {
+        info.wButtons = (infoEx.dwButtons & JOY_BUTTON2) ? JOY_BUTTON1 : 0;
+        info.wXpos = infoEx.dwZpos;
+        info.wYpos = infoEx.dwRpos;
+      }
+    }
+    else
+      result = joyGetPos(JOYSTICKID2, &info);
+    if (result == JOYERR_NOERROR)
 	{
       if ((info.wButtons & JOY_BUTTON1) && !joybutton[2])
 	  {
@@ -245,13 +272,51 @@ void JoyInitialize()
       joytype[1] = J1C_DISABLED;
 	}
   }
+  else if (joyinfo[joytype[1]] == DEVICE_JOYSTICK_THUMBSTICK2)
+  {
+    JOYCAPS caps;
+    if (joyGetDevCaps(JOYSTICKID1, &caps, sizeof(JOYCAPS)) == JOYERR_NOERROR)
+    {
+      joyshrx[1] = 0;
+      joyshry[1] = 0;
+      joysubx[1] = (int)caps.wZmin;
+      joysuby[1] = (int)caps.wRmin;
+      UINT xrange = caps.wZmax - caps.wZmin;
+      UINT yrange = caps.wRmax - caps.wRmin;
+      while (xrange > 256)
+      {
+        xrange >>= 1;
+        ++joyshrx[1];
+      }
+      while (yrange > 256)
+      {
+        yrange >>= 1;
+        ++joyshry[1];
+      }
+    }
+    else
+    {
+      joytype[1] = J1C_DISABLED;
+    }
+  }
+}
+
+//===========================================================================
+
+static UINT g_buttonVirtKey[2] = { VK_MENU, VK_MENU | KF_EXTENDED };	// VK_MENU == ALT Key
+
+void JoySetButtonVirtualKey(UINT button, UINT virtKey)
+{
+	_ASSERT(button < 2);
+	if (button >= 2) return;
+	g_buttonVirtKey[button] = virtKey;
 }
 
 //===========================================================================
 
 #define SUPPORT_CURSOR_KEYS
 
-BOOL JoyProcessKey(int virtkey, BOOL extended, BOOL down, BOOL autorep)
+BOOL JoyProcessKey(int virtkey, bool extended, bool down, bool autorep)
 {
 	static struct
 	{
@@ -261,23 +326,34 @@ BOOL JoyProcessKey(int virtkey, BOOL extended, BOOL down, BOOL autorep)
 		UINT32 Down:1;
 	} CursorKeys = {0};
 
+	const UINT virtKeyWithExtended = ((UINT)virtkey) | (extended ? KF_EXTENDED : 0);
+
 	if ( (joyinfo[joytype[0]] != DEVICE_KEYBOARD) &&
 		 (joyinfo[joytype[1]] != DEVICE_KEYBOARD) &&
-		 (virtkey != VK_MENU)								// VK_MENU == ALT Key
-	   )
+		 (virtKeyWithExtended != g_buttonVirtKey[0]) &&
+		 (virtKeyWithExtended != g_buttonVirtKey[1]) )
 	{
 		return 0;
 	}
+
+	if (!g_bHookAltKeys && virtkey == VK_MENU)				// GH#583
+		return 0;
 
 	//
 
 	BOOL keychange = 0;
 	bool bIsCursorKey = false;
+	const bool swapButtons0and1 = sg_PropertySheet.GetButtonsSwapState();
 
-	if (virtkey == VK_MENU)	// VK_MENU == ALT Key (Button #0 or #1)
+	if (virtKeyWithExtended == g_buttonVirtKey[!swapButtons0and1 ? 0 : 1])
 	{
 		keychange = 1;
-		keydown[JK_OPENAPPLE+(extended != 0)] = down;
+		keydown[JK_OPENAPPLE] = down;
+	}
+	else if (virtKeyWithExtended == g_buttonVirtKey[!swapButtons0and1 ? 1 : 0])
+	{
+		keychange = 1;
+		keydown[JK_CLOSEDAPPLE] = down;
 	}
 	else if (!extended)
 	{
@@ -436,7 +512,7 @@ static void DoAutofire(UINT uButton, BOOL& pressed)
 	lastPressed[uButton] = nowPressed;
 }
 
-BYTE __stdcall JoyportReadButton(WORD address, ULONG nCyclesLeft)
+BYTE __stdcall JoyportReadButton(WORD address, ULONG nExecutedCycles)
 {
 	BOOL pressed = 0;
 
@@ -484,23 +560,23 @@ BYTE __stdcall JoyportReadButton(WORD address, ULONG nCyclesLeft)
 
 	pressed = pressed ? 0 : 1;	// Invert as Joyport signals are active low
 
-	return MemReadFloatingBus(pressed, nCyclesLeft);
+	return MemReadFloatingBus(pressed, nExecutedCycles);
 }
 
-BYTE __stdcall JoyReadButton(WORD pc, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
+BYTE __stdcall JoyReadButton(WORD pc, WORD address, BYTE, BYTE, ULONG nExecutedCycles)
 {
 	address &= 0xFF;
 
 	if(joyinfo[joytype[0]] == DEVICE_JOYSTICK)
 		CheckJoystick0();
-	if(joyinfo[joytype[1]] == DEVICE_JOYSTICK)
+	if((joyinfo[joytype[1]] == DEVICE_JOYSTICK) || (joyinfo[joytype[1]] == DEVICE_JOYSTICK_THUMBSTICK2))
 		CheckJoystick1();
 
 	if (g_bJoyportEnabled)
 	{
 		// Some extra logic to stop the Joyport forcing a self-test at CTRL+RESET
 		if ((address != 0x62) || (address == 0x62 && pc != 0xC242 && pc != 0xC2BE))	// Original //e ($C242), Enhanced //e ($C2BE) 
-			return JoyportReadButton(address, nCyclesLeft);
+			return JoyportReadButton(address, nExecutedCycles);
 	}
 
 	BOOL pressed = 0;
@@ -538,7 +614,7 @@ BYTE __stdcall JoyReadButton(WORD pc, WORD address, BYTE, BYTE, ULONG nCyclesLef
 			break;
 	}
 
-	return MemReadFloatingBus(pressed, nCyclesLeft);
+	return MemReadFloatingBus(pressed, nExecutedCycles);
 }
 
 //===========================================================================
@@ -560,11 +636,11 @@ BYTE __stdcall JoyReadButton(WORD pc, WORD address, BYTE, BYTE, ULONG nCyclesLef
 
 static const double PDL_CNTR_INTERVAL = 2816.0 / 255.0;	// 11.04 (From KEGS)
 
-BYTE __stdcall JoyReadPosition(WORD programcounter, WORD address, BYTE, BYTE, ULONG nCyclesLeft)
+BYTE __stdcall JoyReadPosition(WORD programcounter, WORD address, BYTE, BYTE, ULONG nExecutedCycles)
 {
 	int nJoyNum = (address & 2) ? 1 : 0;	// $C064..$C067
 
-	CpuCalcCycles(nCyclesLeft);
+	CpuCalcCycles(nExecutedCycles);
 
 	ULONG nPdlPos = (address & 1) ? ypos[nJoyNum] : xpos[nJoyNum];
 
@@ -574,7 +650,7 @@ BYTE __stdcall JoyReadPosition(WORD programcounter, WORD address, BYTE, BYTE, UL
 
 	BOOL nPdlCntrActive = g_nCumulativeCycles <= (g_nJoyCntrResetCycle + (unsigned __int64) ((double)nPdlPos * PDL_CNTR_INTERVAL));
 
-	return MemReadFloatingBus(nPdlCntrActive, nCyclesLeft);
+	return MemReadFloatingBus(nPdlCntrActive, nExecutedCycles);
 }
 
 //===========================================================================
@@ -586,17 +662,15 @@ void JoyReset()
 }
 
 //===========================================================================
-BYTE __stdcall JoyResetPosition(WORD, WORD, BYTE, BYTE, ULONG nCyclesLeft)
+void JoyResetPosition(ULONG nExecutedCycles)
 {
-	CpuCalcCycles(nCyclesLeft);
+	CpuCalcCycles(nExecutedCycles);
 	g_nJoyCntrResetCycle = g_nCumulativeCycles;
 
 	if(joyinfo[joytype[0]] == DEVICE_JOYSTICK)
 		CheckJoystick0();
-	if(joyinfo[joytype[1]] == DEVICE_JOYSTICK)
+	if((joyinfo[joytype[1]] == DEVICE_JOYSTICK) || (joyinfo[joytype[1]] == DEVICE_JOYSTICK_THUMBSTICK2))
 		CheckJoystick1();
-
-	return MemReadFloatingBus(nCyclesLeft);
 }
 
 //===========================================================================
@@ -629,14 +703,26 @@ BOOL JoySetEmulationType(HWND window, DWORD newtype, int nJoystickNumber, const 
   if(joytype[nJoystickNumber] == newtype)
 	  return 1;	// Already set to this type. Return OK.
 
-  if (joyinfo[newtype] == DEVICE_JOYSTICK)
+  if (joyinfo[newtype] == DEVICE_JOYSTICK || joyinfo[newtype] == DEVICE_JOYSTICK_THUMBSTICK2)
   {
     JOYCAPS caps;
-	unsigned int nJoyID = nJoystickNumber == JN_JOYSTICK0 ? JOYSTICKID1 : JOYSTICKID2;
+	unsigned int nJoy2ID = joyinfo[newtype] == DEVICE_JOYSTICK_THUMBSTICK2 ? JOYSTICKID1 : JOYSTICKID2;
+	unsigned int nJoyID = nJoystickNumber == JN_JOYSTICK0 ? JOYSTICKID1 : nJoy2ID;
     if (joyGetDevCaps(nJoyID, &caps, sizeof(JOYCAPS)) != JOYERR_NOERROR)
-	{
+    {
       MessageBox(window,
                  TEXT("The emulator is unable to read your PC joystick.  ")
+                 TEXT("Ensure that your game port is configured properly, ")
+                 TEXT("that the joystick is firmly plugged in, and that ")
+                 TEXT("you have a joystick driver installed."),
+                 TEXT("Configuration"),
+                 MB_ICONEXCLAMATION | MB_SETFOREGROUND);
+      return 0;
+    }
+    if ((joyinfo[newtype] == DEVICE_JOYSTICK_THUMBSTICK2) && (caps.wNumAxes < 4))
+    {
+      MessageBox(window,
+                 TEXT("The emulator is unable to read thumbstick 2.  ")
                  TEXT("Ensure that your game port is configured properly, ")
                  TEXT("that the joystick is firmly plugged in, and that ")
                  TEXT("you have a joystick driver installed."),
@@ -760,6 +846,19 @@ void JoySetJoyType(UINT num, DWORD type)
 	if (num > JN_JOYSTICK1)
 		return;
 
+	if (num == JN_JOYSTICK0)	// GH#434
+	{
+		_ASSERT(type < J0C_MAX);
+		if (type >= J0C_MAX)
+			return;
+	}
+	else
+	{
+		_ASSERT(type < J1C_MAX);
+		if (type >= J1C_MAX)
+			return;
+	}
+
 	joytype[num] = type;
 
 	// Refresh centre positions whenever 'joytype' changes
@@ -848,13 +947,6 @@ void JoyportControl(const UINT uControl)
 }
 
 //===========================================================================
-
-void JoySetSnapshot_v1(const unsigned __int64 JoyCntrResetCycle)
-{
-	g_nJoyCntrResetCycle = JoyCntrResetCycle;
-}
-
-//
 
 #define SS_YAML_KEY_COUNTERRESETCYCLE "Counter Reset Cycle"
 #define SS_YAML_KEY_JOY0TRIMX "Joystick0 TrimX"

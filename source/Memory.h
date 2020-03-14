@@ -10,9 +10,12 @@
 #define  MF_HIRES      0x00000040
 #define  MF_PAGE2      0x00000080
 #define  MF_SLOTC3ROM  0x00000100
-#define  MF_SLOTCXROM  0x00000200
+#define  MF_INTCXROM   0x00000200
 #define  MF_WRITERAM   0x00000400   // Language Card RAM is Write Enabled
+#define  MF_IOUDIS     0x00000800	// Disable IOU access for addresses $C058 to $C05F; enable access to DHIRES switch (0=on) (Enhanced //e only)
 #define  MF_IMAGEMASK  0x000003F7
+#define  MF_LANGCARD_MASK	(MF_WRITERAM|MF_HIGHRAM|MF_BANK2)
+
 
 enum
 {
@@ -39,21 +42,13 @@ enum MemoryInitPattern_e
 	, NUM_MIP
 };
 
-enum MemoryType_e
-{
-	MEM_TYPE_NATIVE   = 0,
-	MEM_TYPE_RAMWORKS = 1,
-	MEM_TYPE_SATURN   = 2,
-	NUM_MEM_TYPE      = 3
-};
-extern MemoryType_e	g_eMemType;
+typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nExecutedCycles);
 
 extern iofunction IORead[256];
 extern iofunction IOWrite[256];
 extern LPBYTE     memwrite[0x100];
 extern LPBYTE     mem;
 extern LPBYTE     memdirty;
-extern DWORD      memmode;
 
 #ifdef RAMWORKS
 const UINT kMaxExMemoryBanks = 127;	// 127 * aux mem(64K) + main mem(64K) = 8MB
@@ -61,38 +56,50 @@ extern UINT       g_uMaxExPages;	// user requested ram pages (from cmd line)
 extern UINT       g_uActiveBank;
 #endif
 
-#ifdef SATURN
-extern UINT g_uSaturnTotalBanks;
-extern UINT g_uSaturnActiveBank;		// Saturn 128K Language Card Bank 0 .. 7
-#endif // SATURN
-
 void	RegisterIoHandler(UINT uSlot, iofunction IOReadC0, iofunction IOWriteC0, iofunction IOReadCx, iofunction IOWriteCx, LPVOID lpSlotParameter, BYTE* pExpansionRom);
 
 void    MemDestroy ();
-bool	MemCheckSLOTCXROM();
+bool	MemCheckSLOTC3ROM();
+bool	MemCheckINTCXROM();
 LPBYTE  MemGetAuxPtr(const WORD);
 LPBYTE  MemGetMainPtr(const WORD);
 LPBYTE  MemGetBankPtr(const UINT nBank);
 LPBYTE  MemGetCxRomPeripheral();
+DWORD   GetMemMode(void);
+void    SetMemMode(DWORD memmode);
+bool	MemOptimizeForModeChanging(WORD programcounter, WORD address);
 bool    MemIsAddrCodeMemory(const USHORT addr);
 void    MemInitialize ();
 void    MemInitializeROM(void);
 void    MemInitializeCustomF8ROM(void);
 void    MemInitializeIO(void);
+void    MemInitializeCardExpansionRomFromSnapshot(void);
 BYTE    MemReadFloatingBus(const ULONG uExecutedCycles);
 BYTE    MemReadFloatingBus(const BYTE highbit, const ULONG uExecutedCycles);
 void    MemReset ();
 void    MemResetPaging ();
 void    MemUpdatePaging(BOOL initialize);
 LPVOID	MemGetSlotParameters (UINT uSlot);
-void    MemSetSnapshot_v1(const DWORD MemMode, const BOOL LastWriteRam, const BYTE* const pMemMain, const BYTE* const pMemAux);
+bool    MemGetAnnunciator(UINT annunciator);
 std::string MemGetSnapshotUnitAuxSlotName(void);
 void    MemSaveSnapshot(class YamlSaveHelper& yamlSaveHelper);
-bool    MemLoadSnapshot(class YamlLoadHelper& yamlLoadHelper);
+bool    MemLoadSnapshot(class YamlLoadHelper& yamlLoadHelper, UINT unitVersion);
 void    MemSaveSnapshotAux(class YamlSaveHelper& yamlSaveHelper);
-bool    MemLoadSnapshotAux(class YamlLoadHelper& yamlLoadHelper, UINT version);
+bool    MemLoadSnapshotAux(class YamlLoadHelper& yamlLoadHelper, UINT unitVersion);
 
 BYTE __stdcall IO_Null(WORD programcounter, WORD address, BYTE write, BYTE value, ULONG nCycles);
 
-BYTE __stdcall MemCheckPaging (WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-BYTE __stdcall MemSetPaging(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+BYTE __stdcall MemSetPaging(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+
+enum SS_CARDTYPE;
+void	SetExpansionMemType(const SS_CARDTYPE type);
+SS_CARDTYPE GetCurrentExpansionMemType(void);
+void	CreateLanguageCard(void);
+
+void	SetRamWorksMemorySize(UINT pages);
+UINT	GetRamWorksActiveBank(void);
+void	SetSaturnMemorySize(UINT banks);
+void	SetMemMainLanguageCard(LPBYTE ptr, bool bMemMain=false);
+class LanguageCardUnit* GetLanguageCard(void);
+
+LPBYTE GetCxRomPeripheral(void);

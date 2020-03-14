@@ -1,18 +1,10 @@
 #pragma once
 
-const double _M14 = (157500000.0 / 11.0); // 14.3181818... * 10^6
-const double CLK_6502 = ((_M14 * 65.0) / 912.0); // 65 cycles per 912 14M clocks
+const double _14M_NTSC = (157500000.0 / 11.0);	// 14.3181818... * 10^6
+const double _14M_PAL = 14.25045e6;				// UTAIIe:3-17
+const double CLK_6502_NTSC = (_14M_NTSC * 65.0) / (65.0*14.0+2.0); // 65 cycles per 912 14M clocks
+const double CLK_6502_PAL  = (_14M_PAL  * 65.0) / (65.0*14.0+2.0);
 //const double CLK_6502 = 23 * 44100;			// 1014300
-
-// The effective Z-80 clock rate is 2.041MHz
-// See: http://www.apple2info.net/hardware/softcard/SC-SWHW_a2in.pdf
-const double CLK_Z80 = (CLK_6502 * 2);
-
-// TODO: Clean up from Common.h, Video.cpp, and NTSC.h !!!
-const UINT uCyclesPerLine			= 65;	// 25 cycles of HBL & 40 cycles of HBL'
-const UINT uVisibleLinesPerFrame	= 64*3;	// 192
-const UINT uLinesPerFrame			= 262;	// 64 in each third of the screen & 70 in VBL
-const DWORD dwClksPerFrame			= uCyclesPerLine * uLinesPerFrame;	// 17030
 
 #define NUM_SLOTS 8
 
@@ -20,7 +12,6 @@ const DWORD dwClksPerFrame			= uCyclesPerLine * uLinesPerFrame;	// 17030
 #define  MIN(a,b)          (((a) < (b)) ? (a) : (b))
 
 #define  RAMWORKS			// 8MB RamWorks III support
-//#define  SATURN				// SATURN 128K
 
 // Use a base freq so that DirectX (or sound h/w) doesn't have to up/down-sample
 // Assume base freqs are 44.1KHz & 48KHz
@@ -75,21 +66,26 @@ enum AppMode_e
 #define  REGVALUE_CPU_TYPE           "CPU Type"
 #define  REGVALUE_OLD_APPLE2_TYPE    "Computer Emulation"	// Deprecated
 #define  REGVALUE_CONFIRM_REBOOT     "Confirm Reboot" // Added at 1.24.1 PageConfig
+#define  REGVALUE_FS_SHOW_SUBUNIT_STATUS "Full-screen show subunit status"
+#define  REGVALUE_SOUND_EMULATION    "Sound Emulation"
 #define  REGVALUE_SPKR_VOLUME        "Speaker Volume"
 #define  REGVALUE_MB_VOLUME          "Mockingboard Volume"
 #define  REGVALUE_SAVESTATE_FILENAME "Save State Filename"
 #define  REGVALUE_SAVE_STATE_ON_EXIT "Save State On Exit"
 #define  REGVALUE_HDD_ENABLED        "Harddisk Enable"
-#define  REGVALUE_JOYSTICK0_EMU_TYPE	"Joystick0 Emu Type"	// Added at 1.24.0 (previously was "Joystick 0 Emulation")
-#define  REGVALUE_JOYSTICK1_EMU_TYPE	"Joystick1 Emu Type"	// Added at 1.24.0 (previously was "Joystick 1 Emulation")
-#define  REGVALUE_OLD_JOYSTICK0_EMU_TYPE	"Joystick 0 Emulation"	// Deprecated from 1.24.0
-#define  REGVALUE_OLD_JOYSTICK1_EMU_TYPE	"Joystick 1 Emulation"	// Deprecated from 1.24.0
+#define  REGVALUE_JOYSTICK0_EMU_TYPE		"Joystick0 Emu Type v3"	// GH#434: Added at 1.26.3.0 (previously was "Joystick0 Emu Type")
+#define  REGVALUE_JOYSTICK1_EMU_TYPE		"Joystick1 Emu Type v3"	// GH#434: Added at 1.26.3.0 (previously was "Joystick1 Emu Type")
+#define  REGVALUE_OLD_JOYSTICK0_EMU_TYPE2	"Joystick0 Emu Type"	// GH#434: Deprecated from 1.26.3.0 (previously was "Joystick 0 Emulation")
+#define  REGVALUE_OLD_JOYSTICK1_EMU_TYPE2	"Joystick1 Emu Type"	// GH#434: Deprecated from 1.26.3.0 (previously was "Joystick 1 Emulation")
+#define  REGVALUE_OLD_JOYSTICK0_EMU_TYPE1	"Joystick 0 Emulation"	// Deprecated from 1.24.0
+#define  REGVALUE_OLD_JOYSTICK1_EMU_TYPE1	"Joystick 1 Emulation"	// Deprecated from 1.24.0
 #define  REGVALUE_PDL_XTRIM          "PDL X-Trim"
 #define  REGVALUE_PDL_YTRIM          "PDL Y-Trim"
 #define  REGVALUE_SCROLLLOCK_TOGGLE  "ScrollLock Toggle"
 #define  REGVALUE_CURSOR_CONTROL		"Joystick Cursor Control"
 #define  REGVALUE_CENTERING_CONTROL		"Joystick Centering Control"
 #define  REGVALUE_AUTOFIRE           "Autofire"
+#define  REGVALUE_SWAP_BUTTONS_0_AND_1 "Swap buttons 0 and 1"
 #define  REGVALUE_MOUSE_CROSSHAIR    "Mouse crosshair"
 #define  REGVALUE_MOUSE_RESTRICT_TO_WINDOW "Mouse restrict to window"
 #define  REGVALUE_THE_FREEZES_F8_ROM "The Freeze's F8 Rom"
@@ -102,13 +98,18 @@ enum AppMode_e
 #define  REGVALUE_PRINTER_APPEND     "Append to printer file"
 #define  REGVALUE_PRINTER_IDLE_LIMIT "Printer idle limit"
 #define  REGVALUE_VIDEO_MODE         "Video Emulation"
-#define  REGVALUE_VIDEO_HALF_SCAN_LINES "Half Scan Lines"
+#define  REGVALUE_VIDEO_STYLE         "Video Style"			// GH#616: Added at 1.28.2
+#define  REGVALUE_VIDEO_HALF_SCAN_LINES "Half Scan Lines"	// GH#616: Deprecated from 1.28.2
 #define  REGVALUE_VIDEO_MONO_COLOR      "Monochrome Color"
+#define  REGVALUE_VIDEO_REFRESH_RATE    "Video Refresh Rate"
 #define  REGVALUE_SERIAL_PORT_NAME   "Serial Port Name"
 #define  REGVALUE_ENHANCE_DISK_SPEED "Enhance Disk Speed"
 #define  REGVALUE_CUSTOM_SPEED       "Custom Speed"
 #define  REGVALUE_EMULATION_SPEED    "Emulation Speed"
 #define  REGVALUE_WINDOW_SCALE       "Window Scale"
+#define  REGVALUE_UTHERNET_ACTIVE       "Uthernet Active"
+#define  REGVALUE_UTHERNET_INTERFACE    "Uthernet Interface"
+#define  REGVALUE_SLOT0					"Slot 0"
 #define  REGVALUE_SLOT1					"Slot 1"
 #define  REGVALUE_SLOT2					"Slot 2"
 #define  REGVALUE_SLOT3					"Slot 3"
@@ -141,9 +142,6 @@ enum AppMode_e
 #define WM_USER_FULLSCREEN	WM_USER+9
 #define VK_SNAPSHOT_TEXT	WM_USER+10 // PrintScreen+Ctrl
 
-// TODO-TC: Refactor codebase by renaming /nCyclesLeft/ to /uExecutedCycles/
-typedef BYTE (__stdcall *iofunction)(WORD nPC, WORD nAddr, BYTE nWriteFlag, BYTE nWriteValue, ULONG nCyclesLeft);
-
 enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC, IS_MOUSE};
 
 //
@@ -162,8 +160,8 @@ enum eIRQSRC {IS_6522=0, IS_SPEECH, IS_SSC, IS_MOUSE};
 #define APPLECLONE_MASK	0x100
 
 #define IS_APPLE2		((g_Apple2Type & (APPLE2E_MASK|APPLE2C_MASK)) == 0)
-#define IS_APPLE2E		(g_Apple2Type & APPLE2E_MASK)
-#define IS_APPLE2C		(g_Apple2Type & APPLE2C_MASK)
+#define IS_APPLE2E()	(g_Apple2Type & APPLE2E_MASK)
+#define IS_APPLE2C()	(g_Apple2Type & APPLE2C_MASK)
 #define IS_CLONE()		(g_Apple2Type & APPLECLONE_MASK)
 
 // NB. These get persisted to the Registry & save-state file, so don't change the values for these enums!
@@ -175,22 +173,32 @@ enum eApple2Type {
 					A2TYPE_UNDEFINED,
 					A2TYPE_APPLE2C=APPLE2C_MASK,
 					A2TYPE_APPLE2D=APPLE2D_MASK,
-					//
-					// Clones start here:
+
+					// ][ clones start here:
 					A2TYPE_CLONE=APPLECLONE_MASK,
-					A2TYPE_PRAVETS=APPLECLONE_MASK,
-					A2TYPE_PRAVETS82=A2TYPE_PRAVETS,				// Apple ][ clone
 					A2TYPE_PRAVETS8M,								// Apple ][ clone
-					A2TYPE_BAD_PRAVETS82=A2TYPE_PRAVETS|APPLE2E_MASK,	// Wrongly tagged as Apple //e clone (< AppleWin 1.26)
-					A2TYPE_BAD_PRAVETS8M,								// Wrongly tagged as Apple //e clone (< AppleWin 1.26)
+					A2TYPE_PRAVETS82,								// Apple ][ clone
+					// (Gap for more Apple ][ clones)
+					A2TYPE_CLONE_A2_MAX,
+
+					// //e clones start here:
+					A2TYPE_CLONE_A2E=A2TYPE_CLONE|APPLE2E_MASK,
+					A2TYPE_BAD_PRAVETS82=A2TYPE_CLONE|APPLE2E_MASK,	// Wrongly tagged as Apple //e clone (< AppleWin 1.26)
+					A2TYPE_BAD_PRAVETS8M,							// Wrongly tagged as Apple //e clone (< AppleWin 1.26)
 					A2TYPE_PRAVETS8A,								// Apple //e clone
 					A2TYPE_TK30002E,								// Apple //e enhanced clone
+					// (Gap for more Apple //e clones)
 					A2TYPE_MAX
 				};
 
-inline bool IsApple2(eApple2Type type)
+inline bool IsApple2Original(eApple2Type type)		// Apple ][
 {
-	return (type & (APPLE2E_MASK|APPLE2C_MASK)) == 0;
+	return type == A2TYPE_APPLE2;
+}
+
+inline bool IsApple2Plus(eApple2Type type)			// Apple ][,][+
+{
+	return ((type & (APPLE2E_MASK|APPLE2C_MASK)) == 0) && !(type & APPLECLONE_MASK);
 }
 
 inline bool IsClone(eApple2Type type)
@@ -198,12 +206,24 @@ inline bool IsClone(eApple2Type type)
 	return (type & APPLECLONE_MASK) != 0;
 }
 
-extern eApple2Type g_Apple2Type;
-inline bool IsOriginal2E(void)
+inline bool IsApple2PlusOrClone(eApple2Type type)	// Apple ][,][+ or clone ][,][+
 {
-	return (g_Apple2Type == A2TYPE_APPLE2E);
+	return (type & (APPLE2E_MASK|APPLE2C_MASK)) == 0;
+}
+
+extern eApple2Type g_Apple2Type;
+inline bool IsEnhancedIIE(void)
+{
+	return ( (g_Apple2Type == A2TYPE_APPLE2EENHANCED) || (g_Apple2Type == A2TYPE_TK30002E) );
+}
+
+inline bool IsEnhancedIIEorIIC(void)
+{
+	return ( (g_Apple2Type == A2TYPE_APPLE2EENHANCED) || (g_Apple2Type == A2TYPE_TK30002E) || IS_APPLE2C() );
 }
 
 enum eBUTTON {BUTTON0=0, BUTTON1};
 
 enum eBUTTONSTATE {BUTTON_UP=0, BUTTON_DOWN};
+
+enum {IDEVENT_TIMER_MOUSE=1, IDEVENT_TIMER_100MSEC};

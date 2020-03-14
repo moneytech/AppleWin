@@ -28,20 +28,21 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 
-#include "AppleWin.h"
+#include "Applewin.h"
+#include "Frame.h"	// g_hFrameWindow
 #include "Memory.h"
 #include "ParallelPrinter.h"
 #include "Registry.h"
 #include "YamlHelper.h"
 
-#include "..\resource\resource.h"
+#include "../resource/resource.h"
 
 static DWORD inactivity = 0;
 static unsigned int g_PrinterIdleLimit = 10;
 static FILE* file = NULL;
 DWORD const PRINTDRVR_SIZE = APPLE_SLOT_SIZE;
 #define DEFAULT_PRINT_FILENAME "Printer.txt"
-static char g_szPrintFilename[MAX_PATH] = {0};
+static std::string g_szPrintFilename;
 bool g_bDumpToPrinter = false;
 bool g_bConvertEncoding = true;
 bool g_bFilterUnprintable = true;
@@ -96,9 +97,9 @@ static BOOL CheckPrint()
         //_tcsncat(filepath, _T("Printer.txt"), MAX_PATH);
 		//file = fopen(filepath, "wb");
 		if (g_bPrinterAppend )
-			file = fopen(Printer_GetFilename(), "ab");
+			file = fopen(Printer_GetFilename().c_str(), "ab");
 		else
-			file = fopen(Printer_GetFilename(), "wb");
+			file = fopen(Printer_GetFilename().c_str(), "wb");
     }
     return (file != NULL);
 }
@@ -160,16 +161,16 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 {
 	         char Lat8A[]= "abwgdevzijklmnoprstufhc~{}yx`q|]";
              char Lat82[]= "abwgdevzijklmnoprstufhc^[]yx@q{}~`"; 
-			 char Kir82[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞß[]^@";
-	  char Kir8ACapital[]= "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÜÞßÝ";
-	char Kir8ALowerCase[]= "àáâãäåæçèéêëìíîïðñòóôõö÷øùúüþÿý";
+			 char Kir82[]= "Ã€ÃÃ‚ÃƒÃ„Ã…Ã†Ã‡ÃˆÃ‰ÃŠÃ‹ÃŒÃÃŽÃÃÃ‘Ã’Ã“Ã”Ã•Ã–Ã—Ã˜Ã™ÃšÃœÃžÃŸ[]^@";
+	  char Kir8ACapital[]= "Ã€ÃÃ‚ÃƒÃ„Ã…Ã†Ã‡ÃˆÃ‰ÃŠÃ‹ÃŒÃÃŽÃÃÃ‘Ã’Ã“Ã”Ã•Ã–Ã—Ã˜Ã™ÃšÃœÃžÃŸÃ";
+	char Kir8ALowerCase[]= "Ã Ã¡Ã¢Ã£Ã¤Ã¥Ã¦Ã§Ã¨Ã©ÃªÃ«Ã¬Ã­Ã®Ã¯Ã°Ã±Ã²Ã³Ã´ÃµÃ¶Ã·Ã¸Ã¹ÃºÃ¼Ã¾Ã¿Ã½";
 	bool Pres = false;
     if (!CheckPrint())
     {
         return 0;
     }
 	
-	char c = NULL;
+	char c = 0;
 	if ((g_Apple2Type == A2TYPE_PRAVETS8A) &&  g_bConvertEncoding)  //This is print conversion for Pravets 8A/C. Print conversion for Pravets82/M is still to be done.
 		{
 			if ((value > 90) && (value < 128)) //This range shall be set more precisely
@@ -227,20 +228,21 @@ static BYTE __stdcall PrintTransmit(WORD, WORD, BYTE, BYTE value, ULONG)
 
 //===========================================================================
 
-char* Printer_GetFilename()
+const std::string & Printer_GetFilename()
 {
 	return g_szPrintFilename;
 }
 
-void Printer_SetFilename(char* prtFilename)
+void Printer_SetFilename(const std::string & prtFilename)
 {
-	if(*prtFilename)
-		strcpy(g_szPrintFilename, (const char *) prtFilename);
+	if (!prtFilename.empty())
+	{
+		g_szPrintFilename = prtFilename;
+	}
 	else  //No registry entry is available
 	{
-		_tcsncpy(g_szPrintFilename, g_sProgramDir, MAX_PATH);
-        _tcsncat(g_szPrintFilename, _T(DEFAULT_PRINT_FILENAME), MAX_PATH);		
-		RegSaveString(TEXT("Configuration"),REGVALUE_PRINTER_FILENAME,1,g_szPrintFilename);
+		g_szPrintFilename = g_sProgramDir + DEFAULT_PRINT_FILENAME;
+		RegSaveString(REG_CONFIG, REGVALUE_PRINTER_FILENAME, 1, g_szPrintFilename);
 	}
 }
 
@@ -300,7 +302,7 @@ bool Printer_LoadSnapshot(class YamlLoadHelper& yamlLoadHelper, UINT slot, UINT 
 
 	inactivity					= yamlLoadHelper.LoadUint(SS_YAML_KEY_INACTIVITY);
 	g_PrinterIdleLimit			= yamlLoadHelper.LoadUint(SS_YAML_KEY_IDLELIMIT);
-	strncpy(g_szPrintFilename, yamlLoadHelper.LoadString(SS_YAML_KEY_FILENAME).c_str(), sizeof(g_szPrintFilename));
+	g_szPrintFilename = yamlLoadHelper.LoadString(SS_YAML_KEY_FILENAME);
 
 	if (yamlLoadHelper.LoadBool(SS_YAML_KEY_FILEOPEN))
 	{

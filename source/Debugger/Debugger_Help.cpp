@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "Debug.h"
 
-#include "..\AppleWin.h"
+#include "../Applewin.h"
 
 
 #define DEBUG_COLOR_CONSOLE 0
@@ -210,8 +210,9 @@ void Help_Categories()
 void Help_Examples()
 {
 	char sText[ CONSOLE_WIDTH ];
-	ConsolePrintFormat( sText, " %sExamples%s:"
+	ConsolePrintFormat( sText, " %sExamples%s:%s"
 		, CHC_USAGE
+		, CHC_ARG_SEP
 		, CHC_DEFAULT
 	);
 }
@@ -322,6 +323,17 @@ void _ColorizeHeader(
 	pDst += nLen;
 }
 
+
+void _ColorizeString(
+	char * & pDst,
+	const char *pSrc, const size_t nLen )
+{
+	strcpy( pDst, pSrc );
+	pDst += nLen;
+}
+
+
+// pOperator is one of CHC_*
 void _ColorizeOperator(
 	char * & pDst, const char * & pSrc,
 	char * pOperator )
@@ -340,6 +352,18 @@ void _ColorizeOperator(
 	pDst += nLen;
 
 	pSrc++;
+}
+
+
+
+
+bool isHexDigit( char c )
+{
+	if ((c >= '0') &&  (c <= '9')) return true;
+	if ((c >= 'A') &&  (c <= 'F')) return true;
+	if ((c >= 'a') &&  (c <= 'f')) return true;
+
+	return false;
 }
 
 
@@ -363,6 +387,9 @@ bool Colorize( char * pDst, const char * pSrc )
 	const char sTotal[] = "Total:";
 	const int  nTotal = sizeof( sTotal ) - 1;
 
+	const char sExamples[] = "Examples:";
+	const int  nExamples = sizeof( sExamples ) - 1;
+
 	int nLen = 0;
 	while (*pSrc)
 	{
@@ -384,6 +411,11 @@ bool Colorize( char * pDst, const char * pSrc )
 		if (strncmp( sTotal, pSrc, nNote) == 0)
 		{
 			_ColorizeHeader( pDst, pSrc, sTotal, nTotal );
+		}
+		else
+		if (strncmp( sExamples, pSrc, nExamples) == 0)
+		{
+			_ColorizeHeader( pDst, pSrc, sExamples, nExamples );
 		}
 		else
 		if (*pSrc == '[')
@@ -416,6 +448,25 @@ bool Colorize( char * pDst, const char * pSrc )
 			_ColorizeOperator( pDst, pSrc, CHC_ARG_SEP );
 		}
 		else
+		if ((*pSrc == '$') && isHexDigit(pSrc[1])) // Hex Number
+		{
+			_ColorizeOperator( pDst, pSrc, CHC_ARG_SEP );
+
+			const char *start = pSrc;
+			const char *end   = pSrc;
+
+			while( isHexDigit( *end ) )
+				end++;
+
+			size_t nDigits = end - start;
+
+			_ColorizeString( pDst, CHC_NUM_HEX, strlen( CHC_NUM_HEX ) );
+			_ColorizeString( pDst, start      , nDigits               );
+			_ColorizeString( pDst, CHC_DEFAULT, strlen( CHC_DEFAULT ) );
+
+			pSrc += nDigits;
+		}
+		else
 		{
 			*pDst = *pSrc;
 			pDst++;
@@ -426,6 +477,7 @@ bool Colorize( char * pDst, const char * pSrc )
 	return true;
 }
 
+// NOTE: This appends a new line
 inline bool ConsoleColorizePrint( char* colorizeBuf, size_t /*colorizeBufSz*/,
                                   const char* pText )
 {
@@ -847,7 +899,7 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsolePrintFormat( sText, "%s  G[G] C600 F000:FFFF", CHC_EXAMPLE );
 			break;
 		case CMD_JSR:
-			ConsoleColorizePrint( sText, " %sUsage%s: %s[symbol | address]" );
+			ConsoleColorizePrint( sText, " Usage: [symbol | address]" );
 			ConsoleBufferPush( "  Pushes PC on stack; calls the named subroutine." );
 			break;
 		case CMD_NOP:
@@ -1006,6 +1058,12 @@ Update_t CmdHelpSpecific (int nArgs)
 			break;
 		case CMD_BREAKPOINT_LIST:
 			break;
+		case CMD_BREAKPOINT_ADD_MEM:
+		case CMD_BREAKPOINT_ADD_MEMR:
+		case CMD_BREAKPOINT_ADD_MEMW:
+			ConsoleColorizePrint(sText, " Usage: <range>");
+			Help_Range();
+			break;
 	// Config - Load / Save
 		case CMD_CONFIG_LOAD:
 			ConsoleColorizePrint( sText, " Usage: [\"filename\"]" );
@@ -1033,9 +1091,11 @@ Update_t CmdHelpSpecific (int nArgs)
 		{
 			ConsoleColorizePrint( sText, " Note: All arguments effect the disassembly view" );
 
-			ConsoleColorizePrintFormat( sTemp, sText, " Usage: [%s%s | %s%s | %s%s | %s%s | %s%s]"
+			ConsoleColorizePrintFormat( sTemp, sText, " Usage: [%s%s | %s | %s%s | %s%s | %s%s | %s%s]"
 				, CHC_COMMAND
 				, g_aParameters[ PARAM_CONFIG_BRANCH ].m_sName
+				, CHC_COMMAND
+				, g_aParameters[ PARAM_CONFIG_CLICK ].m_sName
 				, CHC_COMMAND
 				, g_aParameters[ PARAM_CONFIG_COLON  ].m_sName
 				, CHC_COMMAND
@@ -1052,6 +1112,23 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsoleBufferPushFormat( sText, "  %d off, %d plain, %d fancy",
 				 DISASM_BRANCH_OFF, DISASM_BRANCH_PLAIN, DISASM_BRANCH_FANCY );
 			ConsolePrintFormat( sText, "  i.e. %s%s %s 1", CHC_EXAMPLE, pCommand->m_sName, g_aParameters[ iParam ].m_sName );
+
+			iParam = PARAM_CONFIG_CLICK;
+			ConsoleColorizePrintFormat( sTemp, sText, " Usage: %s [#]", g_aParameters[ iParam ].m_sName );
+			ConsoleBufferPush( "  Set required key combo. (Alt, Control, or Shift) when left clicking" );
+			ConsoleBufferPushFormat( sText, "    0  Left-Click (no Alt, Ctrl, Shift)" );
+			ConsoleBufferPushFormat( sText, "    1  Alt Left-click"                   );
+			ConsoleBufferPushFormat( sText, "    2  Ctrl Left-click"                  );
+			ConsoleBufferPushFormat( sText, "    3  Alt+Ctrl Left-click"              );
+			ConsoleBufferPushFormat( sText, "    4  Shift Left-click"                 );
+			ConsoleBufferPushFormat( sText, "    5  Shift+Alt Left-click"             );
+			ConsoleBufferPushFormat( sText, "    6  Shift+Ctrl Left-click"            );
+			ConsoleBufferPushFormat( sText, "    7  Shift+Ctrl+Alt Left-click"        );
+			Help_Examples();
+			ConsolePrintFormat( sText, "    %s%s %s 0  // Plain Left-click"           , CHC_EXAMPLE, pCommand->m_sName, g_aParameters[ iParam ].m_sName );
+			ConsolePrintFormat( sText, "    %s%s %s 1  // Require Alt Left-click"     , CHC_EXAMPLE, pCommand->m_sName, g_aParameters[ iParam ].m_sName );
+			ConsolePrintFormat( sText, "    %s%s %s 2  // Require Ctrl Left-click"    , CHC_EXAMPLE, pCommand->m_sName, g_aParameters[ iParam ].m_sName );
+			ConsolePrintFormat( sText, "    %s%s %s 3  // Require Alt+Ctrl Left-click", CHC_EXAMPLE, pCommand->m_sName, g_aParameters[ iParam ].m_sName );
 
 			iParam = PARAM_CONFIG_COLON;
 			ConsoleColorizePrintFormat( sTemp, sText, " Usage: %s [0|1]", g_aParameters[ iParam ].m_sName );
@@ -1247,12 +1324,15 @@ Update_t CmdHelpSpecific (int nArgs)
 	// Output
 		case CMD_OUTPUT_CALC:
 			ConsoleColorizePrint( sText, " Usage: <address | symbol | expression >" );
-			ConsoleBufferPush( "  Expression is one of: + - * / % ^ ~"  );
+			ConsoleBufferPush( "  Operator is one of: + - * / % ^ ~"    );
 			ConsoleBufferPush( " Output order is: Hex Bin Dec Char"     );
-			ConsoleBufferPush( "  Note: symbols take piority."          );
+			ConsoleBufferPush( "  Note: symbols take priority."         );
+			ConsoleBufferPush( "  Note: #A (if you don't want the accumulator value)" );
+			ConsoleBufferPush( "  Note: #F (if you don't want the flags value)"  );
 			Help_Examples();
-			ConsoleBufferPush( "Note: #A (if you don't want the accumulator value)" );
-			ConsoleBufferPush( "Note: #F (if you don't want the flags value)"  );
+			ConsolePrintFormat( sText, "%s   CALC 5 + #A", CHC_EXAMPLE );
+			ConsolePrintFormat( sText, "%s   CALC 80 * 2", CHC_EXAMPLE );
+			ConsoleColorizePrint( sText, " See also: " CHC_COMMAND "HELP OP"          );
 			break;
 		case CMD_OUTPUT_ECHO:
 			ConsoleColorizePrint( sText, " Usage: string"    );
@@ -1281,10 +1361,23 @@ Update_t CmdHelpSpecific (int nArgs)
 	// Symbols
 		case CMD_SYMBOLS_LOOKUP:
 			ConsoleColorizePrint( sText, " Usage: symbol [= <address>]" );
+			ConsolePrintFormat( sText, "       %s\"%ssymbol%s\" = %saddress"
+				, CHC_ARG_MAND
+				, CHC_SYMBOL
+				, CHC_ARG_MAND
+				, CHC_ADDRESS
+			);
+			ConsoleColorizePrint( sText, " Note: Valid characters are any characters above ASCII space ($20)." );
+			ConsolePrintFormat( sText, " You %sMUST%s double-quote names containing special characters to be recognized."
+				, CHC_WARNING
+				, CHC_DEFAULT
+			);
 			Help_Examples();
-			ConsolePrintFormat( sText, "%s   %s HOME"       , CHC_EXAMPLE, pCommand->m_sName );
-			ConsolePrintFormat( sText, "%s   %s LIFE = 2000", CHC_EXAMPLE, pCommand->m_sName );
-			ConsolePrintFormat( sText, "%s   %s LIFE"       , CHC_EXAMPLE, pCommand->m_sName );
+			ConsolePrintFormat( sText, "%s   %s HOME"          , CHC_EXAMPLE, pCommand->m_sName );
+			ConsolePrintFormat( sText, "%s   %s LIFE = 2000"   , CHC_EXAMPLE, pCommand->m_sName );
+			ConsolePrintFormat( sText, "%s   %s LIFE"          , CHC_EXAMPLE, pCommand->m_sName );
+			ConsolePrintFormat( sText, "%s   %s \"PR#\" = FE95", CHC_EXAMPLE, pCommand->m_sName );
+			ConsolePrintFormat( sText, "%s   %s \"PR#\""       , CHC_EXAMPLE, pCommand->m_sName );
 			break;
 		case CMD_SYMBOLS_ROM:
 		case CMD_SYMBOLS_APPLESOFT:
@@ -1313,7 +1406,27 @@ Update_t CmdHelpSpecific (int nArgs)
 			ConsoleColorizePrint( sText, " Usage: symbol" );
 			ConsoleBufferPush( "  Looks up symbol in all 3 symbol tables: main, user, source" );
 			break;
-	// View
+// Cycles
+		case CMD_CYCLES_INFO:
+			ConsoleColorizePrint(sText, " Usage: <abs|rel>");
+			ConsoleBufferPush("  Where:");
+			ConsoleBufferPush("    <abs|rel> changes cycle output to absolute/relative");
+			break;
+// Video-Scanner
+		case CMD_VIDEO_SCANNER_INFO:
+			ConsoleColorizePrint(sText, " Usage: <dec|hex|real|apple>");
+			ConsoleBufferPush("  Where:");
+			ConsoleBufferPush("    <dec|hex> changes output to dec/hex");
+			ConsoleBufferPush("    <real|apple> alters horz value to hbl-l,visible,hbl-r or hbl-r+l,visible");
+			{
+				char sText2[CONSOLE_WIDTH];
+				ConsolePrintFormat(sText2, "    %sYellow%s=invisible (hbl or vbl active) / %sGreen%s=visible"
+					,CHC_INFO   , CHC_DEFAULT	// yellow
+					,CHC_COMMAND, CHC_DEFAULT	// green
+				);
+			}
+			break;
+// View
 		case CMD_VIEW_TEXT4X:
 		case CMD_VIEW_TEXT41:
 		case CMD_VIEW_TEXT42:

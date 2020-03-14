@@ -1,7 +1,7 @@
 #pragma once
 
-#include "..\SaveState_Structs_v1.h"	// For SS_CARD_MOCKINGBOARD
-#include "..\Common.h"
+#include "../SaveState_Structs_v1.h"	// For SS_CARD_MOCKINGBOARD
+#include "../Common.h"
 
 #include "Debugger_Types.h"
 #include "Debugger_DisassemblerData.h"
@@ -29,12 +29,14 @@
 // Breakpoints
 	enum BreakpointHit_t
 	{
-		BP_HIT_NONE     = 0
-		,BP_HIT_INVALID = (1 << 0)
-		,BP_HIT_OPCODE  = (1 << 1)
-		,BP_HIT_REG     = (1 << 2)
-		,BP_HIT_MEM     = (1 << 3)
-		,BP_HIT_PC_READ_FLOATING_BUS_OR_IO_MEM = (1 << 4)
+		BP_HIT_NONE = 0
+		, BP_HIT_INVALID = (1 << 0)
+		, BP_HIT_OPCODE = (1 << 1)
+		, BP_HIT_REG = (1 << 2)
+		, BP_HIT_MEM = (1 << 3)
+		, BP_HIT_MEMR = (1 << 4)
+		, BP_HIT_MEMW = (1 << 5)
+		, BP_HIT_PC_READ_FLOATING_BUS_OR_IO_MEM = (1 << 6)
 	};
 
 	extern int          g_nBreakpoints;
@@ -66,7 +68,7 @@
 	};
 
 // Config - FileName
-	extern char      g_sFileNameConfig[];
+	extern std::string g_sFileNameConfig;
 
 // Cursor
 	extern WORD g_nDisasmTopAddress ;
@@ -83,6 +85,7 @@
 
 // Config - Disassembly
 	extern bool  g_bConfigDisasmAddressView  ;
+	extern int   g_bConfigDisasmClick        ; // GH#462
 	extern bool  g_bConfigDisasmAddressColon ;
 	extern bool  g_bConfigDisasmOpcodesView  ;
 	extern bool  g_bConfigDisasmOpcodeSpaces ;
@@ -106,7 +109,7 @@
 	extern std::vector<int> g_vMemorySearchResults;
 
 // Source Level Debugging
-	extern TCHAR  g_aSourceFileName[ MAX_PATH ];
+	extern std::string g_aSourceFileName;
 	extern MemoryTextFile_t g_AssemblerSourceBuffer;
 
 	extern int    g_iSourceDisplayStart   ;
@@ -165,11 +168,12 @@
 
 	void	DebugBegin ();
 	void	DebugExitDebugger ();
-	void	DebugContinueStepping ();
+	void	DebugContinueStepping(const bool bCallerWillUpdateDisplay = false);
 	void    DebugStopStepping(void);
 	void	DebugDestroy ();
 	void	DebugDisplay ( BOOL bInitDisasm = FALSE );
 	void	DebugInitialize ();
+	void	DebugReset(void);
 
 	void	DebuggerInputConsoleChar( TCHAR ch );
 	void	DebuggerProcessKey( int keycode );

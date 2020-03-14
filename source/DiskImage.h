@@ -51,11 +51,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		eIMAGE_ERROR_GZ,
 		eIMAGE_ERROR_ZIP,
 		eIMAGE_ERROR_REJECTED_MULTI_ZIP,
-		eIMAGE_ERROR_UNSUPPORTED_MULTI_ZIP,
 		eIMAGE_ERROR_UNABLE_TO_OPEN,
 		eIMAGE_ERROR_UNABLE_TO_OPEN_GZ,
 		eIMAGE_ERROR_UNABLE_TO_OPEN_ZIP,
 		eIMAGE_ERROR_FAILED_TO_GET_PATHNAME,
+		eIMAGE_ERROR_ZEROLENGTH_WRITEPROTECTED,
+		eIMAGE_ERROR_FAILED_TO_INIT_ZEROLENGTH,
 	};
 
 	const int MAX_DISK_IMAGE_NAME = 15;
@@ -63,21 +64,26 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 struct ImageInfo;
 
-ImageError_e ImageOpen(LPCTSTR pszImageFilename, ImageInfo** ppImageInfo, bool* pWriteProtected, const bool bCreateIfNecessary, std::string& strFilenameInZip, const bool bExpectFloppy=true);
-void ImageClose(ImageInfo* const pImageInfo, const bool bOpenError=false);
+ImageError_e ImageOpen(const std::string & pszImageFilename, ImageInfo** ppImageInfo, bool* pWriteProtected, const bool bCreateIfNecessary, std::string& strFilenameInZip, const bool bExpectFloppy=true);
+void ImageClose(ImageInfo* const pImageInfo);
 BOOL ImageBoot(ImageInfo* const pImageInfo);
 void ImageDestroy(void);
 void ImageInitialize(void);
 
-void ImageReadTrack(ImageInfo* const pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImageBuffer, int* pNibbles);
-void ImageWriteTrack(ImageInfo* const pImageInfo, int nTrack, int nQuarterTrack, LPBYTE pTrackImage, int nNibbles);
+void ImageReadTrack(ImageInfo* const pImageInfo, float phase, LPBYTE pTrackImageBuffer, int* pNibbles, UINT* pBitCount, bool enhanceDisk);
+void ImageWriteTrack(ImageInfo* const pImageInfo, float phase, LPBYTE pTrackImageBuffer, int nNibbles);
 bool ImageReadBlock(ImageInfo* const pImageInfo, UINT nBlock, LPBYTE pBlockBuffer);
 bool ImageWriteBlock(ImageInfo* const pImageInfo, UINT nBlock, LPBYTE pBlockBuffer);
 
-int ImageGetNumTracks(ImageInfo* const pImageInfo);
+UINT ImageGetNumTracks(ImageInfo* const pImageInfo);
 bool ImageIsWriteProtected(ImageInfo* const pImageInfo);
 bool ImageIsMultiFileZip(ImageInfo* const pImageInfo);
-const char* ImageGetPathname(ImageInfo* const pImageInfo);
+const std::string & ImageGetPathname(ImageInfo* const pImageInfo);
 UINT ImageGetImageSize(ImageInfo* const pImageInfo);
+bool ImageIsWOZ(ImageInfo* const pImageInfo);
+BYTE ImageGetOptimalBitTiming(ImageInfo* const pImageInfo);
+UINT ImagePhaseToTrack(ImageInfo* const pImageInfo, const float phase, const bool limit=true);
+UINT ImageGetMaxNibblesPerTrack(ImageInfo* const pImageInfo);
+bool ImageIsBootSectorFormatSector13(ImageInfo* const pImageInfo);
 
-void GetImageTitle(LPCTSTR pPathname, TCHAR* pImageName, TCHAR* pFullName);
+void GetImageTitle(LPCTSTR pPathname, std::string & pImageName, std::string & pFullName);

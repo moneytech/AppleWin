@@ -24,12 +24,12 @@
  *
  */
 
-#include "..\StdAfx.h"
+#include "../StdAfx.h"
 
-#include "..\AppleWin.h"
-#include "..\CPU.h"
-#include "..\Memory.h"
-#include "..\YamlHelper.h"
+#include "../Applewin.h"
+#include "../CPU.h"
+#include "../Memory.h"
+#include "../YamlHelper.h"
 
 
 #undef IN							// Defined in windef.h
@@ -39,15 +39,15 @@
 
 #include <stdlib.h>
 
-#include "..\CommonVICE\6510core.h"	// [AppleWin-TC]
-#include "..\CommonVICE\alarm.h"
+#include "../CommonVICE/6510core.h"	// [AppleWin-TC]
+#include "../CommonVICE/alarm.h"
 #include "daa.h"
 //#include "debug.h"				// [AppleWin-TC]
-#include "..\CommonVICE\interrupt.h"
+#include "../CommonVICE/interrupt.h"
 //#include "log.h"					// [AppleWin-TC]
 //#include "maincpu.h"				// [AppleWin-TC]
 //#include "monitor.h"				// [AppleWin-TC]
-#include "..\CommonVICE\types.h"
+#include "../CommonVICE/types.h"
 #include "z80.h"
 #include "z80mem.h"
 #include "z80regs.h"
@@ -55,7 +55,7 @@
 
 /*#define DEBUG_Z80*/
 
-static CLOCK maincpu_clk = 0;		// [AppleWin-TC]
+CLOCK maincpu_clk = 0;		// [AppleWin-TC]
 
 static BYTE reg_a = 0;
 static BYTE reg_b = 0;
@@ -5510,7 +5510,10 @@ static void opcode_fd(BYTE ip1, BYTE ip2, BYTE ip3, WORD ip12, WORD ip23)
 
 /* Z80 mainloop.  */
 
-static const double uZ80ClockMultiplier = CLK_Z80 / CLK_6502;
+// The effective Z-80 clock rate is 2.041MHz
+// See: http://www.apple2info.net/hardware/softcard/SC-SWHW_a2in.pdf
+static const double uZ80ClockMultiplier = 2;
+
 inline static ULONG ConvertZ80TStatesTo6502Cycles(UINT uTStates)
 {
 	return (uTStates < 0) ? 0 : (ULONG) ((double)uTStates / uZ80ClockMultiplier);

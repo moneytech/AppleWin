@@ -46,34 +46,11 @@ enum SS_UNIT_TYPE
 const UINT nMemMainSize = 64*1024;
 const UINT nMemAuxSize = 64*1024;
 
-const UINT kSLOT_LANG = 0;
-const UINT kSLOT_AUX = 8;
-
 struct SS_CARD_HDR
 {
 	SS_UNIT_HDR UnitHdr;
 	DWORD Type;			// SS_CARDTYPE
 	DWORD Slot;			// [1..7], 0=Language card, 8=Aux
-};
-
-enum SS_CARDTYPE
-{
-	CT_Empty = 0,
-	CT_Disk2,			// Apple Disk][
-	CT_SSC,				// Apple Super Serial Card
-	CT_MockingboardC,	// Soundcard
-	CT_GenericPrinter,
-	CT_GenericHDD,		// Hard disk
-	CT_GenericClock,
-	CT_MouseInterface,
-	CT_Z80,
-	CT_Phasor,			// Soundcard
-	CT_Echo,			// Soundcard
-	CT_SAM,				// Soundcard: Software Automated Mouth
-	CT_80Col,			// 80 column card (no memory)
-	CT_Extended80Col,	// Extended 80-col card (64K)
-	CT_RamWorksIII,		// RamWorksIII (up to 8MB)
-	CT_Uthernet,
 };
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -115,6 +92,8 @@ struct SY6522
 	IWORD TIMER1_LATCH;
 	IWORD TIMER2_COUNTER;
 	IWORD TIMER2_LATCH;
+	int timer1IrqDelay;
+	int timer2IrqDelay;
 	//
 	BYTE SERIAL_SHIFT;		// $0A
 	BYTE ACR;				// $0B - Auxiliary Control Register

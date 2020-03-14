@@ -22,12 +22,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
 #include "StdAfx.h"
-#include "..\Common.h"
+#include "../Common.h"
 
-#include "..\ParallelPrinter.h"
-#include "..\Registry.h"
-#include "..\SaveState.h"
-#include "..\resource\resource.h"
+#include "../ParallelPrinter.h"
+#include "../Registry.h"
+#include "../SaveState.h"
+#include "../resource/resource.h"
 #include "PageAdvanced.h"
 #include "PropertySheetHelper.h"
 
@@ -38,7 +38,7 @@ const TCHAR CPageAdvanced::m_CloneChoices[] =
 				TEXT("Pravets 82\0")	// Bulgarian
 				TEXT("Pravets 8M\0")	// Bulgarian
 				TEXT("Pravets 8A\0")	// Bulgarian
-				TEXT("TK3000 //e");		// Brazilian
+				TEXT("TK3000 //e\0");	// Brazilian
 
 BOOL CALLBACK CPageAdvanced::DlgProc(HWND hWnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
@@ -84,8 +84,8 @@ BOOL CPageAdvanced::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPAR
 		case IDC_SAVESTATE_FILENAME:
 			break;
 		case IDC_SAVESTATE_BROWSE:
-			if(m_PropertySheetHelper.SaveStateSelectImage(hWnd, TEXT("Select Save State file"), false))
-				SendDlgItemMessage(hWnd, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM)m_PropertySheetHelper.GetSSNewFilename());
+			if(m_PropertySheetHelper.SaveStateSelectImage(hWnd, TEXT("Select Save State file"), true))
+				SendDlgItemMessage(hWnd, IDC_SAVESTATE_FILENAME, WM_SETTEXT, 0, (LPARAM)m_PropertySheetHelper.GetSSNewFilename().c_str());
 			break;
 		case IDC_PRINTER_DUMP_FILENAME_BROWSE:
 			{				
@@ -125,7 +125,7 @@ BOOL CPageAdvanced::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPAR
 
 	case WM_INITDIALOG:
 		{
-			SendDlgItemMessage(hWnd,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename());
+			SendDlgItemMessage(hWnd,IDC_SAVESTATE_FILENAME,WM_SETTEXT,0,(LPARAM)Snapshot_GetFilename().c_str());
 
 			CheckDlgButton(hWnd, IDC_SAVESTATE_ON_EXIT, g_bSaveStateOnExit ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hWnd, IDC_DUMPTOPRINTER, g_bDumpToPrinter ? BST_CHECKED : BST_UNCHECKED);
@@ -134,7 +134,7 @@ BOOL CPageAdvanced::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPAR
 			CheckDlgButton(hWnd, IDC_PRINTER_APPEND, g_bPrinterAppend ? BST_CHECKED : BST_UNCHECKED);
 			SendDlgItemMessage(hWnd, IDC_SPIN_PRINTER_IDLE, UDM_SETRANGE, 0, MAKELONG(999,0));
 			SendDlgItemMessage(hWnd, IDC_SPIN_PRINTER_IDLE, UDM_SETPOS, 0, MAKELONG(Printer_GetIdleLimit (),0));
-			SendDlgItemMessage(hWnd, IDC_PRINTER_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM)Printer_GetFilename());
+			SendDlgItemMessage(hWnd, IDC_PRINTER_DUMP_FILENAME, WM_SETTEXT, 0, (LPARAM)Printer_GetFilename().c_str());
 
 			InitOptions(hWnd);
 
@@ -237,6 +237,15 @@ int CPageAdvanced::GetCloneMenuItem(void)
 	int nMenuItem = MENUITEM_CLONEMIN;
 	switch (type)
 	{
+		case A2TYPE_CLONE:	// Set as generic clone type from Config page
+			{
+				// Need to set a real clone type & CPU in case the user never touches the clone menu
+				nMenuItem = MENUITEM_CLONEMIN;
+				const eApple2Type NewCloneType = GetCloneType(MENUITEM_CLONEMIN);
+				m_PropertySheetHelper.GetConfigNew().m_Apple2Type = GetCloneType(NewCloneType);
+				m_PropertySheetHelper.GetConfigNew().m_CpuType = ProbeMainCpuDefault(NewCloneType);
+			}
+			break;
 		case A2TYPE_PRAVETS82:	nMenuItem = MENUITEM_PRAVETS82; break;
 		case A2TYPE_PRAVETS8M:	nMenuItem = MENUITEM_PRAVETS8M; break;
 		case A2TYPE_PRAVETS8A:	nMenuItem = MENUITEM_PRAVETS8A; break;
@@ -250,8 +259,8 @@ int CPageAdvanced::GetCloneMenuItem(void)
 
 void CPageAdvanced::InitFreezeDlgButton(HWND hWnd)
 {
-	const bool bIsApple2 = IsApple2( m_PropertySheetHelper.GetConfigNew().m_Apple2Type );
-	EnableWindow(GetDlgItem(hWnd, IDC_THE_FREEZES_F8_ROM_FW), bIsApple2 ? TRUE : FALSE);
+	const bool bIsApple2Plus = IsApple2Plus( m_PropertySheetHelper.GetConfigNew().m_Apple2Type );
+	EnableWindow(GetDlgItem(hWnd, IDC_THE_FREEZES_F8_ROM_FW), bIsApple2Plus ? TRUE : FALSE);
 
 	const UINT CheckTheFreezesRom = m_PropertySheetHelper.GetConfigNew().m_bEnableTheFreezesF8Rom ? BST_CHECKED : BST_UNCHECKED;
 	CheckDlgButton(hWnd, IDC_THE_FREEZES_F8_ROM_FW, CheckTheFreezesRom);

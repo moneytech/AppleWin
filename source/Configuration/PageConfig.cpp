@@ -23,12 +23,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 
-#include "..\AppleWin.h"
-#include "..\Frame.h"
-#include "..\Registry.h"
-#include "..\SerialComms.h"
-#include "..\Video.h"
-#include "..\resource\resource.h"
+#include "../Applewin.h"
+#include "../Frame.h"
+#include "../Registry.h"
+#include "../SerialComms.h"
+#include "../Video.h"
+#include "../resource/resource.h"
 #include "PageConfig.h"
 #include "PropertySheetHelper.h"
 
@@ -118,10 +118,10 @@ BOOL CPageConfig::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM
 			break;
 
 		case IDC_CHECK_CONFIRM_REBOOT:
-			g_bConfirmReboot = IsDlgButtonChecked(hWnd, IDC_CHECK_CONFIRM_REBOOT) ? 1 : 0;
-			break;
-
 		case IDC_CHECK_HALF_SCAN_LINES:
+		case IDC_CHECK_VERTICAL_BLEND:
+		case IDC_CHECK_FS_SHOW_SUBUNIT_STATUS:
+		case IDC_CHECK_50HZ_VIDEO:
 			// Checked in DlgOK()
 			break;
 
@@ -141,6 +141,14 @@ BOOL CPageConfig::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM
 					// - Set correctly in PageAdvanced.cpp for IDC_CLONETYPE
 					m_PropertySheetHelper.GetConfigNew().m_CpuType = CPU_UNKNOWN;
 				}
+			}
+			break;
+
+		case IDC_VIDEOTYPE:
+			if(HIWORD(wparam) == CBN_SELCHANGE)
+			{
+				const VideoType_e newVideoType = (VideoType_e) SendDlgItemMessage(hWnd, IDC_VIDEOTYPE, CB_GETCURSEL, 0, 0);
+				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VERTICAL_BLEND), (newVideoType == VT_COLOR_MONITOR_RGB) ? TRUE : FALSE);
 			}
 			break;
 
@@ -180,6 +188,7 @@ BOOL CPageConfig::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM
 				case A2TYPE_PRAVETS8M:		nCurrentChoice = MENUITEM_CLONE; break;
 				case A2TYPE_PRAVETS8A:		nCurrentChoice = MENUITEM_CLONE; break;
 				case A2TYPE_TK30002E:		nCurrentChoice = MENUITEM_CLONE; break;
+				default: _ASSERT(0); break;
 				}
 
 				m_PropertySheetHelper.FillComboBox(hWnd, IDC_COMPUTER, m_ComputerChoices, nCurrentChoice);
@@ -187,11 +196,25 @@ BOOL CPageConfig::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM
 
 			CheckDlgButton(hWnd, IDC_CHECK_CONFIRM_REBOOT, g_bConfirmReboot ? BST_CHECKED : BST_UNCHECKED );
 
-			m_PropertySheetHelper.FillComboBox(hWnd,IDC_VIDEOTYPE,g_aVideoChoices,g_eVideoType);
-			CheckDlgButton(hWnd, IDC_CHECK_HALF_SCAN_LINES, g_uHalfScanLines ? BST_CHECKED : BST_UNCHECKED);
+			m_PropertySheetHelper.FillComboBox(hWnd,IDC_VIDEOTYPE, g_aVideoChoices, GetVideoType());
+			CheckDlgButton(hWnd, IDC_CHECK_HALF_SCAN_LINES, IsVideoStyle(VS_HALF_SCANLINES) ? BST_CHECKED : BST_UNCHECKED);
+			CheckDlgButton(hWnd, IDC_CHECK_FS_SHOW_SUBUNIT_STATUS, GetFullScreenShowSubunitStatus() ? BST_CHECKED : BST_UNCHECKED);
 
-			m_PropertySheetHelper.FillComboBox(hWnd,IDC_SERIALPORT, sg_SSC.GetSerialPortChoices(), sg_SSC.GetSerialPort());
-			EnableWindow(GetDlgItem(hWnd, IDC_SERIALPORT), !sg_SSC.IsActive() ? TRUE : FALSE);
+			CheckDlgButton(hWnd, IDC_CHECK_VERTICAL_BLEND, IsVideoStyle(VS_COLOR_VERTICAL_BLEND) ? BST_CHECKED : BST_UNCHECKED);
+			EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VERTICAL_BLEND), (GetVideoType() == VT_COLOR_MONITOR_RGB) ? TRUE : FALSE);
+
+			if (g_CardMgr.IsSSCInstalled())
+			{
+				CSuperSerialCard* pSSC = g_CardMgr.GetSSC();
+				m_PropertySheetHelper.FillComboBox(hWnd, IDC_SERIALPORT, pSSC->GetSerialPortChoices(), pSSC->GetSerialPort());
+				EnableWindow(GetDlgItem(hWnd, IDC_SERIALPORT), !pSSC->IsActive() ? TRUE : FALSE);
+			}
+			else
+			{
+				EnableWindow(GetDlgItem(hWnd, IDC_SERIALPORT), FALSE);
+			}
+
+			CheckDlgButton(hWnd, IDC_CHECK_50HZ_VIDEO, (GetVideoRefreshRate() == VR_50HZ) ? BST_CHECKED : BST_UNCHECKED);
 
 			SendDlgItemMessage(hWnd,IDC_SLIDER_CPU_SPEED,TBM_SETRANGE,1,MAKELONG(0,40));
 			SendDlgItemMessage(hWnd,IDC_SLIDER_CPU_SPEED,TBM_SETPAGESIZE,0,5);
@@ -202,8 +225,9 @@ BOOL CPageConfig::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM
 				BOOL bCustom = TRUE;
 				if (g_dwSpeed == SPEED_NORMAL)
 				{
-					bCustom = FALSE;
-					REGLOAD(TEXT(REGVALUE_CUSTOM_SPEED),(DWORD *)&bCustom);
+					DWORD dwCustomSpeed;
+					REGLOAD_DEFAULT(TEXT(REGVALUE_CUSTOM_SPEED), &dwCustomSpeed, 0);
+					bCustom = dwCustomSpeed ? TRUE : FALSE;
 				}
 				CheckRadioButton(hWnd, IDC_AUTHENTIC_SPEED, IDC_CUSTOM_SPEED, bCustom ? IDC_CUSTOM_SPEED : IDC_AUTHENTIC_SPEED);
 				SetFocus(GetDlgItem(hWnd, bCustom ? IDC_SLIDER_CPU_SPEED : IDC_AUTHENTIC_SPEED));
@@ -245,22 +269,46 @@ void CPageConfig::DlgOK(HWND hWnd)
 {
 	bool bVideoReinit = false;
 
-	const DWORD newvidtype = (DWORD) SendDlgItemMessage(hWnd, IDC_VIDEOTYPE, CB_GETCURSEL, 0, 0);
-	if (g_eVideoType != newvidtype)
+	const VideoType_e newVideoType = (VideoType_e) SendDlgItemMessage(hWnd, IDC_VIDEOTYPE, CB_GETCURSEL, 0, 0);
+	if (GetVideoType() != newVideoType)
 	{
-		g_eVideoType = newvidtype;
+		SetVideoType(newVideoType);
 		bVideoReinit = true;
 	}
 
-	const DWORD newHalfScanLines = IsDlgButtonChecked(hWnd, IDC_CHECK_HALF_SCAN_LINES) ? 1 : 0;
-	if (g_uHalfScanLines != newHalfScanLines)
+	const bool newHalfScanLines = IsDlgButtonChecked(hWnd, IDC_CHECK_HALF_SCAN_LINES) != 0;
+	const bool currentHalfScanLines = IsVideoStyle(VS_HALF_SCANLINES);
+	if (currentHalfScanLines != newHalfScanLines)
 	{
-		g_uHalfScanLines = newHalfScanLines;
+		if (newHalfScanLines)
+			SetVideoStyle( (VideoStyle_e) (GetVideoStyle() | VS_HALF_SCANLINES) );
+		else
+			SetVideoStyle( (VideoStyle_e) (GetVideoStyle() & ~VS_HALF_SCANLINES) );
 		bVideoReinit = true;
+	}
+
+	const bool newVerticalBlend = IsDlgButtonChecked(hWnd, IDC_CHECK_VERTICAL_BLEND) != 0;
+	const bool currentVerticalBlend = IsVideoStyle(VS_COLOR_VERTICAL_BLEND);
+	if (currentVerticalBlend != newVerticalBlend)
+	{
+		if (newVerticalBlend)
+			SetVideoStyle( (VideoStyle_e) (GetVideoStyle() | VS_COLOR_VERTICAL_BLEND) );
+		else
+			SetVideoStyle( (VideoStyle_e) (GetVideoStyle() & ~VS_COLOR_VERTICAL_BLEND) );
+		bVideoReinit = true;
+	}
+
+	const bool isNewVideoRate50Hz = IsDlgButtonChecked(hWnd, IDC_CHECK_50HZ_VIDEO) != 0;
+	const bool isCurrentVideoRate50Hz = GetVideoRefreshRate() == VR_50HZ;
+	if (isCurrentVideoRate50Hz != isNewVideoRate50Hz)
+	{
+		m_PropertySheetHelper.GetConfigNew().m_videoRefreshRate = isNewVideoRate50Hz ? VR_50HZ : VR_60HZ;
 	}
 
 	if (bVideoReinit)
 	{
+		Config_Save_Video();
+
 		FrameRefreshStatus(DRAW_TITLE, false);
 
 		VideoReinitialize();
@@ -270,15 +318,42 @@ void CPageConfig::DlgOK(HWND hWnd)
 		}
 	}
 
-	REGSAVE(TEXT(REGVALUE_CONFIRM_REBOOT), g_bConfirmReboot);
+	//
 
-	const DWORD newserialport = (DWORD) SendDlgItemMessage(hWnd, IDC_SERIALPORT, CB_GETCURSEL, 0, 0);
-	sg_SSC.CommSetSerialPort(hWnd, newserialport);
-	RegSaveString(	TEXT(REG_CONFIG),
-					TEXT(REGVALUE_SERIAL_PORT_NAME),
-					TRUE,
-					sg_SSC.GetSerialPortName() );
-	
+	const bool bNewFSSubunitStatus = IsDlgButtonChecked(hWnd, IDC_CHECK_FS_SHOW_SUBUNIT_STATUS) ? true : false;
+	if (GetFullScreenShowSubunitStatus() != bNewFSSubunitStatus)
+	{
+		REGSAVE(TEXT(REGVALUE_FS_SHOW_SUBUNIT_STATUS), bNewFSSubunitStatus ? 1 : 0);
+		SetFullScreenShowSubunitStatus(bNewFSSubunitStatus);
+
+		if (IsFullScreen())
+			FrameRefreshStatus(DRAW_BACKGROUND | DRAW_LEDS | DRAW_DISK_STATUS);
+	}
+
+	//
+
+	const BOOL bNewConfirmReboot = IsDlgButtonChecked(hWnd, IDC_CHECK_CONFIRM_REBOOT) ? 1 : 0;
+	if (g_bConfirmReboot != bNewConfirmReboot)
+	{
+		REGSAVE(TEXT(REGVALUE_CONFIRM_REBOOT), bNewConfirmReboot);
+		g_bConfirmReboot = bNewConfirmReboot;
+	}
+
+	//
+
+	if (g_CardMgr.IsSSCInstalled())
+	{
+		CSuperSerialCard* pSSC = g_CardMgr.GetSSC();
+		const DWORD uNewSerialPort = (DWORD) SendDlgItemMessage(hWnd, IDC_SERIALPORT, CB_GETCURSEL, 0, 0);
+		pSSC->CommSetSerialPort(hWnd, uNewSerialPort);
+		RegSaveString(	TEXT(REG_CONFIG),
+						TEXT(REGVALUE_SERIAL_PORT_NAME),
+						TRUE,
+						pSSC->GetSerialPortName() );
+	}
+
+	//
+
 	if (IsDlgButtonChecked(hWnd, IDC_AUTHENTIC_SPEED))
 		g_dwSpeed = SPEED_NORMAL;
 	else
@@ -288,8 +363,6 @@ void CPageConfig::DlgOK(HWND hWnd)
 
 	REGSAVE(TEXT(REGVALUE_CUSTOM_SPEED), IsDlgButtonChecked(hWnd, IDC_CUSTOM_SPEED));
 	REGSAVE(TEXT(REGVALUE_EMULATION_SPEED), g_dwSpeed);
-
-	Config_Save_Video();
 
 	m_PropertySheetHelper.PostMsgAfterClose(hWnd, m_Page);
 }

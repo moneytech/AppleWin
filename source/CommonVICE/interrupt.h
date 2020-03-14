@@ -3,7 +3,7 @@
  *
  * Written by
  *  Ettore Perazzoli <ettore@comm2000.it>
- *  André Fachat <fachat@physik.tu-chemnitz.de>
+ *  AndrÃ© Fachat <fachat@physik.tu-chemnitz.de>
  *  Andreas Boose <viceteam@t-online.de>
  *
  * This file is part of VICE, the Versatile Commodore Emulator.
@@ -31,7 +31,7 @@
 
 #include <stdio.h>
 
-#include "..\CommonVICE\types.h"
+#include "../CommonVICE/types.h"
 
 /* Define the number of cycles needed by the CPU to detect the NMI or IRQ.  */
 #define INTERRUPT_DELAY 2

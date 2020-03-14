@@ -22,23 +22,25 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
 #include "StdAfx.h"
-#include "..\SaveState_Structs_common.h"
-#include "..\Common.h"
+#include "../SaveState_Structs_common.h"
+#include "../Common.h"
 
-#include "..\Keyboard.h"
-#include "..\Registry.h"
-#include "..\resource\resource.h"
+#include "../Keyboard.h"
+#include "../Registry.h"
+#include "../resource/resource.h"
 #include "PageInput.h"
 #include "PropertySheetHelper.h"
 
 CPageInput* CPageInput::ms_this = 0;	// reinit'd in ctor
 
+// Joystick option choices - NOTE maximum text length is MaxMenuChoiceLen = 40
 const TCHAR CPageInput::m_szJoyChoice0[] = TEXT("Disabled\0");
 const TCHAR CPageInput::m_szJoyChoice1[] = TEXT("PC Joystick #1\0");
 const TCHAR CPageInput::m_szJoyChoice2[] = TEXT("PC Joystick #2\0");
 const TCHAR CPageInput::m_szJoyChoice3[] = TEXT("Keyboard (cursors)\0");
 const TCHAR CPageInput::m_szJoyChoice4[] = TEXT("Keyboard (numpad)\0");
 const TCHAR CPageInput::m_szJoyChoice5[] = TEXT("Mouse\0");
+const TCHAR CPageInput::m_szJoyChoice6[] = TEXT("PC Joystick #1 Thumbstick 2\0");
 
 const TCHAR* const CPageInput::m_pszJoy0Choices[J0C_MAX] = {
 									CPageInput::m_szJoyChoice0,
@@ -52,7 +54,8 @@ const TCHAR* const CPageInput::m_pszJoy1Choices[J1C_MAX] = {
 									CPageInput::m_szJoyChoice2,	// PC Joystick #2
 									CPageInput::m_szJoyChoice3,
 									CPageInput::m_szJoyChoice4,
-									CPageInput::m_szJoyChoice5 };
+									CPageInput::m_szJoyChoice5,
+									CPageInput::m_szJoyChoice6 };
 
 const TCHAR CPageInput::m_szCPMSlotChoice_Slot4[] = TEXT("Slot 4\0");
 const TCHAR CPageInput::m_szCPMSlotChoice_Slot5[] = TEXT("Slot 5\0");
@@ -194,6 +197,7 @@ BOOL CPageInput::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM 
 
 			CheckDlgButton(hWnd, IDC_CURSORCONTROL, m_uCursorControl ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hWnd, IDC_AUTOFIRE, m_bmAutofire ? BST_CHECKED : BST_UNCHECKED);
+			CheckDlgButton(hWnd, IDC_SWAPBUTTONS0AND1, m_bSwapButtons0and1 ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hWnd, IDC_CENTERINGCONTROL, m_uCenteringControl == JOYSTICK_MODE_CENTERING ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hWnd, IDC_SCROLLLOCK_TOGGLE, m_uScrollLockToggle ? BST_CHECKED : BST_UNCHECKED);
 
@@ -208,8 +212,12 @@ BOOL CPageInput::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM 
 
 void CPageInput::DlgOK(HWND hWnd)
 {
-	const UINT uNewJoyType0 = SendDlgItemMessage(hWnd, IDC_JOYSTICK0, CB_GETCURSEL, 0, 0);
-	const UINT uNewJoyType1 = SendDlgItemMessage(hWnd, IDC_JOYSTICK1, CB_GETCURSEL, 0, 0);
+	UINT uNewJoyType0 = SendDlgItemMessage(hWnd, IDC_JOYSTICK0, CB_GETCURSEL, 0, 0);
+	if (uNewJoyType0 >= J0C_MAX) uNewJoyType0 = 0;	// GH#434
+
+	UINT uNewJoyType1 = SendDlgItemMessage(hWnd, IDC_JOYSTICK1, CB_GETCURSEL, 0, 0);
+	if (uNewJoyType1 >= J1C_MAX) uNewJoyType1 = 0;	// GH#434
+
 	const bool bIsSlot4Mouse = m_PropertySheetHelper.GetConfigNew().m_Slot[4] == CT_MouseInterface;
 
 	if (JoySetEmulationType(hWnd, m_nJoy0ChoiceTranlationTbl[uNewJoyType0], JN_JOYSTICK0, bIsSlot4Mouse))
@@ -227,6 +235,7 @@ void CPageInput::DlgOK(HWND hWnd)
 
 	m_uCursorControl = IsDlgButtonChecked(hWnd, IDC_CURSORCONTROL) ? 1 : 0;
 	m_bmAutofire = IsDlgButtonChecked(hWnd, IDC_AUTOFIRE) ? 7 : 0;	// bitmap of 3 bits
+	m_bSwapButtons0and1 = IsDlgButtonChecked(hWnd, IDC_SWAPBUTTONS0AND1) ? true : false;
 	m_uCenteringControl = IsDlgButtonChecked(hWnd, IDC_CENTERINGCONTROL) ? 1 : 0;
 	m_uMouseShowCrosshair = IsDlgButtonChecked(hWnd, IDC_MOUSE_CROSSHAIR) ? 1 : 0;
 	m_uMouseRestrictToWindow = IsDlgButtonChecked(hWnd, IDC_MOUSE_RESTRICT_TO_WINDOW) ? 1 : 0;
@@ -236,6 +245,7 @@ void CPageInput::DlgOK(HWND hWnd)
 	REGSAVE(TEXT(REGVALUE_SCROLLLOCK_TOGGLE), m_uScrollLockToggle);
 	REGSAVE(TEXT(REGVALUE_CURSOR_CONTROL), m_uCursorControl);
 	REGSAVE(TEXT(REGVALUE_AUTOFIRE), m_bmAutofire);
+	REGSAVE(TEXT(REGVALUE_SWAP_BUTTONS_0_AND_1), m_bSwapButtons0and1);
 	REGSAVE(TEXT(REGVALUE_CENTERING_CONTROL), m_uCenteringControl);
 	REGSAVE(TEXT(REGVALUE_MOUSE_CROSSHAIR), m_uMouseShowCrosshair);
 	REGSAVE(TEXT(REGVALUE_MOUSE_RESTRICT_TO_WINDOW), m_uMouseRestrictToWindow);
@@ -302,17 +312,24 @@ void CPageInput::InitJoystickChoices(HWND hWnd, int nJoyNum, int nIdcValue)
 	// Now exclude:
 	// . the other Joystick type (if it exists) from this new list
 	// . the mouse if the mousecard is plugged in
-	for(UINT i=nJC_KEYBD_CURSORS; i<nJC_MAX; i++)
+	int removedItemCompensation = 0;
+	for (UINT i=nJC_KEYBD_CURSORS; i<nJC_MAX; i++)
 	{
-		if( ( (i == nJC_KEYBD_CURSORS) || (i == nJC_KEYBD_NUMPAD) ) &&
+		if ( ( (i == nJC_KEYBD_CURSORS) || (i == nJC_KEYBD_NUMPAD) ) &&
 			( (JoyGetJoyType(nOtherJoyNum) == nJC_KEYBD_CURSORS) || (JoyGetJoyType(nOtherJoyNum) == nJC_KEYBD_NUMPAD) )
 		  )
 		{
+			if (i <= JoyGetJoyType(nJoyNum))
+				removedItemCompensation++;
 			continue;
 		}
 
 		if (i == nJC_MOUSE && bIsSlot4Mouse)
+		{
+			if (i <= JoyGetJoyType(nJoyNum))
+				removedItemCompensation++;
 			continue;
+		}
 
 		if (JoyGetJoyType(nOtherJoyNum) != i)
 		{
@@ -324,7 +341,7 @@ void CPageInput::InitJoystickChoices(HWND hWnd, int nJoyNum, int nIdcValue)
 
 	*pszMem = 0x00;	// Doubly null terminated
 
-	m_PropertySheetHelper.FillComboBox(hWnd, nIdcValue, pnzJoystickChoices, JoyGetJoyType(nJoyNum));
+	m_PropertySheetHelper.FillComboBox(hWnd, nIdcValue, pnzJoystickChoices, JoyGetJoyType(nJoyNum) - removedItemCompensation);
 }
 
 void CPageInput::InitSlotOptions(HWND hWnd)

@@ -28,8 +28,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 
-#include "AppleWin.h"
+#include "Applewin.h"
 #include "Frame.h"
+#include "Log.h"
 #include "SoundCore.h"
 #include "Speaker.h"
 
@@ -225,10 +226,16 @@ void DSReleaseSoundBuffer(VOICE* pVoice)
 
 bool DSZeroVoiceBuffer(PVOICE Voice, char* pszDevName, DWORD dwBufferSize)
 {
+#ifdef NO_DIRECT_X
+
+	return false;
+
+#else
+
 	DWORD dwDSLockedBufferSize = 0;    // Size of the locked DirectSound buffer
 	SHORT* pDSLockedBuffer;
 
-
+	_ASSERT(Voice->lpDSBvoice);
 	HRESULT hr = Voice->lpDSBvoice->Stop();
 	if(FAILED(hr))
 	{
@@ -261,6 +268,7 @@ bool DSZeroVoiceBuffer(PVOICE Voice, char* pszDevName, DWORD dwBufferSize)
 	}
 
 	return true;
+#endif // NO_DIRECT_X
 }
 
 //-----------------------------------------------------------------------------
@@ -418,7 +426,7 @@ void SoundCore_SetFade(eFADE FadeType)
 	if(g_nAppMode == MODE_DEBUG)
 		return;
 
-	// Fade in/out just for speaker, the others are demuted/muted
+	// Fade in/out for speaker, the others are demuted/muted here
 	if(FadeType != FADE_NONE)
 	{
 		for(UINT i=0; i<g_uNumVoices; i++)

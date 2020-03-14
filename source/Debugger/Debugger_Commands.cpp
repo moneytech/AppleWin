@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "Debug.h"
 
-#include "..\Frame.h"
+#include "../Frame.h"
 
 // Commands _______________________________________________________________________________________
 
@@ -85,7 +85,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("BPR")         , CmdBreakpointAddReg  , CMD_BREAKPOINT_ADD_REG   , "Add breakpoint on register value"      }, // NOTE! Different from SoftICE !!!!
 		{TEXT("BPX")         , CmdBreakpointAddPC   , CMD_BREAKPOINT_ADD_PC    , "Add breakpoint at current instruction" },
 		{TEXT("BPIO")        , CmdBreakpointAddIO   , CMD_BREAKPOINT_ADD_IO    , "Add breakpoint for IO address $C0xx"   },
-		{TEXT("BPM")         , CmdBreakpointAddMem  , CMD_BREAKPOINT_ADD_MEM   , "Add breakpoint on memory access"       },  // SoftICE
+		{TEXT("BPM")         , CmdBreakpointAddMemA , CMD_BREAKPOINT_ADD_MEM   , "Add breakpoint on memory access"       },  // SoftICE
+		{TEXT("BPMR")        , CmdBreakpointAddMemR , CMD_BREAKPOINT_ADD_MEMR  , "Add breakpoint on memory read access"  },
+		{TEXT("BPMW")        , CmdBreakpointAddMemW , CMD_BREAKPOINT_ADD_MEMW  , "Add breakpoint on memory write access" },
 
 		{TEXT("BPC")         , CmdBreakpointClear   , CMD_BREAKPOINT_CLEAR     , "Clear (remove) breakpoint"             }, // SoftICE
 		{TEXT("BPD")         , CmdBreakpointDisable , CMD_BREAKPOINT_DISABLE   , "Disable breakpoint- it is still in the list, just not active" }, // SoftICE
@@ -119,6 +121,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("PAGEDN"     ) , CmdCursorPageDown    , CMD_CURSOR_PAGE_DOWN     , "Scroll down one scren"  }, 
 		{TEXT("PAGEDOWN256") , CmdCursorPageDown256 , CMD_CURSOR_PAGE_DOWN_256 , "Scroll down 256 bytes"  }, // Shift
 		{TEXT("PAGEDOWN4K" ) , CmdCursorPageDown4K  , CMD_CURSOR_PAGE_DOWN_4K  , "Scroll down 4096 bytes" }, // Ctrl
+	// Cycles info
+		{TEXT("CYCLES")      , CmdCyclesInfo        , CMD_CYCLES_INFO, "Cycles display configuration" },
 	// Disassembler Data 
 		{TEXT("Z")           , CmdDisasmDataDefByte1       , CMD_DISASM_DATA      , "Treat byte [range] as data"                },
 		{TEXT("X")           , CmdDisasmDataDefCode        , CMD_DISASM_CODE      , "Treat byte [range] as code"                },
@@ -239,6 +243,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //		{TEXT("VARSLOAD")    , CmdVarsLoad          , CMD_VARIABLES_LOAD       },
 //		{TEXT("VARSSAVE")    , CmdVarsSave          , CMD_VARIABLES_SAVE       },
 //		{TEXT("SET")         , CmdVarsSet           , CMD_VARIABLES_SET        },
+	// Video-scanner info
+		{TEXT("VIDEOINFO")   , CmdVideoScannerInfo  , CMD_VIDEO_SCANNER_INFO, "Video-scanner display configuration" },
 	// View
 		{TEXT("TEXT")        , CmdViewOutput_Text4X , CMD_VIEW_TEXT4X, "View Text screen (current page)"        },
 		{TEXT("TEXT1")       , CmdViewOutput_Text41 , CMD_VIEW_TEXT41, "View Text screen Page 1"                },
@@ -420,6 +426,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		{TEXT("N")          , NULL, PARAM_FLAG_N         }, // 1--- ---- Sign
 // Disasm
 		{TEXT("BRANCH")     , NULL, PARAM_CONFIG_BRANCH  },
+		{TEXT("CLICK")      , NULL, PARAM_CONFIG_CLICK   }, // GH#462
 		{TEXT("COLON")      , NULL, PARAM_CONFIG_COLON   },
 		{TEXT("OPCODE")     , NULL, PARAM_CONFIG_OPCODE  },
 		{TEXT("POINTER")    , NULL, PARAM_CONFIG_POINTER },

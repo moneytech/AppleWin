@@ -22,13 +22,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
 #include "StdAfx.h"
-#include "..\SaveState_Structs_common.h"
-#include "..\Common.h"
+#include "../SaveState_Structs_common.h"
+#include "../Common.h"
 
-#include "..\Mockingboard.h"
-#include "..\Registry.h"
-#include "..\Speaker.h"
-#include "..\resource\resource.h"
+#include "../CardManager.h"
+#include "../Mockingboard.h"
+#include "../Registry.h"
+#include "../Speaker.h"
+#include "../resource/resource.h"
 #include "PageSound.h"
 #include "PropertySheetHelper.h"
 
@@ -116,7 +117,7 @@ BOOL CPageSound::DlgProcInternal(HWND hWnd, UINT message, WPARAM wparam, LPARAM 
 			SendDlgItemMessage(hWnd,IDC_MB_VOLUME,TBM_SETTICFREQ,10,0);
 			SendDlgItemMessage(hWnd,IDC_MB_VOLUME,TBM_SETPOS,1,MB_GetVolume());
 
-			if (g_Slot5 == CT_SAM)
+			if (g_CardMgr.QuerySlot(SLOT5) == CT_SAM)
 				m_NewCardType = CT_SAM;
 			else
 				m_NewCardType = MB_GetSoundcardType();	// Reinit 1st time page is activated (fires before PSN_SETACTIVE)
@@ -140,7 +141,7 @@ void CPageSound::DlgOK(HWND hWnd)
 	if (SpkrSetEmulationType(hWnd, newSoundType))
 	{
 		DWORD dwSoundType = (soundtype == SOUND_NONE) ? REG_SOUNDTYPE_NONE : REG_SOUNDTYPE_WAVE;
-		REGSAVE(TEXT("Sound Emulation"), dwSoundType);
+		REGSAVE(TEXT(REGVALUE_SOUND_EMULATION), dwSoundType);
 	}
 
 	// NB. Volume: 0=Loudest, VOLUME_MAX=Silence

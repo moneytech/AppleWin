@@ -31,10 +31,12 @@
 typedef UINT8 uint8_t;
 typedef UINT16 uint16_t;
 typedef UINT32 uint32_t;
+typedef UINT64 uint64_t;
 #endif
 
 #include <windows.h>
 #include <winuser.h> // WM_MOUSEWHEEL
+#include <strsafe.h>
 #include <commctrl.h>
 #include <ddraw.h>
 #include <htmlhelp.h>
@@ -46,6 +48,8 @@ typedef UINT32 uint32_t;
 #include <stack>
 #include <string>
 #include <vector>
+#include <memory>
+#include <stdexcept>
 
 // SM_CXPADDEDBORDER is not supported on 2000 & XP:
 // http://msdn.microsoft.com/en-nz/library/windows/desktop/ms724385(v=vs.85).aspx

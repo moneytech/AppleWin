@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "Debug.h"
 
-#include "..\AppleWin.h"
+#include "../Applewin.h"
 
 	// 2.6.2.13 Added: Can now enable/disable selected symbol table(s) !
 	// Allow the user to disable/enable symbol tables
@@ -52,7 +52,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		,"A2_DOS33.SYM"
 		,"A2_PRODOS.SYM"
 	};
-	char      g_sFileNameSymbolsUser [ MAX_PATH ] = "";
+	std::string  g_sFileNameSymbolsUser;
 
 	char * g_aSymbolTableNames[ NUM_SYMBOL_TABLES ] =
 	{
@@ -84,7 +84,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //===========================================================================
 void _PrintCurrentPath()
 {
-	ConsoleDisplayError( g_sProgramDir );
+	ConsoleDisplayError( g_sProgramDir.c_str() );
 }
 
 Update_t _PrintSymbolInvalidTable()
@@ -228,6 +228,7 @@ bool String2Address( LPCTSTR pText, WORD & nAddress_ )
 
 		_tcscpy( sHexApple, "0x" );
 		_tcsncpy( sHexApple+2, pText+1, MAX_SYMBOLS_LEN - 3 );
+		sHexApple[2 + (MAX_SYMBOLS_LEN - 3) - 1] = 0;
 		pText = sHexApple;
 	}
 
@@ -550,14 +551,16 @@ Update_t _CmdSymbolsListTables (int nArgs, int bSymbolTables )
 
 
 //===========================================================================
-int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrite, int nSymbolOffset )
+int ParseSymbolTable(const std::string & pPathFileName, SymbolTable_Index_e eSymbolTableWrite, int nSymbolOffset )
 {
 	char sText[ CONSOLE_WIDTH * 3 ];
 	bool bFileDisplayed = false;
 
+	const int nMaxLen = min(MAX_TARGET_LEN,MAX_SYMBOLS_LEN);
+
 	int nSymbolsLoaded = 0;
 
-	if (! pPathFileName)
+	if (pPathFileName.empty())
 		return nSymbolsLoaded;
 
 //#if _UNICODE
@@ -571,7 +574,7 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 	sprintf( sFormat1, "%%x %%%ds", MAX_SYMBOLS_LEN ); // i.e. "%x %13s"
 	sprintf( sFormat2, "%%%ds %%x", MAX_SYMBOLS_LEN ); // i.e. "%13s %x"
 
-	FILE *hFile = fopen( pPathFileName, "rt" );
+	FILE *hFile = fopen( pPathFileName.c_str(), "rt" );
 
 	if( !hFile && g_bSymbolsDisplayMissingFile )
 	{
@@ -619,10 +622,13 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 				p = strstr(szLine, ";");		// Optional
 				if(p) *p = 0;
 				p = strstr(szLine, " ");		// 1st space between name & value
-				int nLen = p - szLine;
-				if (nLen > MAX_SYMBOLS_LEN)
+				if (p)
 				{
-					memset(&szLine[MAX_SYMBOLS_LEN], ' ', nLen-MAX_SYMBOLS_LEN);	// sscanf fails for nAddress if string too long
+					int nLen = p - szLine;
+					if (nLen > MAX_SYMBOLS_LEN)
+					{
+						memset(&szLine[MAX_SYMBOLS_LEN], ' ', nLen - MAX_SYMBOLS_LEN);	// sscanf fails for nAddress if string too long
+					}
 				}
 				sscanf(szLine, sFormat2, sName, &nAddress);
 			}
@@ -637,6 +643,20 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 			WORD nAddressPrev;
 			int  iTable;
 
+			// 2.9.0.11 Bug #479
+			int nLen = strlen( sName );
+			if (nLen > nMaxLen)
+			{
+				ConsolePrintFormat( sText, " %sWarn.: %s%s (%d > %d)"
+					, CHC_WARNING
+					, CHC_SYMBOL
+					, sName
+					, nLen
+					, nMaxLen
+				);
+				ConsoleUpdate(); // Flush buffered output so we don't ask the user to pause
+			}
+
 			// 2.8.0.5 Bug #244 (Debugger) Duplicate symbols for identical memory addresses in APPLE2E.SYM
 			const char *pSymbolPrev = FindSymbolFromAddress( (WORD)nAddress, &iTable ); // don't care which table it is in
 			if( pSymbolPrev )
@@ -648,12 +668,12 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 					// TODO: Must check for buffer overflow !
 					ConsolePrintFormat( sText, "%s%s"
 						, CHC_PATH
-						, pPathFileName
+						, pPathFileName.c_str()
 					);
 				}
 
-				ConsolePrintFormat( sText, " %sWarning: %s%-16s %saliases %s$%s%04X %s%-12s%s (%s%s%s)"
-					, CHC_WARNING
+				ConsolePrintFormat( sText, " %sInfo.: %s%-16s %saliases %s$%s%04X %s%-12s%s (%s%s%s)" // MAGIC NUMBER: -MAX_SYMBOLS_LEN
+					, CHC_INFO // 2.9.0.10 was CHC_WARNING, see #479
 					, CHC_SYMBOL
 					, sName
 					, CHC_INFO
@@ -704,7 +724,7 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 						, CHC_STRING
 						, g_aSymbolTableNames[ iTable ]
 						, CHC_DEFAULT
-						, pPathFileName
+						, pPathFileName.c_str()
 					);
 				}
 
@@ -732,8 +752,7 @@ int ParseSymbolTable( TCHAR *pPathFileName, SymbolTable_Index_e eSymbolTableWrit
 //===========================================================================
 Update_t CmdSymbolsLoad (int nArgs)
 {
-	TCHAR sFileName[MAX_PATH];
-	_tcscpy(sFileName,g_sProgramDir);
+	std::string sFileName = g_sProgramDir;
 
 	int iSymbolTable = GetSymbolTableFromCommand();
 	if ((iSymbolTable < 0) || (iSymbolTable >= NUM_SYMBOL_TABLES))
@@ -746,24 +765,23 @@ Update_t CmdSymbolsLoad (int nArgs)
 	// Debugger will call us with 0 args on startup as a way to pre-load symbol tables
 	if (! nArgs)
 	{
-		_tcscat(sFileName, g_sFileNameSymbols[ iSymbolTable ]);
+		sFileName += g_sFileNameSymbols[ iSymbolTable ];
 		nSymbols = ParseSymbolTable( sFileName, (SymbolTable_Index_e) iSymbolTable );
 	}
 
 	int iArg = 1;
 	if (iArg <= nArgs)
 	{
-		TCHAR *pFileName = NULL;
+		std::string pFileName;
 		
 		if( g_aArgs[ iArg ].bType & TYPE_QUOTED_2 )
 		{
 			pFileName = g_aArgs[ iArg ].sArg;
 
-			_tcscpy(sFileName,g_sProgramDir);
-			_tcscat(sFileName, pFileName);
+			sFileName = g_sProgramDir + pFileName;
 
 			// Remember File Name of last symbols loaded
-			_tcscpy( g_sFileNameSymbolsUser, pFileName );
+			g_sFileNameSymbolsUser = pFileName;
 		}
 
 		// SymbolOffset
@@ -787,7 +805,7 @@ Update_t CmdSymbolsLoad (int nArgs)
 			}
 		}
 
-		if( pFileName )
+		if( !pFileName.empty() )
 		{
 			nSymbols = ParseSymbolTable( sFileName, (SymbolTable_Index_e) iSymbolTable, nOffsetAddr );
 		}

@@ -23,11 +23,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "StdAfx.h"
 
-#include "..\Common.h"
-#include "..\Registry.h"
-#include "..\resource\resource.h"
-#include "..\Tfe\Tfe.h"
-#include "..\Tfe\Tfesupp.h"
+#include "../Common.h"
+#include "../Registry.h"
+#include "../resource/resource.h"
+#include "../Tfe/Tfe.h"
+#include "../Tfe/Tfesupp.h"
 #include "PageConfigTfe.h"
 
 CPageConfigTfe* CPageConfigTfe::ms_this = 0;	// reinit'd in ctor
@@ -143,10 +143,10 @@ int CPageConfigTfe::gray_ungray_items(HWND hwnd)
 	int enable;
 	int number;
 
-	int disabled = 0;
-
 	//resources_get_value("ETHERNET_DISABLED", (void *)&disabled);
-	REGLOAD(TEXT("Uthernet Disabled")  ,(DWORD *)&disabled);
+	DWORD dwDisabled;
+	REGLOAD_DEFAULT(TEXT("Uthernet Disabled"), &dwDisabled, 0);
+	int disabled = dwDisabled ? 1 : 0;
 	get_disabled_state(&disabled);
 
 	if (disabled)
@@ -255,6 +255,8 @@ void CPageConfigTfe::init_tfe_dialog(HWND hwnd)
 	if (gray_ungray_items(hwnd))
 	{
 		/* we have a problem: TFE is disabled. Give a message to the user */
+		// TC (18 Dec 2017) this vicekb URL is a broken link now, so I copied it to the AppleWin repo, here:
+		// . https://github.com/AppleWin/AppleWin/blob/master/docs/VICE%20Knowledge%20Base%20-%20Article%2013-005.htm
 		MessageBox( hwnd,
 			"TFE support is not available on your system,\n"
 			"there is some important part missing. Please have a\n"
@@ -280,16 +282,16 @@ void CPageConfigTfe::save_tfe_dialog(HWND hwnd)
 	// RGJ - Added check for NULL interface so we don't set it active without a valid interface selected
 	if (strlen(buffer) > 0)
 	{
-		RegSaveString(TEXT("Configuration"), TEXT("Uthernet Interface"), 1, buffer);
+		RegSaveString(TEXT(REG_CONFIG), TEXT(REGVALUE_UTHERNET_INTERFACE), 1, buffer);
 
 		active_value = SendMessage(GetDlgItem(hwnd, IDC_TFE_SETTINGS_ENABLE), CB_GETCURSEL, 0, 0);
 
 		tfe_enabled = active_value >= 1 ? 1 : 0;
-		REGSAVE(TEXT("Uthernet Active")  ,tfe_enabled);
+		REGSAVE(TEXT(REGVALUE_UTHERNET_ACTIVE)  ,tfe_enabled);
 	}
 	else
 	{
-		REGSAVE(TEXT("Uthernet Active")  ,0);
+		REGSAVE(TEXT(REGVALUE_UTHERNET_ACTIVE)  ,0);
 	}
 }
 

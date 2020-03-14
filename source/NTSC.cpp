@@ -21,14 +21,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Includes
 	#include "StdAfx.h"
-	#include "AppleWin.h"
-	#include "CPU.h"
-	#include "Frame.h"  // FRAMEBUFFER_W FRAMEBUFFER_H
-	#include "Memory.h" // MemGetMainPtr() MemGetBankPtr()
+	#include "Applewin.h"
+	#include "CPU.h"	// CpuGetCyclesThisVideoFrame()
+	#include "Frame.h"
+	#include "Memory.h" // MemGetMainPtr() MemGetAuxPtr()
 	#include "Video.h"  // g_pFramebufferbits
+	#include "RGBMonitor.h"
 
 	#include "NTSC.h"
 	#include "NTSC_CharSet.h"
+
 
 #define NTSC_REMOVE_WHITE_RINGING  1 // 0 = theoritical dimmed white has chroma, 1 = pure white without chroma tinting
 #define NTSC_REMOVE_BLACK_GHOSTING 1 // 1 = remove black smear/smudges carrying over
@@ -40,9 +42,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #if ALT_TABLE
 	#include "ntsc_rgb.h"
 #endif
-
-	//LPBYTE  MemGetMainPtr(const WORD);
-	//LPBYTE  MemGetBankPtr(const UINT nBank);
 
 // Defines
 	#define HGR_TEST_PATTERN 0
@@ -117,12 +116,22 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	static int g_nHiresPage    = 1;
 	static int g_nTextPage     = 1;
 
+	static bool g_bDelayVideoMode = false;	// NB. No need to save to save-state, as it will be done immediately after opcode completes in NTSC_VideoUpdateCycles()
+	static uint32_t g_uNewVideoModeFlags = 0;
+
 	// Understanding the Apple II, Timing Generation and the Video Scanner, Pg 3-11
 	// Vertical Scanning
 	// Horizontal Scanning
 	// "There are exactly 17030 (65 x 262) 6502 cycles in every television scan of an American Apple."
 	#define VIDEO_SCANNER_MAX_HORZ   65 // TODO: use Video.cpp: kHClocks
 	#define VIDEO_SCANNER_MAX_VERT  262 // TODO: use Video.cpp: kNTSCScanLines
+	static const UINT VIDEO_SCANNER_6502_CYCLES = VIDEO_SCANNER_MAX_HORZ * VIDEO_SCANNER_MAX_VERT;
+
+	#define VIDEO_SCANNER_MAX_VERT_PAL 312
+	static const UINT VIDEO_SCANNER_6502_CYCLES_PAL = VIDEO_SCANNER_MAX_HORZ * VIDEO_SCANNER_MAX_VERT_PAL;
+
+	static UINT g_videoScannerMaxVert = VIDEO_SCANNER_MAX_VERT;			// default to NTSC
+	static UINT g_videoScanner6502Cycles = VIDEO_SCANNER_6502_CYCLES;	// default to NTSC
 
 	#define VIDEO_SCANNER_HORZ_COLORBURST_BEG 12
 	#define VIDEO_SCANNER_HORZ_COLORBURST_END 16
@@ -134,7 +143,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	static bgra_t *g_pVideoAddress = 0;
 	static bgra_t *g_pScanLines[VIDEO_SCANNER_Y_DISPLAY*2];  // To maintain the 280x192 aspect ratio for 560px width, we double every scan line -> 560x384
 
-	static unsigned (*g_pHorzClockOffset)[VIDEO_SCANNER_MAX_HORZ] = 0;
+	static const UINT g_kFrameBufferWidth = GetFrameBufferWidth();
+
+	static unsigned short (*g_pHorzClockOffset)[VIDEO_SCANNER_MAX_HORZ] = 0;
 
 	typedef void (*UpdateScreenFunc_t)(long);
 	static UpdateScreenFunc_t g_apFuncVideoUpdateScanline[VIDEO_SCANNER_Y_DISPLAY];
@@ -197,7 +208,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	#define SIGNAL_1     0.7465656072f 
 
 // Tables
-	static unsigned g_aClockVertOffsetsHGR[ VIDEO_SCANNER_MAX_VERT ] = 
+	// Video scanner tables are now runtime-generated using UTAIIe logic
+	static unsigned short g_aClockVertOffsetsHGR[VIDEO_SCANNER_MAX_VERT_PAL];
+	static unsigned short g_aClockVertOffsetsTXT[VIDEO_SCANNER_MAX_VERT_PAL/8];
+	static unsigned short APPLE_IIP_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ];	// 5 = CEILING(312/64) = CEILING(262/64)
+	static unsigned short APPLE_IIE_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ];
+
+#ifdef _DEBUG
+	static unsigned short g_kClockVertOffsetsHGR[ VIDEO_SCANNER_MAX_VERT ] =
 	{
 		0x0000,0x0400,0x0800,0x0C00,0x1000,0x1400,0x1800,0x1C00,0x0080,0x0480,0x0880,0x0C80,0x1080,0x1480,0x1880,0x1C80,
 		0x0100,0x0500,0x0900,0x0D00,0x1100,0x1500,0x1900,0x1D00,0x0180,0x0580,0x0980,0x0D80,0x1180,0x1580,0x1980,0x1D80,
@@ -222,7 +240,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		0x0B80,0x0F80,0x1380,0x1780,0x1B80,0x1F80
 	};
 
-	static unsigned g_aClockVertOffsetsTXT[33] = 
+	static unsigned short g_kClockVertOffsetsTXT[33] =	// 33 = CEILING(262/8)
 	{
 		0x0000,0x0080,0x0100,0x0180,0x0200,0x0280,0x0300,0x0380,
 		0x0000,0x0080,0x0100,0x0180,0x0200,0x0280,0x0300,0x0380,
@@ -232,7 +250,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		0x380
 	};
 
-	static unsigned APPLE_IIP_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ] =
+	static unsigned short kAPPLE_IIP_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ] =
 	{
 		{0x1068,0x1068,0x1069,0x106A,0x106B,0x106C,0x106D,0x106E,0x106F,
 		 0x1070,0x1071,0x1072,0x1073,0x1074,0x1075,0x1076,0x1077,
@@ -280,7 +298,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		 0x0018,0x0019,0x001A,0x001B,0x001C,0x001D,0x001E,0x001F}
 	};
 
-	static unsigned APPLE_IIE_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ] =
+	static unsigned short kAPPLE_IIE_HORZ_CLOCK_OFFSET[5][VIDEO_SCANNER_MAX_HORZ] =
 	{
 		{0x0068,0x0068,0x0069,0x006A,0x006B,0x006C,0x006D,0x006E,0x006F,
 		 0x0070,0x0071,0x0072,0x0073,0x0074,0x0075,0x0076,0x0077,
@@ -327,6 +345,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 		 0x0010,0x0011,0x0012,0x0013,0x0014,0x0015,0x0016,0x0017,
 		 0x0018,0x0019,0x001A,0x001B,0x001C,0x001D,0x001E,0x001F}
 	};
+#endif
 
 	/*
 		http://www.kreativekorp.com/miscpages/a2info/munafo.shtml
@@ -387,30 +406,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 	static csbits_t csbits;		// charset, optionally followed by alt charset
 
 // Prototypes
-	// prototype from CPU.h
-	//unsigned char CpuRead(unsigned short addr, unsigned long uExecutedCycles);
-	// prototypes from Memory.h
-	//unsigned char * MemGetAuxPtr (unsigned short);
-	//unsigned char * MemGetMainPtr (unsigned short);
-	INLINE float     clampZeroOne( const float & x );
-	INLINE uint8_t   getCharSetBits( const int iChar );
-	INLINE uint16_t  getLoResBits( uint8_t iByte );
-	INLINE uint32_t  getScanlineColor( const uint16_t signal, const bgra_t *pTable );
-	INLINE uint32_t* getScanlineNext1Address();
-	INLINE uint32_t* getScanlinePrev1Address();
-	INLINE uint32_t* getScanlinePrev2Address();
-	INLINE uint32_t* getScanlineThis0Address();
-	INLINE void      updateColorPhase();
-	INLINE void      updateFlashRate();
-	INLINE void      updateFramebufferColorTVSingleScanline( uint16_t signal, bgra_t *pTable );
-	INLINE void      updateFramebufferColorTVDoubleScanline( uint16_t signal, bgra_t *pTable );
+	INLINE void      updateFramebufferTVSingleScanline( uint16_t signal, bgra_t *pTable );
+	INLINE void      updateFramebufferTVDoubleScanline( uint16_t signal, bgra_t *pTable );
 	INLINE void      updateFramebufferMonitorSingleScanline( uint16_t signal, bgra_t *pTable );
 	INLINE void      updateFramebufferMonitorDoubleScanline( uint16_t signal, bgra_t *pTable );
 	INLINE void      updatePixels( uint16_t bits );
 	INLINE void      updateVideoScannerHorzEOL();
 	INLINE void      updateVideoScannerAddress();
-	INLINE uint16_t  updateVideoScannerAddressTXT();
-	INLINE uint16_t  updateVideoScannerAddressHGR();
+	INLINE uint16_t  getVideoScannerAddressTXT();
+	INLINE uint16_t  getVideoScannerAddressHGR();
 
 	static void initChromaPhaseTables();
 	static real initFilterChroma   (real z);
@@ -446,8 +450,8 @@ static void set_csbits()
 	{
 	case A2TYPE_APPLE2:			csbits = &csbits_a2[0];         g_nVideoCharSet = 0; break;
 	case A2TYPE_APPLE2PLUS:		csbits = &csbits_a2[0];         g_nVideoCharSet = 0; break;
-	case A2TYPE_APPLE2E:		csbits = &csbits_2e[0];			break;
-	case A2TYPE_APPLE2EENHANCED:csbits = &csbits_enhanced2e[0]; break;
+	case A2TYPE_APPLE2E:		csbits = Get2e_csbits();		break;
+	case A2TYPE_APPLE2EENHANCED:csbits = Get2e_csbits();		break;
 	case A2TYPE_PRAVETS82:	    csbits = &csbits_pravets82[0];  g_nVideoCharSet = 0; break;	// Apple ][ clone
 	case A2TYPE_PRAVETS8M:	    csbits = &csbits_pravets8M[0];  g_nVideoCharSet = 0; break;	// Apple ][ clone
 	case A2TYPE_PRAVETS8A:	    csbits = &csbits_pravets8C[0];  break;	// Apple //e clone
@@ -479,30 +483,34 @@ inline uint16_t getLoResBits( uint8_t iByte )
 //===========================================================================
 inline uint32_t getScanlineColor( const uint16_t signal, const bgra_t *pTable )
 {
-	g_nSignalBitsNTSC = ((g_nSignalBitsNTSC << 1) | signal) & 0xFFF; // 14-bit
+	g_nSignalBitsNTSC = ((g_nSignalBitsNTSC << 1) | signal) & 0xFFF; // 12-bit
 	return *(uint32_t*) &pTable[ g_nSignalBitsNTSC ];
 }
 
 //===========================================================================
-inline uint32_t* getScanlineNext1Address()
+inline uint32_t* getScanlineNextInbetween()
 {
-	return (uint32_t*) (g_pVideoAddress - 1*FRAMEBUFFER_W);
+	return (uint32_t*) (g_pVideoAddress - 1*g_kFrameBufferWidth);
 }
 
-//===========================================================================
-inline uint32_t* getScanlinePrev1Address()
+#if 0	// don't use this pixel, as it's from the previous video-frame!
+inline uint32_t* getScanlineNext()
 {
-	return (uint32_t*) (g_pVideoAddress + 1*FRAMEBUFFER_W);
+	return (uint32_t*) (g_pVideoAddress - 2*g_kFrameBufferWidth);
+}
+#endif
+//===========================================================================
+inline uint32_t* getScanlinePreviousInbetween()
+{
+	return (uint32_t*) (g_pVideoAddress + 1*g_kFrameBufferWidth);
 }
 
-//===========================================================================
-inline uint32_t* getScanlinePrev2Address()
+inline uint32_t* getScanlinePrevious()
 {
-	return (uint32_t*) (g_pVideoAddress + 2*FRAMEBUFFER_W);
+	return (uint32_t*) (g_pVideoAddress + 2*g_kFrameBufferWidth);
 }
-
 //===========================================================================
-inline uint32_t* getScanlineThis0Address()
+inline uint32_t* getScanlineCurrent()
 {
 	return (uint32_t*) g_pVideoAddress;
 }
@@ -545,15 +553,15 @@ inline void updateFlashRate() // TODO: Flash rate should be constant (regardless
 	} while(0)
 
 // prevp is never used nor blended with!
-#define updateFramebufferColorTVSingleScanline(signal,table) \
+#define updateFramebufferTVSingleScanline(signal,table) \
 	do { \
-		uint32_t ntscp, prevp, betwp; \
+		uint32_t ntscp, /*prevp,*/ betwp; \
 		uint32_t *prevlin, *between; \
 		g_nSignalBitsNTSC = ((g_nSignalBitsNTSC << 1) | signal) & 0xFFF; \
-		prevlin = (uint32_t*)(g_pVideoAddress + 2*FRAMEBUFFER_W); \
+		/*prevlin = (uint32_t*)(g_pVideoAddress + 2*FRAMEBUFFER_W);*/ \
 		between = (uint32_t*)(g_pVideoAddress + 1*FRAMEBUFFER_W); \
 		ntscp = *(uint32_t*) &table[g_nSignalBitsNTSC]; /* raw current NTSC color */ \
-		prevp = *prevlin; \
+		/*prevp = *prevlin;*/ \
 		betwp = ntscp - ((ntscp & 0x00fcfcfc) >> 2); \
 		*between = betwp | ALPHA32_MASK; \
 		*(uint32_t*)g_pVideoAddress = ntscp; \
@@ -570,7 +578,7 @@ inline void updateFlashRate() // TODO: Flash rate should be constant (regardless
 		g_pVideoAddress++; \
 	} while(0)
 
-#define updateFramebufferColorTVDoubleScanline(signal,table) \
+#define updateFramebufferTVDoubleScanline(signal,table) \
 	do { \
 		uint32_t ntscp, prevp, betwp; \
 		uint32_t *prevlin, *between; \
@@ -585,80 +593,105 @@ inline void updateFlashRate() // TODO: Flash rate should be constant (regardless
 		g_pVideoAddress++; \
 	} while(0)
 #else
-
 //===========================================================================
-inline void updateFramebufferColorTVSingleScanline( uint16_t signal, bgra_t *pTable )
+
+// Original: Prev1(inbetween) = current - 25% of previous AppleII scanline
+// GH#650:   Prev1(inbetween) = 50% of (50% current + 50% of previous AppleII scanline)
+inline void updateFramebufferTVSingleScanline( uint16_t signal, bgra_t *pTable )
 {
-	/* */ uint32_t *pLine0Address = getScanlineThis0Address();
-	/* */ uint32_t *pLine1Address = getScanlinePrev1Address();
-	/* */ uint32_t *pLine2Address = getScanlinePrev2Address();
-
+	uint32_t *pLine0Curr = getScanlineCurrent();
+	uint32_t *pLine1Prev = getScanlinePreviousInbetween();
+	uint32_t *pLine2Prev = getScanlinePrevious();
 	const uint32_t color0 = getScanlineColor( signal, pTable );
-	const uint32_t color2 = *pLine2Address;
-//	const uint32_t color1 = color0 - ((color2 & 0x00fcfcfc) >> 2); // BUG? color0 - color0? not color0-color2?
-	// TC: The above operation "color0 - ((color2 & 0x00fcfcfc) >> 2)" causes underflow, so I've recoded to clamp on underflow:
-	uint32_t color1;
-	{
-		int r=(color0>>16)&0xff, g=(color0>>8)&0xff, b=color0&0xff;
-		uint32_t color2_prime = (color2 & 0x00fcfcfc) >> 2;
-		r -= (color2_prime>>16)&0xff; if (r<0) r=0;	// clamp to 0 on underflow
-		g -= (color2_prime>>8)&0xff;  if (g<0) g=0;	// clamp to 0 on underflow
-		b -= (color2_prime)&0xff;     if (b<0) b=0;	// clamp to 0 on underflow
-		color1 = (r<<16)|(g<<8)|(b);
-	}
+	const uint32_t color2 = *pLine2Prev;
+	uint32_t color1 = ((color0 & 0x00fefefe) >> 1) + ((color2 & 0x00fefefe) >> 1); // 50% Blend
+	color1 = (color1 & 0x00fefefe) >> 1;	// ... then 50% brightness for inbetween line
 
-	/* */  *pLine1Address = color1 | ALPHA32_MASK;
-	/* */  *pLine0Address = color0;
-	/* */ g_pVideoAddress++;
+	*pLine1Prev = color1 | ALPHA32_MASK;
+	*pLine0Curr = color0;
+
+	// GH#650: Draw to final inbetween scanline to avoid residue from other video modes (eg. Amber->TV B&W)
+	if (g_nVideoClockVert == (VIDEO_SCANNER_Y_DISPLAY-1))
+		*getScanlineNextInbetween() = ((color0 & 0x00fcfcfc) >> 2) | ALPHA32_MASK;	// 50% of (50% current + black)) = 25% of current
+
+	g_pVideoAddress++;
 }
 
 //===========================================================================
-inline void updateFramebufferColorTVDoubleScanline( uint16_t signal, bgra_t *pTable )
-{
-	/* */ uint32_t *pLine0Address = getScanlineThis0Address();
-	/* */ uint32_t *pLine1Address = getScanlinePrev1Address();
-	const uint32_t *pLine2Address = getScanlinePrev2Address();
 
+// Original: Prev1(inbetween) = 50% current + 50% of previous AppleII scanline
+inline void updateFramebufferTVDoubleScanline( uint16_t signal, bgra_t *pTable )
+{
+	uint32_t *pLine0Curr = getScanlineCurrent();
+	uint32_t *pLine1Prev = getScanlinePreviousInbetween();
+	uint32_t *pLine2Prev = getScanlinePrevious();
 	const uint32_t color0 = getScanlineColor( signal, pTable );
-	const uint32_t color2 = *pLine2Address;
+	const uint32_t color2 = *pLine2Prev;
 	const uint32_t color1 = ((color0 & 0x00fefefe) >> 1) + ((color2 & 0x00fefefe) >> 1); // 50% Blend
 
-	/* */  *pLine1Address = color1 | ALPHA32_MASK;
-	/* */  *pLine0Address = color0;
-	/* */ g_pVideoAddress++;
+	*pLine1Prev = color1 | ALPHA32_MASK;
+	*pLine0Curr = color0;
+
+	// GH#650: Draw to final inbetween scanline to avoid residue from other video modes (eg. Amber->TV B&W)
+	if (g_nVideoClockVert == (VIDEO_SCANNER_Y_DISPLAY-1))
+		*getScanlineNextInbetween() = ((color0 & 0x00fefefe) >> 1) | ALPHA32_MASK;	// (50% current + black)) = 50% of current
+
+	g_pVideoAddress++;
 }
 
 //===========================================================================
 inline void updateFramebufferMonitorSingleScanline( uint16_t signal, bgra_t *pTable )
 {
-	/* */ uint32_t *pLine0Address = getScanlineThis0Address();
-	/* */ uint32_t *pLine1Address = getScanlineNext1Address();
+	uint32_t *pLine0Curr = getScanlineCurrent();
+	uint32_t *pLine1Next = getScanlineNextInbetween();
 	const uint32_t color0 = getScanlineColor( signal, pTable );
-	const uint32_t color1 = ((color0 & 0x00fcfcfc) >> 2); // 25% Blend (original)
-//	const uint32_t color1 = ((color0 & 0x00fefefe) >> 1); // 50% Blend -- looks OK most of the time; Archon looks poor
+	const uint32_t color1 = 0;	// Remove blending for consistent DHGR MIX mode (GH#631)
+//	const uint32_t color1 = ((color0 & 0x00fcfcfc) >> 2); // 25% Blend (original)
 
-	/* */  *pLine1Address = color1 | ALPHA32_MASK;
-	/* */  *pLine0Address = color0;
-	/* */ g_pVideoAddress++;
+	*pLine1Next = color1 | ALPHA32_MASK;
+	*pLine0Curr = color0;
+	g_pVideoAddress++;
 }
 
 //===========================================================================
 inline void updateFramebufferMonitorDoubleScanline( uint16_t signal, bgra_t *pTable )
 {
-	/* */ uint32_t *pLine0Address = getScanlineThis0Address();
-	/* */ uint32_t *pLine1Address = getScanlineNext1Address();
+	uint32_t *pLine0Curr = getScanlineCurrent();
+	uint32_t *pLine1Next = getScanlineNextInbetween();
 	const uint32_t color0 = getScanlineColor( signal, pTable );
 
-	/* */  *pLine1Address = color0;
-	/* */  *pLine0Address = color0;
-	/* */ g_pVideoAddress++;
+	*pLine1Next = color0;
+	*pLine0Curr = color0;
+	g_pVideoAddress++;
 }
 #endif
 
 //===========================================================================
+inline bool GetColorBurst( void )
+{
+	return g_nColorBurstPixels >= 2;
+}
+
+//===========================================================================
+
+void update7MonoPixels( uint16_t bits )
+{
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
+	g_pFuncUpdateBnWPixel(bits & 1);
+}
+
+//===========================================================================
+
+// NB. g_nLastColumnPixelNTSC = bits.b13 will be superseded by these parent funcs which use bits.b14:
+// . updateScreenDoubleHires80(), updateScreenDoubleLores80(), updateScreenText80()
 inline void updatePixels( uint16_t bits )
 {
-	if (g_nColorBurstPixels < 2)
+	if (!GetColorBurst())
 	{ 
 		/* #1 of 7 */
 		g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
@@ -681,7 +714,7 @@ inline void updatePixels( uint16_t bits )
 		/* #7 of 7 */
 		g_pFuncUpdateBnWPixel(bits & 1); bits >>= 1;
 		g_pFuncUpdateBnWPixel(bits & 1);
-        g_nLastColumnPixelNTSC=bits& 1 ; bits >>= 1;
+        g_nLastColumnPixelNTSC = bits & 1;
 	}
 	else
 	{
@@ -706,44 +739,61 @@ inline void updatePixels( uint16_t bits )
 		/* #7 of 7 */
 		g_pFuncUpdateHuePixel(bits & 1); bits >>= 1; // 0000 0000 0000 0abc
 		g_pFuncUpdateHuePixel(bits & 1);           
-        g_nLastColumnPixelNTSC=bits& 1 ; bits >>= 1; // 0000 0000 0000 00ab
+        g_nLastColumnPixelNTSC = bits & 1;
 	}
 }
 
 //===========================================================================
+
+inline void updateVideoScannerHorzEOLSimple()
+{
+	if (VIDEO_SCANNER_MAX_HORZ == ++g_nVideoClockHorz)
+	{
+		g_nVideoClockHorz = 0;
+
+		if (++g_nVideoClockVert == g_videoScannerMaxVert)
+		{
+			g_nVideoClockVert = 0;
+
+			updateFlashRate();
+		}
+
+		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
+		{
+			updateVideoScannerAddress();
+		}
+	}
+}
+
+// NOTE: This writes out-of-bounds for a 560x384 framebuffer
 inline void updateVideoScannerHorzEOL()
 {
 	if (VIDEO_SCANNER_MAX_HORZ == ++g_nVideoClockHorz)
 	{
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
-			//VIDEO_DRAW_ENDLINE();
-			if (g_nColorBurstPixels < 2)
+			if (!GetColorBurst())
 			{
-				// NOTE: This writes out-of-bounds for a 560x384 framebuffer
-				g_pFuncUpdateBnWPixel(0);
-				g_pFuncUpdateBnWPixel(0);
+				// Only for: VF_TEXT && !VF_MIXED (ie. full 24-row TEXT40 or TEXT80)
+				g_pFuncUpdateBnWPixel(g_nLastColumnPixelNTSC);
 				g_pFuncUpdateBnWPixel(0);
 				g_pFuncUpdateBnWPixel(0);
 			}
 			else
 			{
-				// NOTE: This writes out-of-bounds for a 560x384 framebuffer
+				g_pFuncUpdateHuePixel(g_nLastColumnPixelNTSC);
 				g_pFuncUpdateHuePixel(0);
 				g_pFuncUpdateHuePixel(0);
-				g_pFuncUpdateHuePixel(0);
-				g_pFuncUpdateHuePixel(g_nLastColumnPixelNTSC); // BUGFIX: ARCHON: green fringe on end of line
 			}
 		}
 
 		g_nVideoClockHorz = 0;
 
-		if (++g_nVideoClockVert == VIDEO_SCANNER_MAX_VERT)
+		if (++g_nVideoClockVert == g_videoScannerMaxVert)
 		{
 			g_nVideoClockVert = 0;
 
 			updateFlashRate();
-			//VideoRefreshScreen(); // ContinueExecution() calls VideoRefreshScreen() every dwClksPerFrame (17030)
 		}
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
@@ -756,23 +806,43 @@ inline void updateVideoScannerHorzEOL()
 //===========================================================================
 inline void updateVideoScannerAddress()
 {
-	g_pVideoAddress        = g_nVideoClockVert<VIDEO_SCANNER_Y_DISPLAY ? g_pScanLines[2*g_nVideoClockVert] : g_pScanLines[0];
+	g_pVideoAddress = g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY ? g_pScanLines[2*g_nVideoClockVert] : g_pScanLines[0];
+
+	// Adjust, as these video styles have 2x 14M pixels of pre-render
+	// NB. For VT_COLOR_MONITOR_NTSC, also check color-burst so that TEXT and MIXED(HGR+TEXT) render the TEXT at the same offset (GH#341)
+	if (g_eVideoType == VT_MONO_TV || g_eVideoType == VT_COLOR_TV || (g_eVideoType == VT_COLOR_MONITOR_NTSC && GetColorBurst()))
+		g_pVideoAddress -= 2;
+
+	// GH#555: For the 14M video modes (DHGR,DGR,80COL), start rendering 1x 14M pixel early to account for these video modes being shifted right by 1 pixel
+	// NB. This 1 pixel shift right is a workaround for the 14M video modes that actually start 7x 14M pixels to the left on *real h/w*.
+	// . 7x 14M pixels early + 1x 14M pixel shifted right = 2 complete color phase rotations.
+	// . ie. the 14M colors are correct, but being 1 pixel out is the closest we can get the 7M and 14M video modes to overlap.
+	// . The alternative is to render the 14M correctly 7 pixels early, but have 7-pixel borders left (for 7M modes) or right (for 14M modes).
+	if (((g_pFuncUpdateGraphicsScreen == updateScreenDoubleHires80) ||
+		(g_pFuncUpdateGraphicsScreen == updateScreenDoubleLores80) ||
+		(g_pFuncUpdateGraphicsScreen == updateScreenText80) ||
+		(g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED && g_pFuncUpdateTextScreen == updateScreenText80))
+		&& (g_eVideoType != VT_COLOR_MONITOR_RGB))	// Fix for "Ansi Story" (Turn the disk over) - Top row of TEXT80 is shifted by 1 pixel
+	{
+		g_pVideoAddress -= 1;
+	}
+
 	g_nColorPhaseNTSC      = INITIAL_COLOR_PHASE;
 	g_nLastColumnPixelNTSC = 0;
 	g_nSignalBitsNTSC      = 0;
 }
 
 //===========================================================================
-INLINE uint16_t updateVideoScannerAddressTXT()
+INLINE uint16_t getVideoScannerAddressTXT()
 {
 	return (g_aClockVertOffsetsTXT[g_nVideoClockVert/8] + 
 		g_pHorzClockOffset         [g_nVideoClockVert/64][g_nVideoClockHorz] + (g_nTextPage  *  0x400));
 }
 
 //===========================================================================
-INLINE uint16_t updateVideoScannerAddressHGR()
+INLINE uint16_t getVideoScannerAddressHGR()
 {
-	// BUG? g_pHorzClockOffset
+	// NB. For both A2 and //e use APPLE_IIE_HORZ_CLOCK_OFFSET - see VideoGetScannerAddress() where only TEXT mode adds $1000
 	return (g_aClockVertOffsetsHGR[g_nVideoClockVert  ] + 
 		APPLE_IIE_HORZ_CLOCK_OFFSET[g_nVideoClockVert/64][g_nVideoClockHorz] + (g_nHiresPage * 0x2000));
 }
@@ -1082,26 +1152,26 @@ static void updatePixelBnWMonitorDoubleScanline (uint16_t compositeSignal)
 //===========================================================================
 static void updatePixelBnWColorTVSingleScanline (uint16_t compositeSignal)
 {
-	updateFramebufferColorTVSingleScanline(compositeSignal, g_aBnWColorTVCustom);
+	updateFramebufferTVSingleScanline(compositeSignal, g_aBnWColorTVCustom);
 }
 
 //===========================================================================
 static void updatePixelBnWColorTVDoubleScanline (uint16_t compositeSignal)
 {
-	updateFramebufferColorTVDoubleScanline(compositeSignal, g_aBnWColorTVCustom);
+	updateFramebufferTVDoubleScanline(compositeSignal, g_aBnWColorTVCustom);
 }
 
 //===========================================================================
 static void updatePixelHueColorTVSingleScanline (uint16_t compositeSignal)
 {
-	updateFramebufferColorTVSingleScanline(compositeSignal, g_aHueColorTV[g_nColorPhaseNTSC]);
+	updateFramebufferTVSingleScanline(compositeSignal, g_aHueColorTV[g_nColorPhaseNTSC]);
 	updateColorPhase();
 }
 
 //===========================================================================
 static void updatePixelHueColorTVDoubleScanline (uint16_t compositeSignal)
 {
-	updateFramebufferColorTVDoubleScanline(compositeSignal, g_aHueColorTV[g_nColorPhaseNTSC]);
+	updateFramebufferTVDoubleScanline(compositeSignal, g_aHueColorTV[g_nColorPhaseNTSC]);
 	updateColorPhase();
 }
 
@@ -1130,7 +1200,7 @@ void updateScreenDoubleHires40 (long cycles6502) // wsUpdateVideoHires0
 	
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressHGR();
+		uint16_t addr = getVideoScannerAddressHGR();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1144,6 +1214,7 @@ void updateScreenDoubleHires40 (long cycles6502) // wsUpdateVideoHires0
 				uint8_t  m     = pMain[0];
 				uint16_t bits  = g_aPixelDoubleMaskHGR[m & 0x7F]; // Optimization: hgrbits second 128 entries are mirror of first 128
 				updatePixels( bits );
+				// NB. No zeroPixel0_14M(), since no color phase shift (or use of g_nLastColumnPixelNTSC)
 			}
 		}
 		updateVideoScannerHorzEOL();
@@ -1151,10 +1222,9 @@ void updateScreenDoubleHires40 (long cycles6502) // wsUpdateVideoHires0
 }
 
 //===========================================================================
-void updateScreenDoubleHires80 (long cycles6502 ) // wsUpdateVideoDblHires
+
+void updateScreenDoubleHires80Simplified (long cycles6502 ) // wsUpdateVideoDblHires
 {
-	uint16_t bits;
-	
 	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
 	{
 		g_pFuncUpdateTextScreen( cycles6502 );
@@ -1163,7 +1233,73 @@ void updateScreenDoubleHires80 (long cycles6502 ) // wsUpdateVideoDblHires
 
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressHGR();
+		uint16_t addr = getVideoScannerAddressHGR();
+
+		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
+		{
+			if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
+			{
+				g_nColorBurstPixels = 1024;
+			}
+			else if (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_START)
+			{
+				uint16_t addr = getVideoScannerAddressHGR();
+				uint8_t a = *MemGetAuxPtr(addr);
+				uint8_t m = *MemGetMainPtr(addr);
+
+				if (RGB_IsMixModeInvertBit7())	// Invert high bit? (GH#633)
+				{
+					a ^= 0x80;
+					m ^= 0x80;
+				}
+
+				if (RGB_Is160Mode())
+				{
+					int width = UpdateDHiRes160Cell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress);
+					g_pVideoAddress += width;
+				}
+				else if (RGB_Is560Mode() || (RGB_IsMixMode() && !((a | m) & 0x80)))
+				{
+					update7MonoPixels(a);
+					update7MonoPixels(m);
+				}
+				else if (!RGB_IsMixMode() || (RGB_IsMixMode() && (a & m & 0x80)))
+				{
+					UpdateDHiResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress, true, true);
+					g_pVideoAddress += 14;
+				}
+				else	// RGB_IsMixMode() && ((a ^ m) & 0x80)
+				{
+					if (a & 0x80)	// RGB color, then monochrome
+					{
+						UpdateDHiResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress, true ,false);
+						g_pVideoAddress += 7;
+						update7MonoPixels(m);
+					}
+					else			// monochrome, then RGB color
+					{
+						update7MonoPixels(a);
+						UpdateDHiResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress, false, true);
+						g_pVideoAddress += 7;
+					}
+				}
+			}
+		}
+		updateVideoScannerHorzEOLSimple();
+	}
+}
+
+void updateScreenDoubleHires80 (long cycles6502 ) // wsUpdateVideoDblHires
+{
+	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
+	{
+		g_pFuncUpdateTextScreen( cycles6502 );
+		return;
+	}
+
+	for (; cycles6502 > 0; --cycles6502)
+	{
+		uint16_t addr = getVideoScannerAddressHGR();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1179,10 +1315,10 @@ void updateScreenDoubleHires80 (long cycles6502 ) // wsUpdateVideoDblHires
 				uint8_t m = pMain[0];
 				uint8_t a = pAux [0];
 
-				bits = ((m & 0x7f) << 7) | (a & 0x7f);
+				uint16_t bits = ((m & 0x7f) << 7) | (a & 0x7f);
 				bits = (bits << 1) | g_nLastColumnPixelNTSC;
 				updatePixels( bits );
-				g_nLastColumnPixelNTSC = (bits >> 14) & 3;
+				g_nLastColumnPixelNTSC = (bits >> 14) & 1;
 			}
 		}
 		updateVideoScannerHorzEOL();
@@ -1200,7 +1336,7 @@ void updateScreenDoubleLores40 (long cycles6502) // wsUpdateVideo7MLores
 
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressTXT();
+		uint16_t addr = getVideoScannerAddressTXT();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1215,6 +1351,7 @@ void updateScreenDoubleLores40 (long cycles6502) // wsUpdateVideo7MLores
 				uint16_t lo    = getLoResBits( m ); 
 				uint16_t bits  = g_aPixelDoubleMaskHGR[(0xFF & lo >> ((1 - (g_nVideoClockHorz & 1)) * 2)) & 0x7F]; // Optimization: hgrbits
 				updatePixels( bits );
+				// NB. No zeroPixel0_14M(), since no color phase shift (or use of g_nLastColumnPixelNTSC)
 			}
 		}
 		updateVideoScannerHorzEOL();
@@ -1222,6 +1359,36 @@ void updateScreenDoubleLores40 (long cycles6502) // wsUpdateVideo7MLores
 }
 
 //===========================================================================
+
+static void updateScreenDoubleLores80Simplified (long cycles6502) // wsUpdateVideoDblLores
+{
+	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
+	{
+		g_pFuncUpdateTextScreen( cycles6502 );
+		return;
+	}
+
+	for (; cycles6502 > 0; --cycles6502)
+	{
+		uint16_t addr = getVideoScannerAddressTXT();
+
+		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
+		{
+			if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
+			{
+				g_nColorBurstPixels = 1024;
+			}
+			else if (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_START)
+			{
+				uint16_t addr = getVideoScannerAddressTXT();
+				UpdateDLoResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress);
+				g_pVideoAddress += 14;
+			}
+		}
+		updateVideoScannerHorzEOLSimple();
+	}
+}
+
 void updateScreenDoubleLores80 (long cycles6502) // wsUpdateVideoDblLores
 {
 	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
@@ -1232,7 +1399,7 @@ void updateScreenDoubleLores80 (long cycles6502) // wsUpdateVideoDblLores
 
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressTXT();
+		uint16_t addr = getVideoScannerAddressTXT();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1255,16 +1422,57 @@ void updateScreenDoubleLores80 (long cycles6502) // wsUpdateVideoDblLores
 				uint16_t aux  = hi >> (((1 - (g_nVideoClockHorz & 1)) * 2) + 3);
 				uint16_t bits = (main << 7) | (aux & 0x7f);
 				updatePixels( bits );
-				g_nLastColumnPixelNTSC = (bits >> 14) & 3;
-
+				g_nLastColumnPixelNTSC = (bits >> 14) & 1;
 			}
 		}
 		updateVideoScannerHorzEOL();
-
 	}
 }
 
 //===========================================================================
+static void updateScreenSingleHires40Simplified (long cycles6502)
+{
+	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
+	{
+		g_pFuncUpdateTextScreen( cycles6502 );
+		return;
+	}
+
+	for (; cycles6502 > 0; --cycles6502)
+	{
+		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
+		{
+			if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
+			{
+				g_nColorBurstPixels = 1024;
+			}
+			else if (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_START)
+			{
+				uint16_t addr = getVideoScannerAddressHGR();
+
+				if (!RGB_Is560Mode())
+				{
+					UpdateHiResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress);
+					g_pVideoAddress += 14;
+				}
+				else	// Color Burst is off - duplicate code from updateScreenSingleHires40() (GH#631)
+				{
+					uint8_t *pMain = MemGetMainPtr(addr);
+					uint8_t  m     = pMain[0];
+					uint16_t bits  = g_aPixelDoubleMaskHGR[m & 0x7F]; // Optimization: hgrbits second 128 entries are mirror of first 128
+					if (m & 0x80)
+						bits = (bits << 1) | g_nLastColumnPixelNTSC;
+					updatePixels( bits );
+
+					if (g_nVideoClockHorz == (VIDEO_SCANNER_MAX_HORZ-1))
+						g_nLastColumnPixelNTSC = 0;
+				}
+			}
+		}
+		updateVideoScannerHorzEOLSimple();
+	}
+}
+
 void updateScreenSingleHires40 (long cycles6502)
 {
 	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
@@ -1272,10 +1480,10 @@ void updateScreenSingleHires40 (long cycles6502)
 		g_pFuncUpdateTextScreen( cycles6502 );
 		return;
 	}
-	
+
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressHGR();
+		uint16_t addr = getVideoScannerAddressHGR();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1291,6 +1499,14 @@ void updateScreenSingleHires40 (long cycles6502)
 				if (m & 0x80)
 					bits = (bits << 1) | g_nLastColumnPixelNTSC;
 				updatePixels( bits );
+
+				// For last hpos && bit6=1: (GH#555)
+				// * if bit7=0 (no shift) then clear g_nLastColumnPixelNTSC to prevent a 3rd 14M (aka DHGR) pixel being drawn
+				//   . even though this is off-screen, it still has an on-screen affect (making the green dot more white on the screen edge).
+				// * if bit7=1 (half-dot shift) then also clear g_nLastColumnPixelNTSC
+				//   . not sure if this is correct though
+				if (g_nVideoClockHorz == (VIDEO_SCANNER_MAX_HORZ-1))
+					g_nLastColumnPixelNTSC = 0;
 			}
 		}
 		updateVideoScannerHorzEOL();
@@ -1298,6 +1514,35 @@ void updateScreenSingleHires40 (long cycles6502)
 }
 
 //===========================================================================
+static void updateScreenSingleLores40Simplified (long cycles6502)
+{
+	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
+	{
+		g_pFuncUpdateTextScreen( cycles6502 );
+		return;
+	}
+
+	for (; cycles6502 > 0; --cycles6502)
+	{
+		uint16_t addr = getVideoScannerAddressTXT();
+
+		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
+		{
+			if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
+			{
+				g_nColorBurstPixels = 1024;
+			}
+			else if (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_START)
+			{
+				uint16_t addr = getVideoScannerAddressTXT();
+				UpdateLoResCell(g_nVideoClockHorz-VIDEO_SCANNER_HORZ_START, g_nVideoClockVert, addr, g_pVideoAddress);
+				g_pVideoAddress += 14;
+			}
+		}
+		updateVideoScannerHorzEOLSimple();
+	}
+}
+
 void updateScreenSingleLores40 (long cycles6502)
 {
 	if (g_nVideoMixed && g_nVideoClockVert >= VIDEO_SCANNER_Y_MIXED)
@@ -1308,7 +1553,7 @@ void updateScreenSingleLores40 (long cycles6502)
 
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressTXT();
+		uint16_t addr = getVideoScannerAddressTXT();
 
 		if (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY)
 		{
@@ -1334,7 +1579,7 @@ void updateScreenText40 (long cycles6502)
 {
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressTXT();
+		uint16_t addr = getVideoScannerAddressTXT();
 
 		if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
 		{
@@ -1366,7 +1611,7 @@ void updateScreenText80 (long cycles6502)
 {
 	for (; cycles6502 > 0; --cycles6502)
 	{
-		uint16_t addr = updateVideoScannerAddressTXT();
+		uint16_t addr = getVideoScannerAddressTXT();
 
 		if ((g_nVideoClockHorz < VIDEO_SCANNER_HORZ_COLORBURST_END) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_COLORBURST_BEG))
 		{
@@ -1392,8 +1637,11 @@ void updateScreenText80 (long cycles6502)
 				if ((0 == g_nVideoCharSet) && 0x40 == (a & 0xC0)) // Flash only if mousetext not active
 					aux ^= g_nTextFlashMask;
 
-				uint16_t bits = (main << 7) | aux;
+				uint16_t bits = (main << 7) | (aux & 0x7f);
+				if (g_eVideoType != VT_COLOR_MONITOR_RGB)			// No extra 14M bit needed for VT_COLOR_MONITOR_RGB
+					bits = (bits << 1) | g_nLastColumnPixelNTSC;	// GH#555: Align TEXT80 chars with DHGR
 				updatePixels( bits );
+				g_nLastColumnPixelNTSC = (bits >> 14) & 1;
 			}
 		}
 		updateVideoScannerHorzEOL();
@@ -1428,34 +1676,51 @@ uint32_t*NTSC_VideoGetChromaTable( bool bHueTypeMonochrome, bool bMonitorTypeCol
 }
 
 //===========================================================================
-
-// NB. NTSC video-scanner doesn't get updated during full-speed, so video-dependent Apple II code can hang
-uint16_t NTSC_VideoGetScannerAddress ( void )
+void NTSC_VideoClockResync(const DWORD dwCyclesThisFrame)
 {
+	g_nVideoClockVert = (uint16_t)(dwCyclesThisFrame / VIDEO_SCANNER_MAX_HORZ) % g_videoScannerMaxVert;
+	g_nVideoClockHorz = (uint16_t)(dwCyclesThisFrame % VIDEO_SCANNER_MAX_HORZ);
+}
+
+//===========================================================================
+uint16_t NTSC_VideoGetScannerAddress ( const ULONG uExecutedCycles )
+{
+	if (g_bFullSpeed)
+	{
+		// Ensure that NTSC video-scanner gets updated during full-speed, so video-dependent Apple II code doesn't hang
+		NTSC_VideoClockResync( CpuGetCyclesThisVideoFrame(uExecutedCycles) );
+	}
+
 	const uint16_t currVideoClockVert = g_nVideoClockVert;
 	const uint16_t currVideoClockHorz = g_nVideoClockHorz;
 
 	// Required for ANSI STORY (end credits) vert scrolling mid-scanline mixed mode: DGR80, TEXT80, DGR80
-	g_nVideoClockHorz -= 2;
+	g_nVideoClockHorz -= 1;
 	if ((SHORT)g_nVideoClockHorz < 0)
 	{
 		g_nVideoClockHorz += VIDEO_SCANNER_MAX_HORZ;
 		g_nVideoClockVert -= 1;
 		if ((SHORT)g_nVideoClockVert < 0)
-			g_nVideoClockVert = VIDEO_SCANNER_MAX_VERT-1;
+			g_nVideoClockVert = g_videoScannerMaxVert-1;
 	}
 
 	uint16_t addr;
 	bool bHires = (g_uVideoMode & VF_HIRES) && !(g_uVideoMode & VF_TEXT); // SW_HIRES && !SW_TEXT
 	if( bHires )
-		addr = updateVideoScannerAddressHGR();
+		addr = getVideoScannerAddressHGR();
 	else
-		addr = updateVideoScannerAddressTXT();
+		addr = getVideoScannerAddressTXT();
 
 	g_nVideoClockVert = currVideoClockVert;
 	g_nVideoClockHorz = currVideoClockHorz;
 
 	return addr;
+}
+
+uint16_t NTSC_VideoGetScannerAddressForDebugger(void)
+{
+	ResetCyclesExecutedForDebugger();		// if in full-speed, then reset cycles so that CpuCalcCycles() doesn't ASSERT
+	return NTSC_VideoGetScannerAddress(0);
 }
 
 //===========================================================================
@@ -1468,52 +1733,95 @@ void NTSC_SetVideoTextMode( int cols )
 }
 
 //===========================================================================
-void NTSC_SetVideoMode( uint32_t uVideoModeFlags )
+void NTSC_SetVideoMode( uint32_t uVideoModeFlags, bool bDelay/*=false*/ )
 {
+	if (bDelay && !g_bFullSpeed)
+	{
+		// (GH#670) NB. if g_bFullSpeed then NTSC_VideoUpdateCycles() won't be called on the next 6502 opcode.
+		//  - Instead it's called when !g_bFullSpeed (eg. drive motor off), then the stale g_uNewVideoModeFlags will get used for NTSC_SetVideoMode()!
+		g_bDelayVideoMode = true;
+		g_uNewVideoModeFlags = uVideoModeFlags;
+		return;
+	}
+
 	g_nVideoMixed   = uVideoModeFlags & VF_MIXED;
 	g_nVideoCharSet = VideoGetSWAltCharSet() ? 1 : 0;
 
 	g_nTextPage  = 1;
 	g_nHiresPage = 1;
-	if (uVideoModeFlags & VF_PAGE2) {
+	if (uVideoModeFlags & VF_PAGE2)
+	{
 		// Apple IIe, Technical Notes, #3: Double High-Resolution Graphics
 		// 80STORE must be OFF to display page 2
-		if (0 == (uVideoModeFlags & VF_80STORE)) {
+		if (0 == (uVideoModeFlags & VF_80STORE))
+		{
 			g_nTextPage  = 2;
 			g_nHiresPage = 2;
 		}
 	}
 
-	if (uVideoModeFlags & VF_TEXT) {
+	if (uVideoModeFlags & VF_TEXT)
+	{
 		if (uVideoModeFlags & VF_80COL)
 			g_pFuncUpdateGraphicsScreen = updateScreenText80;
 		else
 			g_pFuncUpdateGraphicsScreen = updateScreenText40;
 	}
-	else if (uVideoModeFlags & VF_HIRES) {
+	else if (uVideoModeFlags & VF_HIRES)
+	{
 		if (uVideoModeFlags & VF_DHIRES)
+		{
 			if (uVideoModeFlags & VF_80COL)
-				g_pFuncUpdateGraphicsScreen = updateScreenDoubleHires80;
+			{
+				if (g_eVideoType == VT_COLOR_MONITOR_RGB)
+					g_pFuncUpdateGraphicsScreen = updateScreenDoubleHires80Simplified;
+				else
+					g_pFuncUpdateGraphicsScreen = updateScreenDoubleHires80;
+			}
 			else
+			{
 				g_pFuncUpdateGraphicsScreen = updateScreenDoubleHires40;
+			}
+		}
 		else
-			g_pFuncUpdateGraphicsScreen = updateScreenSingleHires40;
-	}
-	else {
-		if (uVideoModeFlags & VF_DHIRES)
-			if (uVideoModeFlags & VF_80COL)
-				g_pFuncUpdateGraphicsScreen = updateScreenDoubleLores80;
+		{
+			if (g_eVideoType == VT_COLOR_MONITOR_RGB)
+				g_pFuncUpdateGraphicsScreen = updateScreenSingleHires40Simplified;
 			else
+				g_pFuncUpdateGraphicsScreen = updateScreenSingleHires40;
+		}
+	}
+	else
+	{
+		if (uVideoModeFlags & VF_DHIRES)
+		{
+			if (uVideoModeFlags & VF_80COL)
+			{
+				if (g_eVideoType == VT_COLOR_MONITOR_RGB)
+					g_pFuncUpdateGraphicsScreen = updateScreenDoubleLores80Simplified;
+				else
+					g_pFuncUpdateGraphicsScreen = updateScreenDoubleLores80;
+			}
+			else
+			{
 				g_pFuncUpdateGraphicsScreen = updateScreenDoubleLores40;
+			}
+		}
 		else
-			g_pFuncUpdateGraphicsScreen = updateScreenSingleLores40;
+		{
+			if (g_eVideoType == VT_COLOR_MONITOR_RGB)
+				g_pFuncUpdateGraphicsScreen = updateScreenSingleLores40Simplified;
+			else
+				g_pFuncUpdateGraphicsScreen = updateScreenSingleLores40;
+		}
 	}
 }
 
 //===========================================================================
+
 void NTSC_SetVideoStyle() // (int v, int s)
 {
-    int half = g_uHalfScanLines;
+    int half = IsVideoStyle(VS_HALF_SCANLINES);
 	uint8_t r, g, b;
 
 	switch ( g_eVideoType )
@@ -1534,7 +1842,7 @@ void NTSC_SetVideoStyle() // (int v, int s)
 			}
 			break;
 
-		case VT_COLOR_MONITOR:
+		case VT_COLOR_MONITOR_NTSC:
 		default:
 			r = 0xFF;
 			g = 0xFF;
@@ -1565,7 +1873,6 @@ void NTSC_SetVideoStyle() // (int v, int s)
 			}
 			break;
 
-//		case VT_MONO_WHITE: //VT_MONO_MONITOR: //3:
 		case VT_MONO_AMBER:
 			r = 0xFF;
 			g = 0x80;
@@ -1578,6 +1885,7 @@ void NTSC_SetVideoStyle() // (int v, int s)
 			b = 0x00;
 			goto _mono;
 
+		case VT_COLOR_MONITOR_RGB:
 		case VT_MONO_WHITE:
 			r = 0xFF;
 			g = 0xFF;
@@ -1608,15 +1916,22 @@ _mono:
 }
 
 //===========================================================================
+void GenerateVideoTables( void );
+void GenerateBaseColors(baseColors_t pBaseNtscColors);
+
 void NTSC_VideoInit( uint8_t* pFramebuffer ) // wsVideoInit
 {
 	make_csbits();
+	GenerateVideoTables();
 	initPixelDoubleMasks();
 	initChromaPhaseTables();
 	updateMonochromeTables( 0xFF, 0xFF, 0xFF );
 
 	for (int y = 0; y < (VIDEO_SCANNER_Y_DISPLAY*2); y++)
-		g_pScanLines[y] = (bgra_t*)(g_pFramebufferbits + sizeof(bgra_t) * FRAMEBUFFER_W * ((FRAMEBUFFER_H - 1) - y - BORDER_H) + (sizeof(bgra_t) * BORDER_W));
+	{
+		uint32_t offset = sizeof(bgra_t) * GetFrameBufferWidth() * ((GetFrameBufferHeight() - 1) - y - GetFrameBufferBorderHeight()) + (sizeof(bgra_t) * GetFrameBufferBorderWidth());
+		g_pScanLines[y] = (bgra_t*) (g_pFramebufferbits + offset);
+	}
 
 	g_pVideoAddress = g_pScanLines[0];
 
@@ -1624,6 +1939,10 @@ void NTSC_VideoInit( uint8_t* pFramebuffer ) // wsVideoInit
 	g_pFuncUpdateGraphicsScreen = updateScreenText40;
 
 	VideoReinitialize(); // Setup g_pFunc_ntsc*Pixel()
+
+	bgra_t baseColors[kNumBaseColors];
+	GenerateBaseColors(&baseColors);
+	VideoInitializeOriginal(&baseColors);
 
 #if HGR_TEST_PATTERN
 // Init HGR to almost all-possible-combinations
@@ -1682,14 +2001,19 @@ void NTSC_VideoInit( uint8_t* pFramebuffer ) // wsVideoInit
 }
 
 //===========================================================================
-void NTSC_VideoReinitialize( DWORD cyclesThisFrame )
+void NTSC_VideoReinitialize( DWORD cyclesThisFrame, bool bInitVideoScannerAddress )
 {
-	_ASSERT(cyclesThisFrame < VIDEO_SCANNER_6502_CYCLES);
-	if (cyclesThisFrame >= VIDEO_SCANNER_6502_CYCLES) cyclesThisFrame = 0;	// error
+	if (cyclesThisFrame >= g_videoScanner6502Cycles)
+	{
+		// Possible, since ContinueExecution() loop waits until: cycles > g_videoScanner6502Cycles && VBL
+		cyclesThisFrame %= g_videoScanner6502Cycles;
+	}
+
 	g_nVideoClockVert = (uint16_t) (cyclesThisFrame / VIDEO_SCANNER_MAX_HORZ);
 	g_nVideoClockHorz = cyclesThisFrame % VIDEO_SCANNER_MAX_HORZ;
 
-	updateVideoScannerAddress();	// Pre-condition: g_nVideoClockVert
+	if (bInitVideoScannerAddress)		// GH#611
+		updateVideoScannerAddress();	// Pre-condition: g_nVideoClockVert
 }
 
 //===========================================================================
@@ -1722,7 +2046,7 @@ void NTSC_VideoInitChroma()
 
 //===========================================================================
 
-// Pre: cyclesLeftToUpdate = [0...VIDEO_SCANNER_6502_CYCLES]
+// Pre: cyclesLeftToUpdate = [0...g_videoScanner6502Cycles]
 // .  2-14: After one emulated 6502/65C02 opcode (optionally with IRQ)
 // . ~1000: After 1ms of Z80 emulation
 // . 17030: From NTSC_VideoRedrawWholeScreen()
@@ -1737,7 +2061,7 @@ static void VideoUpdateCycles( int cyclesLeftToUpdate )
 		g_pFuncUpdateGraphicsScreen(cycles);						// lines [currV...159]
 		cyclesLeftToUpdate -= cycles;
 
-		const int cyclesFromLine160ToLine261 = VIDEO_SCANNER_6502_CYCLES - (VIDEO_SCANNER_MAX_HORZ * VIDEO_SCANNER_Y_MIXED);
+		const int cyclesFromLine160ToLine261 = g_videoScanner6502Cycles - (VIDEO_SCANNER_MAX_HORZ * VIDEO_SCANNER_Y_MIXED);
 		cycles = cyclesLeftToUpdate < cyclesFromLine160ToLine261 ? cyclesLeftToUpdate : cyclesFromLine160ToLine261;
 		g_pFuncUpdateGraphicsScreen(cycles);						// lines [160..191..261]
 		cyclesLeftToUpdate -= cycles;
@@ -1746,7 +2070,7 @@ static void VideoUpdateCycles( int cyclesLeftToUpdate )
 	}
 	else
 	{
-		const int cyclesToLine262 = VIDEO_SCANNER_MAX_HORZ * (VIDEO_SCANNER_MAX_VERT - g_nVideoClockVert - 1) + cyclesToEndOfLine;
+		const int cyclesToLine262 = VIDEO_SCANNER_MAX_HORZ * (g_videoScannerMaxVert - g_nVideoClockVert - 1) + cyclesToEndOfLine;
 		int cycles = cyclesLeftToUpdate < cyclesToLine262 ? cyclesLeftToUpdate : cyclesToLine262;
 		g_pFuncUpdateGraphicsScreen(cycles);						// lines [currV...261]
 		cyclesLeftToUpdate -= cycles;
@@ -1764,9 +2088,21 @@ static void VideoUpdateCycles( int cyclesLeftToUpdate )
 }
 
 //===========================================================================
-void NTSC_VideoUpdateCycles( long cycles6502 )
+void NTSC_VideoUpdateCycles( UINT cycles6502 )
 {
-	_ASSERT(cycles6502 < VIDEO_SCANNER_6502_CYCLES);	// Use NTSC_VideoRedrawWholeScreen() instead
+	_ASSERT(cycles6502 && cycles6502 < g_videoScanner6502Cycles);	// Use NTSC_VideoRedrawWholeScreen() instead
+
+	if (g_bDelayVideoMode)
+	{
+		VideoUpdateCycles(1);	// Video mode change is delayed by 1 cycle
+
+		g_bDelayVideoMode = false;
+		NTSC_SetVideoMode(g_uNewVideoModeFlags);
+
+		cycles6502--;
+		if (!cycles6502)
+			return;
+	}
 
 	VideoUpdateCycles(cycles6502);
 }
@@ -1786,7 +2122,7 @@ void NTSC_VideoRedrawWholeScreen( void )
 	g_nVideoClockHorz = 0;
 	updateVideoScannerAddress();
 
-	VideoUpdateCycles(VIDEO_SCANNER_6502_CYCLES);
+	VideoUpdateCycles(g_videoScanner6502Cycles);
 
 	VideoUpdateCycles(horz);	// Finally update to get to correct H-pos
 
@@ -1797,7 +2133,206 @@ void NTSC_VideoRedrawWholeScreen( void )
 }
 
 //===========================================================================
-bool NTSC_GetColorBurst( void )
+
+static bool CheckVideoTables2( eApple2Type type, uint32_t mode )
 {
-	return (g_nColorBurstPixels < 2) ? false : true;
+	SetApple2Type(type);
+	NTSC_VideoInitAppleType();
+
+	g_uVideoMode = mode;
+
+	g_dwCyclesThisFrame = 0;
+	g_nVideoClockHorz = g_nVideoClockVert = 0;
+
+	for (DWORD cycles=0; cycles<VIDEO_SCANNER_MAX_VERT*VIDEO_SCANNER_MAX_HORZ; cycles++)
+	{
+		WORD addr1 = VideoGetScannerAddress(cycles);
+		WORD addr2 = g_uVideoMode & VF_TEXT ? getVideoScannerAddressTXT()
+											: getVideoScannerAddressHGR();
+		_ASSERT(addr1 == addr2);
+		if (addr1 != addr2)
+		{
+			char str[80];
+			sprintf(str, "vpos=%04X, hpos=%02X, Video_adr=$%04X, NTSC_adr=$%04X\n", g_nVideoClockVert, g_nVideoClockHorz, addr1, addr2);
+			OutputDebugString(str);
+			return false;
+		}
+
+		g_nVideoClockHorz++;
+		if (g_nVideoClockHorz == VIDEO_SCANNER_MAX_HORZ)
+		{
+			g_nVideoClockHorz = 0;
+			g_nVideoClockVert++;
+		}
+	}
+
+	return true;
+}
+
+static void CheckVideoTables( void )
+{
+	CheckVideoTables2(A2TYPE_APPLE2PLUS, VF_HIRES);
+	CheckVideoTables2(A2TYPE_APPLE2PLUS, VF_TEXT);
+	CheckVideoTables2(A2TYPE_APPLE2E,    VF_HIRES);
+	CheckVideoTables2(A2TYPE_APPLE2E,    VF_TEXT);
+}
+
+static bool IsNTSC(void)
+{
+	return g_videoScannerMaxVert == VIDEO_SCANNER_MAX_VERT;
+}
+
+static void GenerateVideoTables( void )
+{
+	eApple2Type currentApple2Type = GetApple2Type();
+	uint32_t currentVideoMode = g_uVideoMode;
+	int currentHiresPage = g_nHiresPage;
+	int currentTextPage = g_nTextPage;
+
+	g_nHiresPage = g_nTextPage = 1;
+
+	//
+	// g_aClockVertOffsetsHGR[]
+	//
+
+	g_uVideoMode = VF_HIRES;
+	{
+		UINT i = 0, cycle = VIDEO_SCANNER_HORZ_START;
+		for (; i < VIDEO_SCANNER_MAX_VERT; i++, cycle += VIDEO_SCANNER_MAX_HORZ)
+		{
+			g_aClockVertOffsetsHGR[i] = VideoGetScannerAddress(cycle, VS_PartialAddrV);
+			if (IsNTSC()) _ASSERT(g_aClockVertOffsetsHGR[i] == g_kClockVertOffsetsHGR[i]);
+		}
+		if (!IsNTSC())
+		{
+			for (; i < VIDEO_SCANNER_MAX_VERT_PAL; i++, cycle += VIDEO_SCANNER_MAX_HORZ)
+				g_aClockVertOffsetsHGR[i] = VideoGetScannerAddress(cycle, VS_PartialAddrV);
+		}
+	}
+
+	//
+	// g_aClockVertOffsetsTXT[]
+	//
+
+	g_uVideoMode = VF_TEXT;
+	{
+		UINT i = 0, cycle = VIDEO_SCANNER_HORZ_START;
+		for (; i < (256 + 8) / 8; i++, cycle += VIDEO_SCANNER_MAX_HORZ * 8)
+		{
+			g_aClockVertOffsetsTXT[i] = VideoGetScannerAddress(cycle, VS_PartialAddrV);
+			if (IsNTSC()) _ASSERT(g_aClockVertOffsetsTXT[i] == g_kClockVertOffsetsTXT[i]);
+		}
+		if (!IsNTSC())
+		{
+			for (; i < VIDEO_SCANNER_MAX_VERT_PAL / 8; i++, cycle += VIDEO_SCANNER_MAX_HORZ * 8)
+				g_aClockVertOffsetsTXT[i] = VideoGetScannerAddress(cycle, VS_PartialAddrV);
+		}
+	}
+
+	//
+	// APPLE_IIP_HORZ_CLOCK_OFFSET[]
+	//
+
+	g_uVideoMode = VF_TEXT;
+	SetApple2Type(A2TYPE_APPLE2PLUS);
+	for (UINT j=0; j<5; j++)
+	{
+		for (UINT i=0, cycle=j*64*VIDEO_SCANNER_MAX_HORZ; i<VIDEO_SCANNER_MAX_HORZ; i++, cycle++)
+		{
+			APPLE_IIP_HORZ_CLOCK_OFFSET[j][i] = VideoGetScannerAddress(cycle, VS_PartialAddrH);
+			if (IsNTSC()) _ASSERT(APPLE_IIP_HORZ_CLOCK_OFFSET[j][i] == kAPPLE_IIP_HORZ_CLOCK_OFFSET[j][i]);
+		}
+	}
+
+	//
+	// APPLE_IIE_HORZ_CLOCK_OFFSET[]
+	//
+
+	g_uVideoMode = VF_TEXT;
+	SetApple2Type(A2TYPE_APPLE2E);
+	for (UINT j=0; j<5; j++)
+	{
+		for (UINT i=0, cycle=j*64*VIDEO_SCANNER_MAX_HORZ; i<VIDEO_SCANNER_MAX_HORZ; i++, cycle++)
+		{
+			APPLE_IIE_HORZ_CLOCK_OFFSET[j][i] = VideoGetScannerAddress(cycle, VS_PartialAddrH);
+			if (IsNTSC()) _ASSERT(APPLE_IIE_HORZ_CLOCK_OFFSET[j][i] == kAPPLE_IIE_HORZ_CLOCK_OFFSET[j][i]);
+		}
+	}
+
+	//
+
+	CheckVideoTables();
+
+//	VideoResetState();
+
+	SetApple2Type(currentApple2Type);
+	g_uVideoMode = currentVideoMode;
+	g_nHiresPage = currentHiresPage;
+	g_nTextPage = currentTextPage;
+}
+
+static void GenerateBaseColors(baseColors_t pBaseNtscColors)
+{
+	for (UINT i=0; i<16; i++)
+	{
+		g_nColorPhaseNTSC = INITIAL_COLOR_PHASE;
+		g_nSignalBitsNTSC = 0;
+
+		// 12 iterations for colour to "stabilise", then 4 iterations to calc the average
+		// - after colour "stabilises" then it repeats through 4 phases (with different RGB values for each phase)
+		uint32_t bits = (i<<12) | (i<<8) | (i<<4) | i;	// 16 bits
+
+		uint32_t colors[4];
+		for (UINT j=0; j<16; j++)
+		{
+			colors[j&3] = getScanlineColor(bits & 1, g_aHueColorTV[g_nColorPhaseNTSC]);
+			bits >>= 1;
+			updateColorPhase();
+		}
+
+		int r = (((colors[0]>>16)&0xff) + ((colors[1]>>16)&0xff) + ((colors[2]>>16)&0xff) + ((colors[3]>>16)&0xff)) / 4;
+		int g = (((colors[0]>> 8)&0xff) + ((colors[1]>> 8)&0xff) + ((colors[2]>> 8)&0xff) + ((colors[3]>> 8)&0xff)) / 4;
+		int b = (((colors[0]    )&0xff) + ((colors[1]    )&0xff) + ((colors[2]    )&0xff) + ((colors[3]    )&0xff)) / 4;
+		uint32_t color = ((r<<16) | (g<<8) | b) | ALPHA32_MASK;
+
+		(*pBaseNtscColors)[i] = * (bgra_t*) &color;
+	}
+}
+
+//===========================================================================
+
+void NTSC_SetRefreshRate(VideoRefreshRate_e rate)
+{
+	if (rate == VR_50HZ)
+	{
+		g_videoScannerMaxVert = VIDEO_SCANNER_MAX_VERT_PAL;
+		g_videoScanner6502Cycles = VIDEO_SCANNER_6502_CYCLES_PAL;
+	}
+	else
+	{
+		g_videoScannerMaxVert = VIDEO_SCANNER_MAX_VERT;
+		g_videoScanner6502Cycles = VIDEO_SCANNER_6502_CYCLES;
+	}
+
+	GenerateVideoTables();
+}
+
+UINT NTSC_GetCyclesPerFrame(void)
+{
+	return g_videoScanner6502Cycles;
+}
+
+UINT NTSC_GetCyclesPerLine(void)
+{
+	return VIDEO_SCANNER_MAX_HORZ;
+}
+
+UINT NTSC_GetVideoLines(void)
+{
+	return (GetVideoRefreshRate() == VR_50HZ) ? VIDEO_SCANNER_MAX_VERT_PAL : VIDEO_SCANNER_MAX_VERT;
+}
+
+bool NTSC_IsVisible(void)
+{
+	return (g_nVideoClockVert < VIDEO_SCANNER_Y_DISPLAY) && (g_nVideoClockHorz >= VIDEO_SCANNER_HORZ_START);
 }

@@ -14,6 +14,7 @@ struct regsrec
 extern regsrec    regs;
 extern unsigned __int64 g_nCumulativeCycles;
 
+void    CpuAdjustIrqCheck(UINT uCyclesUntilInterrupt);
 void    CpuDestroy ();
 void    CpuCalcCycles(ULONG nExecutedCycles);
 DWORD   CpuExecute(const DWORD uCycles, const bool bVideoUpdate);
@@ -27,14 +28,11 @@ void	CpuNmiReset();
 void	CpuNmiAssert(eIRQSRC Device);
 void	CpuNmiDeassert(eIRQSRC Device);
 void    CpuReset ();
-void    CpuSetSnapshot_v1(const BYTE A, const BYTE X, const BYTE Y, const BYTE P, const BYTE SP, const USHORT PC, const unsigned __int64 CumulativeCycles);
 void    CpuSaveSnapshot(class YamlSaveHelper& yamlSaveHelper);
-void    CpuLoadSnapshot(class YamlLoadHelper& yamlLoadHelper);
+void    CpuLoadSnapshot(class YamlLoadHelper& yamlLoadHelper, UINT version);
 
 BYTE	CpuRead(USHORT addr, ULONG uExecutedCycles);
 void	CpuWrite(USHORT addr, BYTE a, ULONG uExecutedCycles);
-
-DWORD   CpuGetEmulationTime_ms(void);
 
 enum eCpuType {CPU_UNKNOWN=0, CPU_6502=1, CPU_65C02, CPU_Z80};	// Don't change! Persisted to Registry
 
@@ -44,3 +42,7 @@ eCpuType ProbeMainCpuDefault(eApple2Type apple2Type);
 void     SetMainCpuDefault(eApple2Type apple2Type);
 eCpuType GetActiveCpu(void);
 void     SetActiveCpu(eCpuType cpu);
+
+bool Is6502InterruptEnabled(void);
+void ResetCyclesExecutedForDebugger(void);
+void SetMouseCardInstalled(bool installed);

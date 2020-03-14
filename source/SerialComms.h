@@ -1,6 +1,6 @@
 #pragma once
 
-extern class CSuperSerialCard sg_SSC;
+#include "Card.h"
 
 enum {COMMEVT_WAIT=0, COMMEVT_ACK, COMMEVT_TERM, COMMEVT_MAX};
 enum eFWMODE {FWMODE_CIC=0, FWMODE_SIC_P8, FWMODE_PPC, FWMODE_SIC_P8A};	// NB. CIC = SSC
@@ -16,60 +16,63 @@ typedef struct
 	UINT	uByteSize;
 	UINT	uParity;
 	bool	bLinefeed;
-	bool	bInterrupts;
+	bool	bInterrupts;	// NB. Can't be read from s/w
 } SSC_DIPSW;
 
 #define TEXT_SERIAL_COM TEXT("COM")
 #define TEXT_SERIAL_TCP TEXT("TCP")
 
-class CSuperSerialCard
+class CSuperSerialCard : public Card
 {
 public:
 	CSuperSerialCard();
 	virtual ~CSuperSerialCard();
 
+	virtual void Init(void) {};
+	virtual void Reset(const bool powerCycle) {};
+
 	void	CommInitialize(LPBYTE pCxRomPeripheral, UINT uSlot);
 	void    CommReset();
 	void    CommDestroy();
 	void    CommSetSerialPort(HWND hWindow, DWORD dwNewSerialPortItem);
-	void    CommUpdate(DWORD);
-	void    SetSnapshot_v1(const DWORD baudrate, const BYTE bytesize, const BYTE commandbyte, const DWORD comminactivity, const BYTE controlbyte, const BYTE parity, const BYTE stopbits);
-	std::string GetSnapshotCardName(void);
+	static std::string GetSnapshotCardName(void);
 	void	SaveSnapshot(class YamlSaveHelper& yamlSaveHelper);
 	bool	LoadSnapshot(class YamlLoadHelper& yamlLoadHelper, UINT slot, UINT version);
 
 	char*	GetSerialPortChoices();
 	DWORD	GetSerialPort() { return m_dwSerialPortItem; }	// Drop-down list item
-	char*	GetSerialPortName() { return m_ayCurrentSerialPortName; }
+	const std::string &	GetSerialPortName() { return m_ayCurrentSerialPortName; }
 	void	SetSerialPortName(const char* pSerialPortName);
 	bool	IsActive() { return (m_hCommHandle != INVALID_HANDLE_VALUE) || (m_hCommListenSocket != INVALID_SOCKET); }
 	void	SupportDCD(bool bEnable) { m_bCfgSupportDCD = bEnable; }	// Status
-	void	SupportDSR(bool bEnable) { m_bCfgSupportDSR = bEnable; }	// Status
-	void	SupportDTR(bool bEnable) { m_bCfgSupportDTR = bEnable; }	// Control
 
 	void	CommTcpSerialAccept();
 	void	CommTcpSerialReceive();
 	void	CommTcpSerialClose();
 	void	CommTcpSerialCleanup();
 
-	static BYTE __stdcall SSC_IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
-	static BYTE __stdcall SSC_IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nCyclesLeft);
+	static BYTE __stdcall SSC_IORead(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nExecutedCycles);
+	static BYTE __stdcall SSC_IOWrite(WORD PC, WORD uAddr, BYTE bWrite, BYTE uValue, ULONG nExecutedCycles);
 
 private:
-	BYTE __stdcall CommCommand(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommControl(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommDipSw(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommReceive(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommStatus(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
-	BYTE __stdcall CommTransmit(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nCyclesLeft);
+	BYTE __stdcall CommCommand(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommControl(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommDipSw(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommReceive(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommStatus(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommTransmit(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
+	BYTE __stdcall CommProgramReset(WORD pc, WORD addr, BYTE bWrite, BYTE d, ULONG nExecutedCycles);
 
 	void	InternalReset();
+	void	UpdateCommandAndControlRegs(BYTE command, BYTE control);
+	void	UpdateCommandReg(BYTE command);
+	void	UpdateControlReg(BYTE control);
 	void	GetDIPSW();
 	void	SetDIPSWDefaults();
-	BYTE	GenerateControl();
 	UINT	BaudRateToIndex(UINT uBaudRate);
 	void	UpdateCommState();
-	BOOL	CheckComm();
+	void	TransmitDone(void);
+	bool	CheckComm();
 	void	CloseComm();
 	void	CheckCommEvent(DWORD dwEvtMask);
 	static DWORD WINAPI	CommThread(LPVOID lpParameter);
@@ -83,10 +86,10 @@ private:
 	//
 
 public:
-	static const UINT SIZEOF_SERIALCHOICE_ITEM = 8*sizeof(char);
+	static const UINT SIZEOF_SERIALCHOICE_ITEM = 12*sizeof(char);
 
 private:
-	char	m_ayCurrentSerialPortName[SIZEOF_SERIALCHOICE_ITEM];
+	std::string m_ayCurrentSerialPortName;
 	DWORD	m_dwSerialPortItem;
 
 	static const UINT SERIALPORTITEM_INVALID_COM_PORT = 0;
@@ -97,10 +100,8 @@ private:
 	static SSC_DIPSW	m_DIPSWDefault;
 	SSC_DIPSW			m_DIPSWCurrent;
 
-	// Derived from DIPSW1
+	static const UINT m_kDefaultBaudRate = CBR_9600;
 	UINT	m_uBaudRate;
-
-	// Derived from DIPSW2
 	UINT	m_uStopBits;
 	UINT	m_uByteSize;
 	UINT	m_uParity;
@@ -114,24 +115,22 @@ private:
 	HANDLE m_hCommHandle;
 	SOCKET m_hCommListenSocket;
 	SOCKET m_hCommAcceptSocket;
-	DWORD  m_dwCommInactivity;
 
 	//
 
-	CRITICAL_SECTION	m_CriticalSection;	// To guard /g_vRecvBytes/
-	std::deque<BYTE>			m_qComSerialBuffer[2];
+	CRITICAL_SECTION	m_CriticalSection;	// To guard /m_vuRxCurrBuffer/ and /m_vbTxEmpty/
+	std::deque<BYTE>	m_qComSerialBuffer[2];
 	volatile UINT		m_vuRxCurrBuffer;	// Written to on COM recv. SSC reads from other one
-	std::deque<BYTE>			m_qTcpSerialBuffer;
+	std::deque<BYTE>	m_qTcpSerialBuffer;
 
 	//
 
 	bool m_bTxIrqEnabled;
 	bool m_bRxIrqEnabled;
 
-	volatile bool		m_vbTxIrqPending;
-	volatile bool		m_vbRxIrqPending;
-
-	bool m_bWrittenTx;
+	volatile bool m_vbTxIrqPending;
+	volatile bool m_vbRxIrqPending;
+	volatile bool m_vbTxEmpty;
 
 	//
 
@@ -143,9 +142,11 @@ private:
 	BYTE* m_pExpansionRom;
 	UINT m_uSlot;
 
-	// Modem
 	bool m_bCfgSupportDCD;
-	bool m_bCfgSupportDSR;
 	UINT m_uDTR;
-	bool m_bCfgSupportDTR;
+
+	static const DWORD m_kDefaultModemStatus = 0;	// MS_RLSD_OFF(=DCD_OFF), MS_DSR_OFF, MS_CTS_OFF
+	volatile DWORD m_dwModemStatus;	// Updated by CommThread when any of RLSD|DSR|CTS changes / Read by main thread - CommStatus()& CommDipSw()
+
+	UINT m_uRTS;
 };

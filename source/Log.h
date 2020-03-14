@@ -8,5 +8,9 @@
 	#endif
 #endif
 
-extern void LogOutput(LPCTSTR format, ...);
-extern void LogFileOutput(LPCTSTR format, ...);
+extern FILE* g_fh;	// Filehandle for log file
+
+void LogInit(void);
+void LogDone(void);
+void LogOutput(LPCTSTR format, ...);
+void LogFileOutput(LPCTSTR format, ...);

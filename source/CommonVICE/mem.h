@@ -2,7 +2,7 @@
  * mem.h - Memory interface.
  *
  * Written by
- *  André Fachat <fachat@physik.tu-chemnitz.de>
+ *  AndrÃ© Fachat <fachat@physik.tu-chemnitz.de>
  *  Ettore Perazzoli <ettore@comm2000.it>
  *  Andreas Boose <viceteam@t-online.de>
  *
@@ -29,7 +29,7 @@
 #ifndef _MEM_H_
 #define _MEM_H_
 
-#include "..\CommonVICE\types.h"
+#include "../CommonVICE/types.h"
 
 typedef BYTE REGPARM1 read_func_t(WORD addr);
 typedef read_func_t *read_func_ptr_t;

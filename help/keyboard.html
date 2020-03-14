@@ -29,7 +29,7 @@
 			The Solid Apple key was introduced on the Apple //e and later renamed to the 
 			Option key. This key is emulated with the PC's
 			<span style="font-style: italic;">Right Alt</span>
-			key, which is in the same position as the Solid Apple key on the original //e.
+			key (or <span style="font-style: italic;">Alt Gr</span> key), which is in the same position as the Solid Apple key on the original //e.
 		</p>
 		<p><span style="font-weight: bold;">Numeric Keypad:</span><br>
 			The numeric keypad, introduced on the Extended Keyboard //e, is emulated 
@@ -43,15 +43,29 @@
 			key will pause emulation. Press
 			<span style="font-style: italic;">Pause</span>
 			again to resume emulation.</p>
+		<p><span style="font-weight: bold;">Caps Lock:</span><br>
+			On start-up, AppleWin always begins with the Apple II's Caps Lock enabled, regardless of the current state of the PC's Caps Lock key.
+			<ul>
+			<li>Assuming Caps Lock is off, when you press the PC's Caps Lock key the first time, this will enable the PC's Caps Lock. AppleWin will see this but remain in the Caps Lock enabled state.
+			<li>Now pressing the PC's Caps Lock key a second time, AppleWin will disable Caps Lock and allow lower-case to be used.
+			<li>Subsequent toggling of the PC's Caps Lock key will continue to be tracked and replicated by AppleWin.
+			</ul>
+			Of course, for lower-case you must be emulating a //e, Enhanced //e or cloned //e (so not a II or II+).<br><br>
+			Also in AppleWin's UI, there is a little icon in the bottom right of the window which shows either 'A' or 'a' to reflect the current state of the emulated Apple II's Caps Lock.
+			</p>
 		<p><span style="font-weight: bold;">Scroll Lock:</span><br>
-			Holding down the PC's
 			<span style="font-style: italic;">Scroll Lock</span>
-			key temporarily sets the emulation to full speed (i.e. unthrottled).<br>
-			NOTE:&nbsp; The status of the PC's
+			key can be configured to toggle normal/full-speed mode, or only enable full-speed when pressed. See <a href="cfg-input.html">Input</a> for configuring how <span style="font-style: italic;">Scroll Lock</span> behaves.
+			NOTE:&nbsp;The status of the PC's
 			<span style="font-style: italic;">Scroll Lock</span>
-			LED is meaningless.&nbsp; The emulator will only run full speed while the
-			<span style="font-style: italic;">Scroll Lock</span>
-			key is pressed down.</p>
+			LED is meaningless.</p>
+		<p><span style="font-weight: bold;">Ctrl+0, Ctrl+1, Ctrl+3:</span><br>
+			Hotkeys to change emulation speed:
+			<ul>
+			<li>Ctrl-0 Toggles between custom speed and Full-Speed
+			<li>Ctrl-1 Sets 1 MHz
+			<li>Ctrl-3 Sets Full-Speed
+			</ul>
 		<p><span style="font-weight: bold;">Shift+Insert:</span><br>
 			Paste text from Windows' clipboard. Text gets fed a character at a time to the 
 			Apple's keyboard hardware. The 'CR+LF' combination gets converted to CR.</p>
@@ -66,7 +80,9 @@
 		<p><span style="font-weight: bold;">Ctrl+PrintScrn:</span><br>
 		    Copy the text screen (auto detect 40/80 columns) to the clipboard.</p>
 		<p><span style="font-weight: bold;">Alt+Enter:</span><br>
-		    Toggle between windowed and full screen video modes. (NB. Will conflict with emulation when doing Open Apple + Enter.)</p>
+		    Default: Toggle between windowed and full screen video modes. (NB. Will conflict with emulation and prevent Open Apple + Enter from being readable. Use the <a href="CommandLine.html">Command Line</a> switch to allow Open Apple + Enter to be readable.)</p>
+		<p><span style="font-weight: bold;">Ctrl+Left Mouse Button:</span><br>
+			This will show the Windows mouse cursor when emulating an Apple joystick with the PC's mouse or using a Mouse card.<br>
 		<p><span style="font-weight: bold;">Function Keys F1-F8:</span><br>
 			These PC function keys correspond to buttons on the <a href="toolbar.html">toolbar</a>.</p>
 		<p><span style="font-weight: bold;">Function Key F2 + Ctrl:</span><br>
@@ -79,11 +95,9 @@
 			through the configuration dialog. <br>NB. Use Shift+F9 to reverse-cycle the display modes.</p>
 		<p><span style="font-weight: bold;">Function Key F9 + Ctrl + Shift:</span><br>
 		    This PC function key combo will toggle 50% scanline mode</p>
-		<p><span style="font-weight: bold;">Function Key F10 (or Ctrl+left mouse button):</span><br>
-			This PC function key will stop emulating an Apple joystick with the PC's mouse.<br>
-            In Pravets 8A emulation mode it servers as Caps Lock and Ctrl+F10 shall
-            be used to stop emulating an Apple joystick with the PC's mouse.</p>
+		<p><span style="font-weight: bold;">Function Key F10:</span><br>
+			In //e or Enhanced //e emulation mode it will emulate the rocker switch for European video ROM selection. Use the <a href="CommandLine.html">Command Line</a> switch to use an alternate European video ROM file.<br>
+            In Pravets 8A emulation mode it servers as Caps Lock.</p>
 		<p><span style="font-weight: bold;">Function Keys F11-F12:</span><br>
-			These PC function keys correspond to saving/loading a <a href="savestate.html">save-state</a>
-			file.</p>
+			These PC function keys correspond to saving/loading a <a href="savestate.html">save-state</a> file.</p>
 	</body></html>

@@ -91,7 +91,7 @@ inline u8 ReadByte( u16 addr, int uExecutedCycles )
 			IOWrite[(addr>>4) & 0xFF](regs.pc,addr,1,(BYTE)(a),uExecutedCycles); \
 	 }
 
-#include "cpu/cpu_instructions.inl"
+#include "CPU/cpu_instructions.inl"
 
 //===========================================================================
 
@@ -406,7 +406,7 @@ static DWORD Cpu65D02(DWORD uTotalCycles, const bool bVideoUpdate)
 		}
 #undef $
 
-		CheckInterruptSources(uExecutedCycles);
+		CheckInterruptSources(uExecutedCycles, bVideoUpdate);
 		NMI(uExecutedCycles, flagc, flagn, flagv, flagz);
 		IRQ(uExecutedCycles, flagc, flagn, flagv, flagz);
 

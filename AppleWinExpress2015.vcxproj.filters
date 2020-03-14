@@ -58,6 +58,9 @@
     <ClCompile Include="source\Disk.cpp">
       <Filter>Source Files\Disk</Filter>
     </ClCompile>
+    <ClCompile Include="source\DiskFormatTrack.cpp">
+      <Filter>Source Files\Disk</Filter>
+    </ClCompile>
     <ClCompile Include="source\DiskImage.cpp">
       <Filter>Source Files\Disk</Filter>
     </ClCompile>
@@ -71,6 +74,9 @@
       <Filter>Source Files\Emulator</Filter>
     </ClCompile>
     <ClCompile Include="source\Keyboard.cpp">
+      <Filter>Source Files\Emulator</Filter>
+    </ClCompile>
+    <ClCompile Include="source\LanguageCard.cpp">
       <Filter>Source Files\Emulator</Filter>
     </ClCompile>
     <ClCompile Include="source\Log.cpp">
@@ -184,6 +190,15 @@
     <ClCompile Include="source\YamlHelper.cpp">
       <Filter>Source Files\Emulator</Filter>
     </ClCompile>
+    <ClCompile Include="source\RGBMonitor.cpp">
+      <Filter>Source Files\Video</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Disk2CardManager.cpp">
+      <Filter>Source Files\Disk</Filter>
+    </ClCompile>
+    <ClCompile Include="source\CardManager.cpp">
+      <Filter>Source Files\Emulator</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\Applewin.h">
@@ -270,10 +285,16 @@
     <ClInclude Include="source\Disk.h">
       <Filter>Source Files\Disk</Filter>
     </ClInclude>
+    <ClInclude Include="source\DiskFormatTrack.h">
+      <Filter>Source Files\Disk</Filter>
+    </ClInclude>
     <ClInclude Include="source\DiskImage.h">
       <Filter>Source Files\Disk</Filter>
     </ClInclude>
     <ClInclude Include="source\DiskImageHelper.h">
+      <Filter>Source Files\Disk</Filter>
+    </ClInclude>
+    <ClInclude Include="source\DiskLog.h">
       <Filter>Source Files\Disk</Filter>
     </ClInclude>
     <ClInclude Include="source\Harddisk.h">
@@ -301,6 +322,9 @@
       <Filter>Source Files\Emulator</Filter>
     </ClInclude>
     <ClInclude Include="source\Keyboard.h">
+      <Filter>Source Files\Emulator</Filter>
+    </ClInclude>
+    <ClInclude Include="source\LanguageCard.h">
       <Filter>Source Files\Emulator</Filter>
     </ClInclude>
     <ClInclude Include="source\Log.h">
@@ -450,6 +474,18 @@
     <ClInclude Include="source\SaveState_Structs_v1.h">
       <Filter>Source Files\_Headers</Filter>
     </ClInclude>
+    <ClInclude Include="source\RGBMonitor.h">
+      <Filter>Source Files\Video</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Disk2CardManager.h">
+      <Filter>Source Files\Disk</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Card.h">
+      <Filter>Source Files\Emulator</Filter>
+    </ClInclude>
+    <ClInclude Include="source\CardManager.h">
+      <Filter>Source Files\Emulator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="resource\Applewin.bmp">
@@ -554,6 +590,9 @@
     <Image Include="resource\SETUP.BMP">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="resource\RUN3000E.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="resource\Apple2.rom">
@@ -605,6 +644,12 @@
       <Filter>Resource Files</Filter>
     </None>
     <None Include="resource\ThunderClockPlus.rom">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="resource\TK3000e.rom">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="resource\TKClock.rom">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

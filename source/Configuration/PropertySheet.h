@@ -28,6 +28,10 @@ public:
 	{
 		m_PropertySheetHelper.ApplyNewConfig(ConfigNew, ConfigOld);
 	}
+	void ConfigSaveApple2Type(eApple2Type apple2Type)
+	{
+		m_PropertySheetHelper.ConfigSaveApple2Type(apple2Type);
+	}
 
 	virtual UINT GetScrollLockToggle(void){ return m_PageInput.GetScrollLockToggle(); }
 	virtual void SetScrollLockToggle(UINT uValue){ m_PageInput.SetScrollLockToggle(uValue); }
@@ -37,6 +41,8 @@ public:
 	virtual void SetJoystickCenteringControl(UINT uValue){ m_PageInput.SetJoystickCenteringControl(uValue); }
 	virtual UINT GetAutofire(UINT uButton) { return m_PageInput.GetAutofire(uButton); }
 	virtual void SetAutofire(UINT uValue) { m_PageInput.SetAutofire(uValue); }
+	virtual bool GetButtonsSwapState(void) { return m_PageInput.GetButtonsSwapState(); }
+	virtual void SetButtonsSwapState(bool value) { m_PageInput.SetButtonsSwapState(value); }
 	virtual UINT GetMouseShowCrosshair(void){ return m_PageInput.GetMouseShowCrosshair(); }
 	virtual void SetMouseShowCrosshair(UINT uValue){ m_PageInput.SetMouseShowCrosshair(uValue); }
 	virtual UINT GetMouseRestrictToWindow(void){ return m_PageInput.GetMouseRestrictToWindow(); }

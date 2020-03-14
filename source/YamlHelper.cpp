@@ -154,7 +154,7 @@ int YamlHelper::ParseMap(MapYaml& mapYaml)
 				mapValue.value = pValue;
 				mapValue.subMap = NULL;
 				mapYaml[std::string(pKey)] = mapValue;
-				delete [] pKey; pKey = NULL;
+				free(pKey); pKey = NULL;
 			}
 
 			bKey = bKey ? false : true;
@@ -166,7 +166,7 @@ int YamlHelper::ParseMap(MapYaml& mapYaml)
 	}
 
 	if (pKey)
-		delete [] pKey;
+		free(pKey);
 
 	return res;
 }
@@ -237,8 +237,10 @@ void YamlHelper::MakeAsciiToHexTable(void)
 		m_AsciiToHex[i] = i - 'a' + 0xA;
 }
 
-void YamlHelper::LoadMemory(MapYaml& mapYaml, const LPBYTE pMemBase, const size_t kAddrSpaceSize)
+UINT YamlHelper::LoadMemory(MapYaml& mapYaml, const LPBYTE pMemBase, const size_t kAddrSpaceSize)
 {
+	UINT bytes = 0;
+
 	for (MapYaml::iterator it = mapYaml.begin(); it != mapYaml.end(); ++it)
 	{
 		const char* pKey = it->first.c_str();
@@ -268,10 +270,13 @@ void YamlHelper::LoadMemory(MapYaml& mapYaml, const LPBYTE pMemBase, const size_
 				throw std::string("Memory: hex data contains illegal character on line address: " + it->first);
 
 			*pDst++ = (ah<<4) | al;
+			bytes++;
 		}
 	}
 
 	mapYaml.clear();
+
+	return bytes;
 }
 
 //-------------------------------------
@@ -342,9 +347,44 @@ std::string YamlLoadHelper::LoadString(const std::string& key)
 	return value;
 }
 
+float YamlLoadHelper::LoadFloat(const std::string key)
+{
+	bool bFound;
+	std::string value = m_yamlHelper.GetMapValue(*m_pMapYaml, key, bFound);
+	if (value == "")
+	{
+		m_bDoGetMapRemainder = false;
+		throw std::string(m_currentMapName + ": Missing: " + key);
+	}
+#if (_MSC_VER >= 1900)
+	return strtof(value.c_str(), NULL);			// MSVC++ 14.0  _MSC_VER == 1900 (Visual Studio 2015 version 14.0)
+#else
+	return (float) strtod(value.c_str(), NULL);	// NB. strtof() requires VS2015
+#endif
+}
+
+double YamlLoadHelper::LoadDouble(const std::string key)
+{
+	bool bFound;
+	std::string value = m_yamlHelper.GetMapValue(*m_pMapYaml, key, bFound);
+	if (value == "")
+	{
+		m_bDoGetMapRemainder = false;
+		throw std::string(m_currentMapName + ": Missing: " + key);
+	}
+	return strtod(value.c_str(), NULL);
+}
+
 void YamlLoadHelper::LoadMemory(const LPBYTE pMemBase, const size_t size)
 {
 	m_yamlHelper.LoadMemory(*m_pMapYaml, pMemBase, size);
+}
+
+void YamlLoadHelper::LoadMemory(std::vector<BYTE>& memory, const size_t size)
+{
+	memory.reserve(size);	// expand (but don't shrink) vector's capacity (NB. vector's size doesn't change)
+	const UINT bytes = m_yamlHelper.LoadMemory(*m_pMapYaml, &memory[0], size);
+	memory.resize(bytes);	// resize so that vector contains /bytes/ elements - so that size() gives correct value.
 }
 
 //-------------------------------------
@@ -371,7 +411,7 @@ void YamlSaveHelper::SaveUint(const char* key, UINT value)
 
 void YamlSaveHelper::SaveHexUint4(const char* key, UINT value)
 {
-	Save("%s: 0x%01X\n", key, value);
+	Save("%s: 0x%01X\n", key, value & 0xf);
 }
 
 void YamlSaveHelper::SaveHexUint8(const char* key, UINT value)
@@ -387,6 +427,11 @@ void YamlSaveHelper::SaveHexUint12(const char* key, UINT value)
 void YamlSaveHelper::SaveHexUint16(const char* key, UINT value)
 {
 	Save("%s: 0x%04X\n", key, value);
+}
+
+void YamlSaveHelper::SaveHexUint24(const char* key, UINT value)
+{
+	Save("%s: 0x%06X\n", key, value);
 }
 
 void YamlSaveHelper::SaveHexUint32(const char* key, UINT value)
@@ -407,6 +452,21 @@ void YamlSaveHelper::SaveBool(const char* key, bool value)
 void YamlSaveHelper::SaveString(const char* key,  const char* value)
 {
 	Save("%s: %s\n", key, (value[0] != 0) ? value : "\"\"");
+}
+
+void YamlSaveHelper::SaveString(const char* key, const std::string & value)
+{
+	SaveString(key, value.c_str());
+}
+
+void YamlSaveHelper::SaveFloat(const char* key, float value)
+{
+	Save("%s: %f\n", key, value);
+}
+
+void YamlSaveHelper::SaveDouble(const char* key, double value)
+{
+	Save("%s: %f\n", key, value);
 }
 
 // Pre: uMemSize must be multiple of 8
